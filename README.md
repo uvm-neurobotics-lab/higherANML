@@ -20,7 +20,7 @@ The code for these phases can be found inside [this](anml.py) file.
 
 Phase       | Trained    |  Optimizer  | LR
  ---------- | ---------  | ----------  | -----
- inner loop | rln + fc   | SGD         | 0.01
+ inner loop | rln + fc   | SGD         | 0.1
  outer loop | everything | Adam        | 0.003
 
 Training can be performed using
