@@ -1,12 +1,20 @@
-# higherANML
+# Overview
 
 The "training" of a few-shots meta-learned model like ANML consists of:
-- train-train: the model is shown a random (initially new) task, i.e. 20 chars from one Omniglot class (ak.a. learning phase)
+- train-train: the model is shown a random (initially new) task, i.e. 20 chars from one Omniglot class (a.k.a. learning phase)
 - train-test: the model is tested on the last task it has just trained on and a sample of 64 random images from all the classes (a.k.a. remembering phase)
 - test-train: at test time the model is shown a few examples (15) of a new class not seen during train-train. Labels are also provided and the model is asked to quickly learn this new class without forgetting (for 600 the learning sequence is 9000 gradient updates long)
 - test-test: after learning from the few-shots the model performance is evaluated on the holdout examples.
 
 The code for these phases can be found inside [this](anml.py) file.
+
+# Prerequisites
+
+- Python3 
+- PyTorch 1.6.0 
+- [higher](https://github.com/facebookresearch/higher)
+- numpy
+- tqdm
 
 # Training
 
@@ -23,6 +31,7 @@ python train_omni.py
 flags can be provided for exploring different setups.
 
 # Evaluation
+![evaluation results](evaluation_results.png)
 
 Number of tasks | Accuracy | Eval LR
 ----| ---- | ------- 
