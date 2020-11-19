@@ -22,16 +22,26 @@ def train(rln, nm, mask, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda")
     omni_sampler = OmniSampler(root="../data/omni")
 
     anml = ANML(rln, nm, mask).to(device)
+
+    # inner optimizer used during the learning phase
     inner_opt = SGD(
         list(anml.rln.parameters()) + list(anml.fc.parameters()), lr=inner_lr
     )
+    # outer optimizer used during the remembering phase, the learning is propagate through the
+    # inner loop optimizations computing second order gradients
     outer_opt = Adam(anml.parameters(), lr=outer_lr)
 
     for it in range(its):
 
         train_data, train_class, (valid_ims, valid_labels) = omni_sampler.sample_train()
+
+        # To facilitate the propagation of gradients through the model we prevent memorization of
+        # training examples by randomizi the weights in the last fully connected layer corresponding
+        # to the task that is about to be learned
         lobotomize(anml.fc, train_class)
 
+        # higher turns a standard pytorch model into a functional version that can be used to
+        # preseve the computation graph across multiple optimization steps
         with higher.innerloop_ctx(anml, inner_opt, copy_initial_weights=False) as (
             fnet,
             diffopt,
