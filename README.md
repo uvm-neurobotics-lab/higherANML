@@ -1,3 +1,7 @@
+PyTorch implementation of the "ANML" algorithm ([paper](https://arxiv.org/abs/2002.09571) [code](https://github.com/uvm-neurobotics-lab/ANML)) using the [higher](https://github.com/facebookresearch/higher) framework
+
+
+
 # Overview
 
 The "training" of a few-shots meta-learned model like ANML consists of:
