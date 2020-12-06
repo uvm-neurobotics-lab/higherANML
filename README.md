@@ -39,14 +39,14 @@ flags can be provided for exploring different setups.
 
 Number of tasks | Accuracy | Eval LR
 ----| ---- | ------- 
-10  | 0.92 | 0.0010 
-50  | 0.88 | 0.0007 
-75  | 0.87 | 0.0006 
-100 | 0.84 | 0.0004 
-200 | 0.80 | 0.0004 
-300 | 0.76 | 0.0003 
-400 | 0.71 | 0.0003 
-600 | 0.65 | 0.0003
+10  | 0.90 | 0.0010 
+50  | 0.89 | 0.0010
+75  | 0.86 | 0.0010 
+100 | 0.85 | 0.0010 
+200 | 0.80 | 0.0008 
+300 | 0.76 | 0.0008 
+400 | 0.72 | 0.0008 
+600 | 0.65 | 0.0008
 
 Evaluation can be performed using
 
@@ -54,4 +54,4 @@ Evaluation can be performed using
 python eval_omni.py --model trained_anmls/256_112_2304_ANML-29999.pth --classes 10 --lr 0.00085 --runs 10
 ```
 
-The model is sensitive to learning rates used, the data shown in the above table has been gathered sweeping several learning rates over multiple repeats.
+During evaluation the model is quite sensitive to learning rates used, the data shown in the above table has been gathered sweeping several learning rates over multiple repeats.
