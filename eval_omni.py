@@ -19,7 +19,7 @@ def check_path(path):
         raise argparse.ArgumentTypeError(f"model:{path} is not a valid path")
 
 
-def repeats(runs, path, classes, train_examples, lr):
+def repeats(runs, path, classes, train_examples, lr, device):
 
     omni_sampler = OmniSampler(root="../data/omni")
 
@@ -28,6 +28,7 @@ def repeats(runs, path, classes, train_examples, lr):
         sampler=omni_sampler,
         num_classes=classes,
         train_examples=train_examples,
+        device=device,
         lr=lr,
     )
 
@@ -77,4 +78,5 @@ if __name__ == "__main__":
         classes=args.classes,
         train_examples=args.train_examples,
         lr=args.lr,
+        device=device,
     )
