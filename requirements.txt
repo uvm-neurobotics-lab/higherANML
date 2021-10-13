@@ -1,0 +1,4 @@
+higher
+scikit-learn
+torchvision
+tqdm
