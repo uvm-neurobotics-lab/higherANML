@@ -1,0 +1,15 @@
+name: higherANML
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - torchvision
+  - pytorch
+  - tqdm
+  - numpy
+  - scikit-learn
+  - pip:
+    - higher
+prefix: /Users/ntraft/.conda/envs/higherANML

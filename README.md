@@ -1,6 +1,6 @@
-PyTorch implementation of the "ANML" algorithm ([paper](https://arxiv.org/abs/2002.09571) [code](https://github.com/uvm-neurobotics-lab/ANML)) using the [higher](https://github.com/facebookresearch/higher) framework
-
-
+PyTorch implementation of the "ANML" algorithm ([paper](https://arxiv.org/abs/2002.09571),
+[code](https://github.com/uvm-neurobotics-lab/ANML)) using the [higher](https://github.com/facebookresearch/higher)
+framework.
 
 # Overview
 
@@ -14,11 +14,42 @@ The code for these phases can be found inside [this](anml.py) file.
 
 # Prerequisites
 
-- Python3 
-- PyTorch 1.6.0 
+- Python >=3.5 
+- PyTorch >=1.6.0
 - [higher](https://github.com/facebookresearch/higher)
 - numpy
+- scikit-learn
 - tqdm
+
+## Creating Your Virtual Environment
+
+To get you set up faster, we support creating a Python environment directly from dependency files.
+
+### Conda
+
+If you have Anaconda or Miniconda, navigate to the `higherANML` repo and run:
+```shell
+$  conda env create -n higherANML -f environment.yml
+$  conda activate higherANML
+```
+If you want to name the environment differently, replace `higherANML` in the above lines with your custom name.
+
+### Pip
+
+To use classic Python tooling, navigate to the `higherANML` repo and run:
+```shell
+$  python -m venv .venv
+$  source .venv/bin/activate
+$  pip install -r requirements.txt
+```
+This assumes you want to store the virtual environment locally within the repo, as is common practice with `venv`. If
+you have errors and do not have the latest pip, try upgrading to see if that fixes the issue: `python -m pip install
+--upgrade pip`.
+
+### Pipenv
+
+We do not currently support `pipenv` because this author could not get it to install PyTorch correctly.
+But if you get a working `Pipfile` please do contribute!
 
 # Training
 
