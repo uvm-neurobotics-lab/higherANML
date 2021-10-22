@@ -66,7 +66,6 @@ if __name__ == "__main__":
         default=15,
         help="how many examples to use for training (max 20, default 15)",
     )
-
     parser.add_argument(
         "-m", "--model", type=check_path, help="path to the model to use"
     )
