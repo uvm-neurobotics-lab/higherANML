@@ -33,7 +33,7 @@ def train(rln, nm, mask, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda")
 
     for it in range(its):
 
-        train_data, train_class, (valid_ims, valid_labels) = omni_sampler.sample_train()
+        train_data, train_class, (valid_ims, valid_labels) = omni_sampler.sample_train(device=device)
 
         # To facilitate the propagation of gradients through the model we prevent memorization of
         # training examples by randomizi the weights in the last fully connected layer corresponding

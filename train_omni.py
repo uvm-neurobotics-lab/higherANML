@@ -1,6 +1,9 @@
 import argparse
+import os
+import sys
+
+import torch
 from torch import manual_seed
-from torch.cuda import is_available
 
 from anml import train
 
@@ -37,10 +40,17 @@ if __name__ == "__main__":
         default=1e-3,
         help="outer learning rate (default: 1e-3)",
     )
-    parser.add_argument("--device", default="cuda", help="cuda/cpu")
+    parser.add_argument("--device", default=None, help="cuda/cpu")
     parser.add_argument("--seed", type=int, default=1, help="random seed (default: 1)")
     args = parser.parse_args()
-    device = "cpu" if not is_available() else args.device
+
+    device = args.device
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    elif device.lower() == "cuda" and not torch.cuda.is_available():
+        print("Torch says CUDA is not available. Remove it from your command to proceed on CPU.", file=sys.stderr)
+        sys.exit(os.EX_UNAVAILABLE)
+
     manual_seed(args.seed)
 
     train(

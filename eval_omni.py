@@ -1,13 +1,15 @@
+import argparse
+import os
+import sys
+import warnings
+from pathlib import Path
+
+import numpy as np
 import torch
+from tqdm import trange
 
 from datasets.OmniSampler import OmniSampler
 from anml import test_train
-
-from tqdm import trange
-import numpy as np
-from pathlib import Path
-import argparse
-import warnings
 
 warnings.filterwarnings("ignore")
 
@@ -68,9 +70,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "-m", "--model", type=check_path, help="path to the model to use"
     )
-    parser.add_argument("-d", "--device", type=str, default="cuda", help="cuda/cpu")
+    parser.add_argument("-d", "--device", type=str, default=None, help="cuda/cpu")
     args = parser.parse_args()
-    device = "cpu" if not torch.cuda.is_available() else args.device
+
+    device = args.device
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    elif device.lower() == "cuda" and not torch.cuda.is_available():
+        print("Torch says CUDA is not available. Remove it from your command to proceed on CPU.", file=sys.stderr)
+        sys.exit(os.EX_UNAVAILABLE)
 
     repeats(
         runs=args.runs,
