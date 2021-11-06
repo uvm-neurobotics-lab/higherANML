@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import sys
 
@@ -6,6 +7,9 @@ import torch
 from torch import manual_seed
 
 from anml import train
+
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
 
 if __name__ == "__main__":
     # Training settings
@@ -44,11 +48,13 @@ if __name__ == "__main__":
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     elif device == "cuda" and not torch.cuda.is_available():
-        print("Torch says CUDA is not available. Remove it from your command to proceed on CPU.", file=sys.stderr)
+        logging.error("Torch says CUDA is not available. Remove it from your command to proceed on CPU.")
         sys.exit(os.EX_UNAVAILABLE)
+    logging.info(f"Using device: {device}")
 
     manual_seed(args.seed)
 
+    logging.info("Commencing training.")
     train(
         args.rln,
         args.nm,

@@ -1,10 +1,12 @@
+import logging
+from pathlib import Path
+
+import higher
+import numpy as np
 import torch
 from torch.nn.functional import cross_entropy
 from torch.nn.init import kaiming_normal_
 from torch.optim import SGD, Adam
-import higher
-import numpy as np
-from pathlib import Path
 
 from model import ANML
 from utils import Log
@@ -19,7 +21,9 @@ def lobotomize(layer, class_num):
 def train(rln, nm, mask, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda"):
 
     log = Log(f"{rln}_{nm}_{mask}_ANML")
+    logging.info("Loading Omniglot data into memory...")
     omni_sampler = OmniSampler(root="../data/omni")
+    logging.info("... done.")
 
     anml = ANML(rln, nm, mask).to(device)
 

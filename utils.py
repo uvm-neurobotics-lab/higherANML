@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from time import time, strftime, gmtime
 from torch import save
@@ -32,9 +33,7 @@ class Log:
                 end = time()
                 elapsed = end - self.start
                 self.start = end
-                print(
-                    f"{it}: {loss.item():.3f} | {acc:.3f} ({strftime('%H:%M:%S', gmtime(elapsed))})"
-                )
+                logging.info(f"{it}: {loss.item():.3f} | {acc:.3f} ({strftime('%H:%M:%S', gmtime(elapsed))})")
 
             if it % self.save_freq == 0:
                 save(model.state_dict(), f"trained_anmls/{self.name}-{it}.pth")
