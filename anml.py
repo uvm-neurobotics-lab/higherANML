@@ -1,10 +1,12 @@
+import logging
+from pathlib import Path
+
+import higher
+import numpy as np
 import torch
 from torch.nn.functional import cross_entropy
 from torch.nn.init import kaiming_normal_
 from torch.optim import SGD, Adam
-import higher
-import numpy as np
-from pathlib import Path
 
 from model import ANML
 from utils import Log
@@ -19,7 +21,9 @@ def lobotomize(layer, class_num):
 def train(rln, nm, mask, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda"):
 
     log = Log(f"{rln}_{nm}_{mask}_ANML")
+    logging.info("Loading Omniglot data into memory...")
     omni_sampler = OmniSampler(root="../data/omni")
+    logging.info("... done.")
 
     anml = ANML(rln, nm, mask).to(device)
 
@@ -33,15 +37,15 @@ def train(rln, nm, mask, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda")
 
     for it in range(its):
 
-        train_data, train_class, (valid_ims, valid_labels) = omni_sampler.sample_train()
+        train_data, train_class, (valid_ims, valid_labels) = omni_sampler.sample_train(device=device)
 
         # To facilitate the propagation of gradients through the model we prevent memorization of
-        # training examples by randomizi the weights in the last fully connected layer corresponding
+        # training examples by randomizing the weights in the last fully connected layer corresponding
         # to the task that is about to be learned
         lobotomize(anml.fc, train_class)
 
         # higher turns a standard pytorch model into a functional version that can be used to
-        # preseve the computation graph across multiple optimization steps
+        # preserve the computation graph across multiple optimization steps
         with higher.innerloop_ctx(anml, inner_opt, copy_initial_weights=False) as (
             fnet,
             diffopt,
