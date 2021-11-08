@@ -6,6 +6,12 @@ __pycache__/
 # C extensions
 *.so
 
+# Slurm output files
+*.out
+
+# Torch checkpoints
+*.pth
+
 # Distribution / packaging
 .Python
 build/
