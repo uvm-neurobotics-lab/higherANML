@@ -8,10 +8,9 @@ from torch.nn.functional import cross_entropy
 from torch.nn.init import kaiming_normal_
 from torch.optim import SGD, Adam
 
+from datasets.omniglot import create_OML_sampler
 from model import ANML
-from utils import Log
-from datasets.OmniSampler import OmniSampler
-from utils import divide_chunks
+from utils import divide_chunks, Log
 
 
 def lobotomize(layer, class_num):
@@ -19,9 +18,12 @@ def lobotomize(layer, class_num):
 
 
 def train(rln, nm, mask, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda"):
+    assert inner_lr > 0
+    assert outer_lr > 0
+    assert its > 0
 
     log = Log(f"{rln}_{nm}_{mask}_ANML")
-    omni_sampler = OmniSampler(root="../data/omni")
+    omni_sampler = create_OML_sampler(root="../data/omni")
 
     anml = ANML(rln, nm, mask).to(device)
 
@@ -45,8 +47,8 @@ def train(rln, nm, mask, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda")
         # higher turns a standard pytorch model into a functional version that can be used to
         # preserve the computation graph across multiple optimization steps
         with higher.innerloop_ctx(anml, inner_opt, copy_initial_weights=False) as (
-            fnet,
-            diffopt,
+                fnet,
+                diffopt,
         ):
             # Inner loop of 1 random task (20 images), one by one
             for im, label in train_data:
@@ -87,14 +89,13 @@ def test_test(model, test_data, test_examples=5):
 
 
 def test_train(
-    model_path,
-    sampler,
-    num_classes=10,
-    train_examples=15,
-    device="cuda",
-    lr=0.01,
+        model_path,
+        sampler,
+        num_classes=10,
+        train_examples=15,
+        device="cuda",
+        lr=0.01,
 ):
-
     name = Path(model_path).name
     sizes = [int(num) for num in name.split("_")[:3]]
     model = ANML(*sizes)

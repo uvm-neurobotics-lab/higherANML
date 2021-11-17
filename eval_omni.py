@@ -6,12 +6,9 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from PIL import Image
-from torchvision.transforms import Compose, ToTensor, Resize, Lambda
 from tqdm import trange
 
-from datasets.omniglot import Omniglot
-from datasets.ContinualMetaLearningSampler import ContinualMetaLearningSampler
+from datasets.omniglot import create_OML_sampler
 from anml import test_train
 
 warnings.filterwarnings("ignore")
@@ -24,35 +21,9 @@ def check_path(path):
         raise argparse.ArgumentTypeError(f"model: {path} is not a valid path")
 
 
-def create_data_sampler(root, im_size=28):
-    transforms = Compose(
-        [
-            Resize(im_size, Image.LANCZOS),
-            ToTensor(),
-            Lambda(lambda x: x.unsqueeze(0)),  # used to add batch dimension
-        ]
-    )
-    t_transforms = Lambda(lambda x: torch.tensor(x).unsqueeze(0))
-    omni_train = Omniglot(
-        root=root,
-        background=True,
-        download=True,
-        transform=transforms,
-        target_transform=t_transforms,
-    )
-    omni_test = Omniglot(
-        root=root,
-        background=False,
-        download=True,
-        transform=transforms,
-        target_transform=t_transforms,
-    )
-    return ContinualMetaLearningSampler(omni_train, omni_test)
-
-
 def repeats(runs, path, classes, train_examples, lr, device):
 
-    omni_sampler = create_data_sampler(root="../data/omni")
+    omni_sampler = create_OML_sampler(root="../data/omni")
 
     def run():
         return test_train(

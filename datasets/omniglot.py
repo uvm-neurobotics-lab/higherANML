@@ -1,9 +1,14 @@
+import logging
 from os.path import join
+from time import time
 
 import numpy as np
+import torch
 from PIL import Image
+from torchvision.transforms import Compose, ToTensor, Resize, Lambda
 
 from .class_indexed_dataset import ClassIndexedDataset
+from .ContinualMetaLearningSampler import ContinualMetaLearningSampler
 from .utils import download_and_extract_archive, check_integrity, list_dir, list_files
 
 
@@ -32,13 +37,13 @@ class Omniglot(ClassIndexedDataset):
     }
 
     def __init__(
-        self,
-        root,
-        background=True,
-        transform=None,
-        target_transform=None,
-        greyscale=True,
-        download=False,
+            self,
+            root,
+            background=True,
+            transform=None,
+            target_transform=None,
+            greyscale=True,
+            download=False,
     ):
         self.root = join(root, self.folder)
         self.background = background
@@ -121,9 +126,7 @@ class Omniglot(ClassIndexedDataset):
 
     def _check_integrity(self):
         zip_filename = self._get_target_folder()
-        if not check_integrity(
-            join(self.root, zip_filename + ".zip"), self.zips_md5[zip_filename]
-        ):
+        if not check_integrity(join(self.root, zip_filename + ".zip"), self.zips_md5[zip_filename]):
             return False
         return True
 
@@ -132,9 +135,48 @@ class Omniglot(ClassIndexedDataset):
             filename = self._get_target_folder()
             zip_filename = filename + ".zip"
             url = self.download_url_prefix + "/" + zip_filename
-            download_and_extract_archive(
-                url, self.root, filename=zip_filename, md5=self.zips_md5[filename]
-            )
+            download_and_extract_archive(url, self.root, filename=zip_filename, md5=self.zips_md5[filename])
 
     def _get_target_folder(self):
         return "images_background" if self.background else "images_evaluation"
+
+
+def create_OML_sampler(root, preload_train=False, preload_test=False, im_size=28):
+    transforms = Compose(
+        [
+            Resize(im_size, Image.LANCZOS),
+            ToTensor(),
+            Lambda(lambda x: x.unsqueeze(0)),  # used to add batch dimension
+        ]
+    )
+    t_transforms = Lambda(lambda x: torch.tensor(x).unsqueeze(0))
+    omni_train = Omniglot(
+        root=root,
+        background=True,
+        download=True,
+        transform=transforms,
+        target_transform=t_transforms,
+    )
+    omni_test = Omniglot(
+        root=root,
+        background=False,
+        download=True,
+        transform=transforms,
+        target_transform=t_transforms,
+    )
+
+    if preload_train:
+        start = time()
+        logging.info("Pre-loading Omniglot train...")
+        _ = [img for img in omni_train]
+        end = time()
+        logging.info(f"{end - start:.1f}s : Omniglot train pre-loaded.")
+
+    if preload_test:
+        start = time()
+        logging.info("Pre-loading Omniglot test...")
+        _ = [img for img in omni_test]
+        end = time()
+        logging.info(f"{end - start:.1f}s : Omniglot test pre-loaded.")
+
+    return ContinualMetaLearningSampler(omni_train, omni_test)
