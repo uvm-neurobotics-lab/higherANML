@@ -87,19 +87,18 @@ def test_test(model, test_data, test_examples=5):
 
 
 def test_train(
-    PATH,
+    model_path,
     sampler,
     num_classes=10,
     train_examples=15,
     device="cuda",
     lr=0.01,
-    quiet=False,
 ):
 
-    name = Path(PATH).name
+    name = Path(model_path).name
     sizes = [int(num) for num in name.split("_")[:3]]
     model = ANML(*sizes)
-    model.load_state_dict(torch.load(PATH, map_location="cpu"))
+    model.load_state_dict(torch.load(model_path, map_location="cpu"))
     model = model.to(device)
 
     torch.nn.init.kaiming_normal_(model.fc.weight)
@@ -107,7 +106,7 @@ def test_train(
     model.rln.requires_grad_(False)
 
     test_examples = 20 - train_examples
-    train_tasks, test_data = sampler.sample_test(num_classes, train_examples, device)
+    train_tasks, test_data = sampler.sample_test(num_classes, train_examples, test_examples, device)
 
     opt = torch.optim.Adam(model.parameters(), lr=lr)
 
