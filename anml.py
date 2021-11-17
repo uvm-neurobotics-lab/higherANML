@@ -21,9 +21,7 @@ def lobotomize(layer, class_num):
 def train(rln, nm, mask, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda"):
 
     log = Log(f"{rln}_{nm}_{mask}_ANML")
-    logging.info("Loading Omniglot data into memory...")
     omni_sampler = OmniSampler(root="../data/omni")
-    logging.info("... done.")
 
     anml = ANML(rln, nm, mask).to(device)
 
@@ -109,9 +107,7 @@ def test_train(
     model.rln.requires_grad_(False)
 
     test_examples = 20 - train_examples
-    train_tasks, test_data, classes = sampler.sample_test(
-        num_classes, train_examples, device
-    )
+    train_tasks, test_data = sampler.sample_test(num_classes, train_examples, device)
 
     opt = torch.optim.Adam(model.parameters(), lr=lr)
 

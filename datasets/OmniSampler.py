@@ -100,7 +100,7 @@ class OmniSampler:
         )
 
     def sample_test(self, num_tasks, train_examples=15, device="cuda"):
-        assert num_tasks < len(
+        assert num_tasks <= len(
             self.tasks_test
         ), f"Number of tasks requested is too large: {num_tasks} > {len(self.tasks_test)}"
         assert (
@@ -120,22 +120,15 @@ class OmniSampler:
         )
 
         # assemble the train/test trajectories
-        train_traj = [
-            self.omni_test[i] for train_task in train_tasks for i in train_task
-        ]
-
+        train_traj = [self.omni_test[i] for train_task in train_tasks for i in train_task]
         test_traj = [self.omni_test[i] for test_task in test_tasks for i in test_task]
 
         # test-train examples are divided by task and sent to device (cpu/cuda)
-        chunk2device = lambda chunk: [
-            (im.to(device), label.to(device)) for im, label in chunk
-        ]
-        train_tasks = [
-            chunk2device(chunk) for chunk in divide_chunks(train_traj, n=train_examples)
-        ]
+        chunk2device = lambda chunk: [(im.to(device), label.to(device)) for im, label in chunk]
+        train_tasks = [chunk2device(chunk) for chunk in divide_chunks(train_traj, n=train_examples)]
 
         # test-test tasks are collected into a massive tensor for one-pass evaluation
         ims, labels = list(zip(*test_traj))
         test_data = (torch.cat(ims).to(device), torch.cat(labels).to(device))
 
-        return train_tasks, test_data, tasks
+        return train_tasks, test_data
