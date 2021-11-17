@@ -7,6 +7,7 @@ import torch
 from torch import manual_seed
 
 from anml import train
+from datasets.omniglot import create_OML_sampler
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
@@ -55,7 +56,9 @@ if __name__ == "__main__":
     manual_seed(args.seed)
 
     logging.info("Commencing training.")
+    sampler = create_OML_sampler(root="../data/omni", seed=args.seed)
     train(
+        sampler,
         args.rln,
         args.nm,
         args.mask,

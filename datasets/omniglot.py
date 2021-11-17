@@ -141,7 +141,7 @@ class Omniglot(ClassIndexedDataset):
         return "images_background" if self.background else "images_evaluation"
 
 
-def create_OML_sampler(root, preload_train=False, preload_test=False, im_size=28):
+def create_OML_sampler(root, preload_train=False, preload_test=False, im_size=28, seed=None):
     transforms = Compose(
         [
             Resize(im_size, Image.LANCZOS),
@@ -179,4 +179,4 @@ def create_OML_sampler(root, preload_train=False, preload_test=False, im_size=28
         end = time()
         logging.info(f"{end - start:.1f}s : Omniglot test pre-loaded.")
 
-    return ContinualMetaLearningSampler(omni_train, omni_test)
+    return ContinualMetaLearningSampler(omni_train, omni_test, seed)

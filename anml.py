@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 
 import higher
@@ -8,7 +7,6 @@ from torch.nn.functional import cross_entropy
 from torch.nn.init import kaiming_normal_
 from torch.optim import SGD, Adam
 
-from datasets.omniglot import create_OML_sampler
 from model import ANML
 from utils import divide_chunks, Log
 
@@ -17,15 +15,13 @@ def lobotomize(layer, class_num):
     kaiming_normal_(layer.weight[class_num].unsqueeze(0))
 
 
-def train(rln, nm, mask, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda"):
+def train(sampler, rln_channels, nm_channels, mask_size, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda"):
     assert inner_lr > 0
     assert outer_lr > 0
     assert its > 0
 
-    log = Log(f"{rln}_{nm}_{mask}_ANML")
-    omni_sampler = create_OML_sampler(root="../data/omni")
-
-    anml = ANML(rln, nm, mask).to(device)
+    log = Log(f"{rln_channels}_{nm_channels}_{mask_size}_ANML")
+    anml = ANML(rln_channels, nm_channels, mask_size).to(device)
 
     # inner optimizer used during the learning phase
     inner_opt = SGD(
@@ -37,7 +33,7 @@ def train(rln, nm, mask, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda")
 
     for it in range(its):
 
-        train_data, train_class, (valid_ims, valid_labels) = omni_sampler.sample_train(device=device)
+        train_data, train_class, (valid_ims, valid_labels) = sampler.sample_train(device=device)
 
         # To facilitate the propagation of gradients through the model we prevent memorization of
         # training examples by randomizing the weights in the last fully connected layer corresponding
