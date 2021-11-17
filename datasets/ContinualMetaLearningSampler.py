@@ -1,6 +1,8 @@
+import logging
+
 import numpy as np
 import torch
-from numpy.random import default_rng
+from numpy.random import default_rng, SeedSequence
 from sklearn.model_selection import train_test_split
 
 from utils import unzip, divide_chunks
@@ -19,7 +21,7 @@ class ContinualMetaLearningSampler:
     (Javed & White, 2019).
     """
 
-    def __init__(self, train, test):
+    def __init__(self, train, test, seed=None):
         """
         Create the sampler.
 
@@ -27,7 +29,10 @@ class ContinualMetaLearningSampler:
             train (ClassIndexedDataset): The training set.
             test (ClassIndexedDataset): The testing set.
         """
-        self.rng = default_rng()
+        # If seed is None, then we will pull entropy from the OS and log it in case we need to reproduce this run.
+        ss = SeedSequence(seed)
+        logging.info(f"ContinualMetaLearningSampler is using seed = {ss.entropy}")
+        self.rng = default_rng(ss)
         self.train = train
         self.test = test
         self.train_sample_index = np.arange(len(self.train))
@@ -112,7 +117,7 @@ class ContinualMetaLearningSampler:
 
         # test-train examples are divided by task and sent to device (cpu/cuda)
         def chunk2device(chunk):
-            [(im.to(device), label.to(device)) for im, label in chunk]
+            return [(im.to(device), label.to(device)) for im, label in chunk]
 
         train_episodes = [chunk2device(chunk) for chunk in divide_chunks(train_traj, n=train_size)]
 

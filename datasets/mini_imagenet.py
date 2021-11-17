@@ -98,6 +98,7 @@ class MiniImageNet(ClassIndexedDataset):
                 self.all_items.append((cls, img))
             currdex += len(images)
 
+    @property
     def class_index(self):
         return self._class_index
 

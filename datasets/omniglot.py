@@ -85,6 +85,7 @@ class Omniglot(ClassIndexedDataset):
             self._class_index.append(np.arange(currdex, currdex + len(img_list)))
             currdex += len(img_list)
 
+    @property
     def class_index(self):
         return self._class_index
 
