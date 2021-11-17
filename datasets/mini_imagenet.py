@@ -8,9 +8,12 @@ from pathlib import Path
 
 import gdown
 import numpy as np
+import torch
 from PIL import Image
+from torchvision.transforms import Compose, ToTensor, Resize, Lambda
 
 from .class_indexed_dataset import ClassIndexedDataset
+from .ContinualMetaLearningSampler import ContinualMetaLearningSampler
 from .utils import extract_archive, check_integrity, list_dir, list_files
 
 
@@ -89,13 +92,13 @@ class MiniImageNet(ClassIndexedDataset):
         # self._class_index is a list of lists of the kind specified by `ClassIndexedDataset.class_index()`.
         self._class_index = []
         # self.all_items is a flattened list of all items from all classes. They will be sorted in alphabetical order of
-        # the full filepath of each image.
+        # the full filepath of each image. Classes are identified by their index, not their string name.
         self.all_items = []
         currdex = 0
-        for cls, images in self.classes.items():
+        for clsdex, (cls, images) in enumerate(self.classes.items()):
             self._class_index.append(np.arange(currdex, currdex + len(images)))
             for img in images:
-                self.all_items.append((cls, img))
+                self.all_items.append((clsdex, img))
             currdex += len(images)
 
     @property
@@ -148,3 +151,31 @@ class MiniImageNet(ClassIndexedDataset):
         # This will also check the integrity of the file for us and re-download if md5 doesn't match.
         gdown.cached_download(id=self.split.gid, path=self.tarpath, md5=self.split.md5, quiet=self.quiet)
         self._extract_if_needed()
+
+
+def create_OML_sampler(root, im_size=28, seed=None):
+    transforms = Compose(
+        [
+            Resize(im_size, Image.LANCZOS),
+            ToTensor(),
+            Lambda(lambda x: x.unsqueeze(0)),  # used to add batch dimension
+        ]
+    )
+    t_transforms = Lambda(lambda x: torch.tensor(x).unsqueeze(0))
+    train = MiniImageNet(
+        root=root,
+        split=Split.TRAIN,
+        transform=transforms,
+        target_transform=t_transforms,
+        greyscale=True,
+        download=True,
+    )
+    test = MiniImageNet(
+        root=root,
+        split=Split.TEST,
+        transform=transforms,
+        target_transform=t_transforms,
+        greyscale=True,
+        download=True,
+    )
+    return ContinualMetaLearningSampler(train, test, seed)

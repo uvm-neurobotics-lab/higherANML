@@ -6,15 +6,22 @@ import sys
 import torch
 from torch import manual_seed
 
+import datasets.mini_imagenet as imagenet
+import datasets.omniglot as omniglot
 from anml import train
-from datasets.omniglot import create_OML_sampler
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-
 
 if __name__ == "__main__":
     # Training settings
     parser = argparse.ArgumentParser(description="ANML training")
+    parser.add_argument(
+        "--dataset",
+        choices=["omni", "miniimagenet"],
+        type=str.lower,
+        default="omni",
+        help="The dataset to use."
+    )
     parser.add_argument("--rln", type=int, default=256, help="number of channels to use in the RLN")
     parser.add_argument("--nm", type=int, default=112, help="number of channels to use in the NM")
     parser.add_argument(
@@ -55,8 +62,15 @@ if __name__ == "__main__":
 
     manual_seed(args.seed)
 
+    if args.dataset == "omni":
+        sampler = omniglot.create_OML_sampler(root="../data/omni", seed=args.seed)
+    elif args.dataset == "miniimagenet":
+        sampler = imagenet.create_OML_sampler(root="../data/mini-imagenet", seed=args.seed)
+    else:
+        parser.error(f"Unknown dataset: {args.dataset}")
+        sys.exit(os.EX_USAGE)  # unreachable, but helps silence warnings about undefined sampler
+
     logging.info("Commencing training.")
-    sampler = create_OML_sampler(root="../data/omni", seed=args.seed)
     train(
         sampler,
         args.rln,
@@ -67,3 +81,4 @@ if __name__ == "__main__":
         its=args.epochs,
         device=device,
     )
+    logging.info("Training complete.")
