@@ -137,9 +137,11 @@ class MiniImageNet(ClassIndexedDataset):
         Untar the dataset if the folder isn't already present.
         """
         if not self.target_folder.exists():
+            if not self.quiet:
+                print(f"Unpacking {self.split.filename} to [self.target_folder]...", end=" ", flush=True)
             extract_archive(self.tarpath, self.target_folder.parent)
             if not self.quiet:
-                print(self.split.filename, "unpacked to", self.target_folder)
+                print("done.")
         else:
             if not self.quiet:
                 print(self.target_folder, "already exists.")

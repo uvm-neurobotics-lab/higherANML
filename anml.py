@@ -8,7 +8,8 @@ from torch.nn.init import kaiming_normal_
 from torch.optim import SGD, Adam
 
 from model import ANML
-from utils import divide_chunks, Log
+from utils import divide_chunks
+from utils.logging import Log
 
 
 def lobotomize(layer, class_num):

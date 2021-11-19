@@ -1,19 +1,11 @@
+"""
+Utilities for logging progress metrics and saving checkpoints.
+"""
+
 import logging
 from pathlib import Path
 from time import time, strftime, gmtime
 from torch import save
-
-
-def unzip(l):
-    # turn list of pairs into pairs of lists
-    return list(zip(*l))
-
-
-# Yield successive n-sized chunks from l.
-def divide_chunks(l, n):
-    # looping till length l
-    for i in range(0, len(l), n):
-        yield l[i : i + n]
 
 
 class Log:
@@ -22,7 +14,7 @@ class Log:
         self.name = name
         self.print_freq = print_freq
         self.save_freq = save_freq
-        Path("./trained_anmls").mkdir(exist_ok=True)
+        Path("../trained_anmls").mkdir(exist_ok=True)
 
     def __call__(self, it, loss, acc, model):
 
