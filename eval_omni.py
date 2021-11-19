@@ -8,7 +8,8 @@ import numpy as np
 import torch
 from tqdm import trange
 
-from datasets.omniglot import create_OML_sampler
+import datasets.mini_imagenet as imagenet
+import datasets.omniglot as omniglot
 from anml import test_train
 
 warnings.filterwarnings("ignore")
@@ -23,12 +24,18 @@ def check_path(path):
 
 def repeats(runs, path, classes, train_examples, lr, device):
 
-    omni_sampler = create_OML_sampler(root="../data/omni")
+    if args.dataset == "omni":
+        sampler = omniglot.create_OML_sampler(root="../data/omni", seed=args.seed)
+    elif args.dataset == "miniimagenet":
+        sampler = imagenet.create_OML_sampler(root="../data/mini-imagenet", seed=args.seed)
+    else:
+        parser.error(f"Unknown dataset: {args.dataset}")
+        sys.exit(os.EX_USAGE)  # unreachable, but helps silence warnings about undefined sampler
 
     def run():
         return test_train(
             path,
-            sampler=omni_sampler,
+            sampler=sampler,
             num_classes=classes,
             train_examples=train_examples,
             device=device,
@@ -39,15 +46,20 @@ def repeats(runs, path, classes, train_examples, lr, device):
     for _ in trange(runs):
         results.append(run().mean())
 
-    print(
-        f"Classes {classes} Accuracy {np.mean(results):.2f} (std {np.std(results):.2f})"
-    )
+    print(f"Classes {classes} Accuracy {np.mean(results):.2f} (std {np.std(results):.2f})")
 
 
 if __name__ == "__main__":
     # Training setting
     parser = argparse.ArgumentParser(description="ANML training")
 
+    parser.add_argument(
+        "--dataset",
+        choices=["omni", "miniimagenet"],
+        type=str.lower,
+        default="omni",
+        help="The dataset to use."
+    )
     parser.add_argument(
         "-l",
         "--lr",
@@ -71,6 +83,7 @@ if __name__ == "__main__":
         "-m", "--model", type=check_path, help="path to the model to use"
     )
     parser.add_argument("-d", "--device", choices=["cpu", "cuda"], type=str.lower, help="Device to use for PyTorch.")
+    parser.add_argument("--seed", type=int, default=1, help="random seed (default: 1)")
     args = parser.parse_args()
 
     device = args.device
