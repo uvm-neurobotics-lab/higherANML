@@ -1,27 +1,19 @@
-import argparse
+"""
+ANML Training Script
+"""
+
 import logging
-import os
-import sys
 
-import torch
-from torch import manual_seed
-
-import datasets.mini_imagenet as imagenet
-import datasets.omniglot as omniglot
+import utils.argparsing as argutils
 from anml import train
 
-logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 if __name__ == "__main__":
+    argutils.configure_logging(level=logging.INFO)
+
     # Training settings
-    parser = argparse.ArgumentParser(description="ANML training")
-    parser.add_argument(
-        "--dataset",
-        choices=["omni", "miniimagenet"],
-        type=str.lower,
-        default="omni",
-        help="The dataset to use."
-    )
+    parser = argutils.create_parser("ANML training")
+    argutils.add_dataset_args(parser)
     parser.add_argument("--rln", type=int, default=256, help="number of channels to use in the RLN")
     parser.add_argument("--nm", type=int, default=112, help="number of channels to use in the NM")
     parser.add_argument(
@@ -48,27 +40,12 @@ if __name__ == "__main__":
         default=1e-3,
         help="outer learning rate (default: 1e-3)",
     )
-    parser.add_argument("-d", "--device", choices=["cpu", "cuda"], type=str.lower, help="Device to use for PyTorch.")
-    parser.add_argument("--seed", type=int, default=1, help="random seed (default: 1)")
+    argutils.add_torch_args(parser, default_seed=1)
+
     args = parser.parse_args()
 
-    device = args.device
-    if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    elif device == "cuda" and not torch.cuda.is_available():
-        logging.error("Torch says CUDA is not available. Remove it from your command to proceed on CPU.")
-        sys.exit(os.EX_UNAVAILABLE)
-    logging.info(f"Using device: {device}")
-
-    manual_seed(args.seed)
-
-    if args.dataset == "omni":
-        sampler = omniglot.create_OML_sampler(root="../data/omni", seed=args.seed)
-    elif args.dataset == "miniimagenet":
-        sampler = imagenet.create_OML_sampler(root="../data/mini-imagenet", seed=args.seed)
-    else:
-        parser.error(f"Unknown dataset: {args.dataset}")
-        sys.exit(os.EX_USAGE)  # unreachable, but helps silence warnings about undefined sampler
+    argutils.set_seed(args.seed)
+    sampler = argutils.get_OML_dataset_sampler(parser, args)
 
     logging.info("Commencing training.")
     train(
@@ -79,6 +56,6 @@ if __name__ == "__main__":
         inner_lr=args.inner_lr,
         outer_lr=args.outer_lr,
         its=args.epochs,
-        device=device,
+        device=args.device,
     )
     logging.info("Training complete.")

@@ -1,15 +1,16 @@
+"""
+Script for evaluation of ANML using OML-style continual learning trajectories.
+"""
+
 import argparse
-import os
-import sys
+import logging
 import warnings
 from pathlib import Path
 
 import numpy as np
-import torch
 from tqdm import trange
 
-import datasets.mini_imagenet as imagenet
-import datasets.omniglot as omniglot
+import utils.argparsing as argutils
 from anml import test_train
 
 warnings.filterwarnings("ignore")
@@ -22,15 +23,7 @@ def check_path(path):
         raise argparse.ArgumentTypeError(f"model: {path} is not a valid path")
 
 
-def repeats(runs, path, classes, train_examples, lr, device):
-
-    if args.dataset == "omni":
-        sampler = omniglot.create_OML_sampler(root="../data/omni", seed=args.seed)
-    elif args.dataset == "miniimagenet":
-        sampler = imagenet.create_OML_sampler(root="../data/mini-imagenet", seed=args.seed)
-    else:
-        parser.error(f"Unknown dataset: {args.dataset}")
-        sys.exit(os.EX_USAGE)  # unreachable, but helps silence warnings about undefined sampler
+def repeats(runs, sampler, path, classes, train_examples, lr, device):
 
     def run():
         return test_train(
@@ -50,16 +43,12 @@ def repeats(runs, path, classes, train_examples, lr, device):
 
 
 if __name__ == "__main__":
-    # Training setting
-    parser = argparse.ArgumentParser(description="ANML training")
+    argutils.configure_logging(level=logging.INFO)
 
-    parser.add_argument(
-        "--dataset",
-        choices=["omni", "miniimagenet"],
-        type=str.lower,
-        default="omni",
-        help="The dataset to use."
-    )
+    # Training setting
+    parser = argutils.create_parser("ANML testing")
+
+    argutils.add_dataset_args(parser)
     parser.add_argument(
         "-l",
         "--lr",
@@ -82,22 +71,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "-m", "--model", type=check_path, help="path to the model to use"
     )
-    parser.add_argument("-d", "--device", choices=["cpu", "cuda"], type=str.lower, help="Device to use for PyTorch.")
-    parser.add_argument("--seed", type=int, default=1, help="random seed (default: 1)")
+    argutils.add_torch_args(parser)
+
     args = parser.parse_args()
 
-    device = args.device
-    if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    elif device == "cuda" and not torch.cuda.is_available():
-        print("Torch says CUDA is not available. Remove it from your command to proceed on CPU.", file=sys.stderr)
-        sys.exit(os.EX_UNAVAILABLE)
+    argutils.set_seed(args.seed)
+    sampler = argutils.get_OML_dataset_sampler(parser, args)
 
     repeats(
         runs=args.runs,
+        sampler=sampler,
         path=args.model,
         classes=args.classes,
         train_examples=args.train_examples,
         lr=args.lr,
-        device=device,
+        device=args.device,
     )
