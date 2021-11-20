@@ -11,6 +11,7 @@ import numpy as np
 import torch
 from PIL import Image
 from torchvision.transforms import Compose, ToTensor, Resize, Lambda
+from torchvision.transforms.functional import InterpolationMode
 
 from .class_indexed_dataset import ClassIndexedDataset
 from .ContinualMetaLearningSampler import ContinualMetaLearningSampler
@@ -117,6 +118,7 @@ class MiniImageNet(ClassIndexedDataset):
         Returns:
             tuple: (image, target) where target is index of the target character class.
         """
+        # TODO: Support slices.
         label, image_path = self.all_items[index]
         image = Image.open(image_path)
         if self.greyscale:
@@ -158,7 +160,7 @@ class MiniImageNet(ClassIndexedDataset):
 def create_OML_sampler(root, im_size=28, seed=None):
     transforms = Compose(
         [
-            Resize(im_size, Image.LANCZOS),
+            Resize(im_size, InterpolationMode.LANCZOS),
             ToTensor(),
             Lambda(lambda x: x.unsqueeze(0)),  # used to add batch dimension
         ]

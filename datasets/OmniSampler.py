@@ -2,10 +2,10 @@ from time import time
 import numpy as np
 from numpy.random import choice
 from sklearn.model_selection import train_test_split
-from PIL import Image
 
 import torch
 from torchvision.transforms import Compose, ToTensor, Resize, Lambda
+from torchvision.transforms.functional import InterpolationMode
 
 from .omniglot import Omniglot  # patched to use memoization
 from utils import unzip, divide_chunks
@@ -22,7 +22,7 @@ class OmniSampler:
     def __init__(self, root, preload_train=False, preload_test=False, im_size=28):
         transforms = Compose(
             [
-                Resize(im_size, Image.LANCZOS),
+                Resize(im_size, InterpolationMode.LANCZOS),
                 ToTensor(),
                 Lambda(lambda x: x.unsqueeze(0)),  # used to add batch dimension
             ]

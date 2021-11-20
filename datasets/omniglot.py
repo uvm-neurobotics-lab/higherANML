@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from PIL import Image
 from torchvision.transforms import Compose, ToTensor, Resize, Lambda
+from torchvision.transforms.functional import InterpolationMode
 
 from .class_indexed_dataset import ClassIndexedDataset
 from .ContinualMetaLearningSampler import ContinualMetaLearningSampler
@@ -144,7 +145,7 @@ class Omniglot(ClassIndexedDataset):
 def create_OML_sampler(root, preload_train=False, preload_test=False, im_size=28, seed=None):
     transforms = Compose(
         [
-            Resize(im_size, Image.LANCZOS),
+            Resize(im_size, InterpolationMode.LANCZOS),
             ToTensor(),
             Lambda(lambda x: x.unsqueeze(0)),  # used to add batch dimension
         ]
