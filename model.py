@@ -1,3 +1,5 @@
+import logging
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -51,6 +53,7 @@ class NM(nn.Module):
         batch_shape = (2,) + tuple(input_shape)
         shape_after_conv = self.forward_conv(torch.zeros(batch_shape)).shape
         assert len(shape_after_conv) == 2, "Conv output should only be two dims."
+        logging.debug(f"NM FC layer shape: {shape_after_conv[-1]} x {mask_size}")
         self.fc = nn.Linear(in_features=shape_after_conv[-1], out_features=mask_size)
 
     def forward_conv(self, x):
@@ -81,7 +84,9 @@ class ANML(nn.Module):
         shape_after_rln = self.rln(torch.zeros(batch_shape)).shape
         assert len(shape_after_rln) == 2, "RLN output should only be two dims."
         feature_size = shape_after_rln[-1]
+        logging.debug(f"RLN output size: {shape_after_rln}")
         self.nm = NM(input_shape, nm_chs, feature_size)
+        logging.debug(f"Final layer size: {feature_size} x {num_classes}")
         self.fc = nn.Linear(feature_size, num_classes)
 
     def forward(self, x):

@@ -6,12 +6,17 @@ import argparse
 import logging
 
 
-def configure_logging(**kwargs):
+def configure_logging(parsed_args=None, **kwargs):
     """
-    You are advised to call this at the beginning of your main script, and use `logging.info()` throughout the program,
-    instead of `print()`.
+    You are advised to call in your main script, after parsing the args. Then use `logging.info()` throughout the
+    program, instead of `print()`.
 
-    Delegates to `logging.basicConfig()`. Accepts all the same arguments, but supplies some better defaults.
+    Delegates to `logging.basicConfig()`. Accepts all the same arguments, but supplies some better defaults. Also
+    enables DEBUG level logging if the user supplies the `--verbose` argument (if using `add_verbose_arg()`).
+
+    Args:
+        parsed_args (argparse.Namespace): Arguments from command line, if desired.
+        kwargs: Any arguments supported by `logging.basicConfig()`.
     """
     # Default options.
     options = {
@@ -19,7 +24,10 @@ def configure_logging(**kwargs):
         "format": "[%(asctime)s] [%(levelname)s] %(message)s",
         "datefmt": "%Y-%m-%d %H:%M:%S",
     }
-    options.update(kwargs)  # allow client's selections to override defaults
+    options.update(kwargs)  # allow caller's selections to override defaults
+    if getattr(parsed_args, "verbose", False):
+        # allow command line user's preference to override all others
+        options["level"] = logging.DEBUG
     logging.basicConfig(**options)
 
 
@@ -40,6 +48,17 @@ def create_parser(desc):
         ArgumentParser: A new parser.
     """
     return argparse.ArgumentParser(description=desc, formatter_class=HelpFormatter)
+
+
+def add_verbose_arg(parser):
+    """
+    Adds an argument which turns on verbose logging, if using `configure_logging()`.
+
+    Args:
+        parser (ArgumentParser): The parser to modify.
+    """
+    parser.add_argument("-v", "--verbose", action="store_true", help="Turn on verbose logging.")
+    return parser
 
 
 def add_dataset_args(parser):
@@ -133,7 +152,7 @@ def add_torch_args(parser, default_seed=None):
 
 def set_seed(seed):
     """
-    Interprets the user's seed argument as given by `add_torch_args()` and seeds Python, NumPy, and PyTorch.
+    Seeds Python, NumPy, and PyTorch random number generators.
     """
     # Import in this scope so clients can still use the other utilities in this module without Torch.
     import numpy as np
@@ -153,6 +172,15 @@ def set_seed(seed):
         if seed != seed32:
             addl_str = f" (Torch and legacy NumPy will use the 32-bit version: {seed32})"
         logging.info(f"Using a fixed random seed: {seed}" + addl_str)
+
+
+def set_seed_from_args(parsed_args):
+    """
+    Interprets the user's seed argument as given by `add_torch_args()` and seeds Python, NumPy, and PyTorch.
+    Args:
+        parsed_args (argparse.Namespace): Arguments from command line.
+    """
+    set_seed(parsed_args.seed)
 
 
 def add_wandb_args(parser):

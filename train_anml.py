@@ -10,8 +10,6 @@ from anml import train
 
 
 if __name__ == "__main__":
-    argutils.configure_logging(level=logging.INFO)
-
     # Training settings
     parser = argutils.create_parser("ANML training")
     argutils.add_dataset_args(parser)
@@ -36,10 +34,11 @@ if __name__ == "__main__":
         help="outer learning rate (default: 1e-3)",
     )
     argutils.add_torch_args(parser, default_seed=1)
+    argutils.add_verbose_arg(parser)
 
     args = parser.parse_args()
-
-    argutils.set_seed(args.seed)
+    argutils.configure_logging(args, level=logging.INFO)
+    argutils.set_seed_from_args(args)
     sampler, input_shape = argutils.get_OML_dataset_sampler(parser, args)
 
     logging.info("Commencing training.")

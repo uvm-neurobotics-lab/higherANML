@@ -44,8 +44,6 @@ def repeats(runs, sampler, sampler_input_shape, path, classes, train_examples, l
 
 
 if __name__ == "__main__":
-    argutils.configure_logging(level=logging.INFO)
-
     # Training setting
     parser = argutils.create_parser("ANML testing")
 
@@ -73,10 +71,11 @@ if __name__ == "__main__":
         "-m", "--model", type=check_path, help="path to the model to use"
     )
     argutils.add_torch_args(parser)
+    argutils.add_verbose_arg(parser)
 
     args = parser.parse_args()
-
-    argutils.set_seed(args.seed)
+    argutils.configure_logging(args, level=logging.INFO)
+    argutils.set_seed_from_args(args)
     sampler, input_shape = argutils.get_OML_dataset_sampler(parser, args)
 
     repeats(
