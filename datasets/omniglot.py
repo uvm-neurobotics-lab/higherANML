@@ -143,6 +143,24 @@ class Omniglot(ClassIndexedDataset):
 
 
 def create_OML_sampler(root, preload_train=False, preload_test=False, im_size=28, seed=None):
+    """
+    Create a sampler for Omniglot data that will return examples in the framework specified by OML (see
+    ContinualMetaLearningSampler).
+
+    Args:
+        root (str or Path): Folder where the dataset will be located.
+        preload_train (bool): Whether to load all training images into memory up-front.
+        preload_test (bool): Whether to load all testing images into memory up-front.
+        im_size (int): Desired size of images, or None to default to 28x28.
+        seed (int or list[int]): Random seed for sampling.
+
+    Returns:
+        ContinualMetaLearningSampler: The sampler class.
+        tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
+    """
+    if im_size is None:
+        # For now, use 28x28 as default, instead of the Omniglot default of 105x105.
+        im_size = 28
     transforms = Compose(
         [
             Resize(im_size, InterpolationMode.LANCZOS),
@@ -180,4 +198,5 @@ def create_OML_sampler(root, preload_train=False, preload_test=False, im_size=28
         end = time()
         logging.info(f"{end - start:.1f}s : Omniglot test pre-loaded.")
 
-    return ContinualMetaLearningSampler(omni_train, omni_test, seed)
+    image_shape = (1, im_size, im_size)
+    return ContinualMetaLearningSampler(omni_train, omni_test, seed), image_shape

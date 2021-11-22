@@ -56,23 +56,28 @@ def add_dataset_args(parser):
     return parser
 
 
-def get_OML_dataset_sampler(parser, args):
+def get_OML_dataset_sampler(parser, args, im_size=None, greyscale=True):
     """
     Parses the dataset arguments, as given by `add_dataset_args()`. Also requires a `seed` argument.
 
     Args:
         parser (argparse.ArgumentParser): The argument parser.
         args (argparse.Namespace): The parsed args.
+        im_size (int): Image size (single integer, to be used as height and width).
+        greyscale (bool): Whether to convert images to greyscale.
     Returns:
         ContinualMetaLearningSampler: A sampler for the user-specified dataset.
+        tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
     import datasets.mini_imagenet as imagenet
     import datasets.omniglot as omniglot
 
     if args.dataset == "omni":
-        return omniglot.create_OML_sampler(root="../data/omni", seed=args.seed)
+        if not greyscale:
+            raise ValueError("Omniglot is only available in greyscale.")
+        return omniglot.create_OML_sampler(root="../data/omni", im_size=im_size, seed=args.seed)
     elif args.dataset == "miniimagenet":
-        return imagenet.create_OML_sampler(root="../data/mini-imagenet", seed=args.seed)
+        return imagenet.create_OML_sampler(root="../data/mini-imagenet", im_size=im_size, seed=args.seed)
     else:
         parser.error(f"Unknown dataset: {args.dataset}")
 
@@ -139,9 +144,15 @@ def set_seed(seed):
         logging.info(f"Using a non-deterministic random seed.")
     else:
         random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        logging.info(f"Using a fixed random seed: {seed}")
+        # Mask out higher bits, b/c the two RNGs below can't handle larger than 32-bit seeds. We still need to support
+        # larger seeds because newer NumPy code might have used a larger seed and we may want to reproduce that result.
+        seed32 = seed & (2 ** 32 - 1)
+        np.random.seed(seed32)
+        torch.manual_seed(seed32)
+        addl_str = ""
+        if seed != seed32:
+            addl_str = f" (Torch and legacy NumPy will use the 32-bit version: {seed32})"
+        logging.info(f"Using a fixed random seed: {seed}" + addl_str)
 
 
 def add_wandb_args(parser):

@@ -16,13 +16,20 @@ def lobotomize(layer, class_num):
     kaiming_normal_(layer.weight[class_num].unsqueeze(0))
 
 
-def train(sampler, rln_channels, nm_channels, mask_size, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda"):
+def train(sampler, input_shape, rln_channels, nm_channels, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda"):
     assert inner_lr > 0
     assert outer_lr > 0
     assert its > 0
 
-    log = Log(f"{rln_channels}_{nm_channels}_{mask_size}_ANML")
-    anml = ANML(rln_channels, nm_channels, mask_size).to(device)
+    # TODO: Auto-size this instead.
+    # num_classes = max(sampler.num_train_classes(), sampler.num_test_classes())
+    num_classes = 1000
+    # For now, we identify the architecture of saved models using their filename.
+    name = ""
+    for num in (*input_shape, rln_channels, nm_channels, num_classes):
+        name += f"{num}_"
+    log = Log(name + "ANML")
+    anml = ANML(input_shape, rln_channels, nm_channels, num_classes).to(device)
 
     # inner optimizer used during the learning phase
     inner_opt = SGD(
@@ -88,14 +95,44 @@ def test_test(model, test_data, test_examples=5):
 def test_train(
         model_path,
         sampler,
+        sampler_input_shape,
         num_classes=10,
         train_examples=15,
         device="cuda",
         lr=0.01,
 ):
     name = Path(model_path).name
-    sizes = [int(num) for num in name.split("_")[:3]]
-    model = ANML(*sizes)
+    # Identify architecture by collecting all integers at the beginning of the filename.
+    sizes = []
+    for num in name.split("_")[:-1]:
+        try:
+            sizes.append(int(num))
+        except ValueError:
+            # Not an int, so consider this the end of the list.
+            break
+    sizes = tuple(sizes)
+
+    if len(sizes) > 3:
+        # We'll assume image shapes are 3 dimensions: (C, H, W). Remainder is assumed to be all other params.
+        input_shape = sizes[:3]
+        model = ANML(input_shape, *sizes[3:])
+    elif len(sizes) == 3 and sizes[-1] == 2304:
+        # Backward compatibility: Before we included `input_shape` and `num_classes`. At this time, `num_classes` was
+        # always 1000 and we always used greyscale images.
+        out_classes = 1000
+        input_shape = (1, 28, 28)
+        rln_chs, nm_chs = sizes[:2]
+        model = ANML(input_shape, rln_chs, nm_chs, out_classes)
+    else:
+        # We currently don't need to support any other sizes, but could always change this.
+        raise RuntimeError(f"Unsupported model shape: {sizes}")
+
+    # Check if the images we are testing on match the dimensions of the images this model was built for.
+    if tuple(input_shape) != tuple(sampler_input_shape):
+        raise RuntimeError("The specified dataset image sizes do not match the size this model was trained for.\n"
+                           f"Data size:  {sampler_input_shape}\n"
+                           f"Model size: {input_shape}")
+
     model.load_state_dict(torch.load(model_path, map_location="cpu"))
     model = model.to(device)
 

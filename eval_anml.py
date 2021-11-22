@@ -23,12 +23,13 @@ def check_path(path):
         raise argparse.ArgumentTypeError(f"model: {path} is not a valid path")
 
 
-def repeats(runs, sampler, path, classes, train_examples, lr, device):
+def repeats(runs, sampler, sampler_input_shape, path, classes, train_examples, lr, device):
 
     def run():
         return test_train(
             path,
             sampler=sampler,
+            sampler_input_shape=sampler_input_shape,
             num_classes=classes,
             train_examples=train_examples,
             device=device,
@@ -76,11 +77,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     argutils.set_seed(args.seed)
-    sampler = argutils.get_OML_dataset_sampler(parser, args)
+    sampler, input_shape = argutils.get_OML_dataset_sampler(parser, args)
 
     repeats(
         runs=args.runs,
         sampler=sampler,
+        sampler_input_shape=input_shape,
         path=args.model,
         classes=args.classes,
         train_examples=args.train_examples,

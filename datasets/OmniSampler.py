@@ -66,6 +66,15 @@ class OmniSampler:
             end = time()
             print(f"{end - start:.1f}s : Omniglot test pre-loaded.")
 
+    def num_train_classes(self):
+        return len(self.omni_train._character_images)
+
+    def num_test_classes(self):
+        return len(self.omni_test._character_images)
+
+    def num_total_classes(self):
+        return len(self.omni_train._character_images) + len(self.omni_test._character_images)
+
     def sample_train(self, remember_size=64, device="cuda"):
         # Used during Meta-Training
         # prepare data for training and send it to the correct device

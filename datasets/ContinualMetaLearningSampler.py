@@ -38,6 +38,15 @@ class ContinualMetaLearningSampler:
         self.train_sample_index = np.arange(len(self.train))
         self.test_sample_index = np.arange(len(self.test))
 
+    def num_train_classes(self):
+        return len(self.train.class_index)
+
+    def num_test_classes(self):
+        return len(self.test.class_index)
+
+    def num_total_classes(self):
+        return len(self.train.class_index) + len(self.test.class_index)
+
     def sample_train(self, train_size=20, remember_size=64, device="cuda"):
         """
         Samples a single episode ("outer loop") of the meta-train procedure.

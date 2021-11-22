@@ -41,14 +41,14 @@ class MiniImageNet(ClassIndexedDataset):
     """
 
     def __init__(
-        self,
-        root,
-        split,
-        transform=None,
-        target_transform=None,
-        greyscale=False,
-        download=False,
-        quiet=False,
+            self,
+            root,
+            split,
+            transform=None,
+            target_transform=None,
+            greyscale=False,
+            download=False,
+            quiet=False,
     ):
         """
         Create the dataset.
@@ -157,21 +157,41 @@ class MiniImageNet(ClassIndexedDataset):
         self._extract_if_needed()
 
 
-def create_OML_sampler(root, im_size=28, seed=None):
-    transforms = Compose(
-        [
+def create_OML_sampler(root, im_size=None, greyscale=False, seed=None):
+    """
+    Create a sampler for Mini-ImageNet data that will return examples in the framework specified by OML (see
+    ContinualMetaLearningSampler).
+
+    Args:
+        root (str or Path): Folder where the dataset will be located.
+        im_size (int): Desired size of images, or None to use the on-disk sizes.
+        greyscale (bool): Whether to convert images to greyscale.
+        seed (int or list[int]): Random seed for sampling.
+
+    Returns:
+        ContinualMetaLearningSampler: The sampler class.
+        tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
+    """
+    # Use the default data size if a specific size is not requested.
+    if im_size is None:
+        transforms = [
+            ToTensor(),
+            Lambda(lambda x: x.unsqueeze(0)),  # used to add batch dimension
+        ]
+    else:
+        transforms = [
             Resize(im_size, InterpolationMode.LANCZOS),
             ToTensor(),
             Lambda(lambda x: x.unsqueeze(0)),  # used to add batch dimension
         ]
-    )
+    transforms = Compose(transforms)
     t_transforms = Lambda(lambda x: torch.tensor(x).unsqueeze(0))
     train = MiniImageNet(
         root=root,
         split=Split.TRAIN,
         transform=transforms,
         target_transform=t_transforms,
-        greyscale=True,
+        greyscale=greyscale,
         download=True,
     )
     test = MiniImageNet(
@@ -179,7 +199,10 @@ def create_OML_sampler(root, im_size=28, seed=None):
         split=Split.TEST,
         transform=transforms,
         target_transform=t_transforms,
-        greyscale=True,
+        greyscale=greyscale,
         download=True,
     )
-    return ContinualMetaLearningSampler(train, test, seed)
+    # We know that by default this dataset has 84x84 color images.
+    actual_size = 84 if im_size is None else im_size
+    image_shape = (1 if greyscale else 3, actual_size, actual_size)
+    return ContinualMetaLearningSampler(train, test, seed), image_shape

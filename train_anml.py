@@ -3,6 +3,7 @@ ANML Training Script
 """
 
 import logging
+import sys
 
 import utils.argparsing as argutils
 from anml import train
@@ -16,12 +17,6 @@ if __name__ == "__main__":
     argutils.add_dataset_args(parser)
     parser.add_argument("--rln", type=int, default=256, help="number of channels to use in the RLN")
     parser.add_argument("--nm", type=int, default=112, help="number of channels to use in the NM")
-    parser.add_argument(
-        "--mask",
-        type=int,
-        default=2304,
-        help="size of the modulatory mask, needs to match extracted features size",
-    )
     parser.add_argument(
         "--epochs",
         type=int,
@@ -45,14 +40,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     argutils.set_seed(args.seed)
-    sampler = argutils.get_OML_dataset_sampler(parser, args)
+    sampler, input_shape = argutils.get_OML_dataset_sampler(parser, args)
 
     logging.info("Commencing training.")
     train(
         sampler,
+        input_shape,
         args.rln,
         args.nm,
-        args.mask,
         inner_lr=args.inner_lr,
         outer_lr=args.outer_lr,
         its=args.epochs,
