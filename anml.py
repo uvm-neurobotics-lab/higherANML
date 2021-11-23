@@ -21,13 +21,23 @@ def create_model(input_shape, nm_channels, rln_channels, device):
     # For backward compatibility, we use the original ANML if the images are <=30 px.
     # Otherwise, we automatically size the net as appropriate.
     if input_shape[-1] <= 30:
+        # Temporarily turn off the "legacy" model so we can test parity with the new model.
+        # model_args = {
+        #     "input_shape": input_shape,
+        #     "rln_chs": rln_channels,
+        #     "nm_chs": nm_channels,
+        #     "num_classes": num_classes,
+        # }
+        # anml = LegacyANML(**model_args)
         model_args = {
             "input_shape": input_shape,
             "rln_chs": rln_channels,
             "nm_chs": nm_channels,
             "num_classes": num_classes,
+            "num_conv_blocks": 3,
+            "pool_rln_output": False,
         }
-        anml = LegacyANML(**model_args).to(device)
+        anml = ANML(**model_args)
     else:
         model_args = {
             "input_shape": input_shape,
@@ -37,7 +47,8 @@ def create_model(input_shape, nm_channels, rln_channels, device):
             "num_conv_blocks": recommended_number_of_convblocks(input_shape),
             "pool_rln_output": True,
         }
-        anml = ANML(**model_args).to(device)
+        anml = ANML(**model_args)
+    anml.to(device)
     logging.info(f"Model shape:\n{anml}")
     return anml, model_args
 
