@@ -68,7 +68,7 @@ def load_model(model_path, sampler_input_shape):
         supported = (".net", ".pt", ".pth")
         raise RuntimeError(f"Unsupported model file type: {model_path}. Expected one of {supported}.")
 
-    logging.info(f"Model shape:\n{model}")
+    logging.debug(f"Model shape:\n{model}")
 
     # Check if the images we are testing on match the dimensions of the images this model was built for.
     if tuple(model.input_shape) != tuple(sampler_input_shape):
