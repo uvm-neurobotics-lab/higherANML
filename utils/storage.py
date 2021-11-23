@@ -25,6 +25,15 @@ def check_ext(file, expect="net"):
 
 
 def load(file):
+    """
+    Load a saved PyTorch module.
+
+    Args:
+        file (str or Path): The file from which to load. Should have been saved using `save()`.
+
+    Returns:
+        torch.nn.Module: The re-constituted module.
+    """
 
     # check_ext(file, expect="net")
 
@@ -52,6 +61,17 @@ def load(file):
 
 
 def save(net, file, opt=None, check=True, **kwargs):
+    """
+    Save the given PyTorch module.
+
+    Args:
+        net (torch.nn.Module): The module to be saved.
+        file (str or Path): Full path to save to.
+        opt (torch.optim.Optimizer): The optimizer being used for training. Optional.
+        check (bool): Whether to re-load the file immediately upon saving to check that it works properly.
+        **kwargs: The exact arguments that were given to the model constructor. These will be saved so the model can
+            be re-constructed in the same way upon loading.
+    """
     # don't call these .pth or something you will never remember, use .net
     # because networks, right? and it's not like anyone else used it before right?
     check_ext(file, expect="net")
@@ -76,9 +96,8 @@ def save(net, file, opt=None, check=True, **kwargs):
 
     # store additional info for forensic
     info["creator"] = get_creator()
-    # get the class name to re-instantiate it at load time
+    # get the class name and constructor arguments to re-instantiate it at load time
     info["class"] = net.__class__.__name__
-    # if you really really have to pass parameters to the constructor use kwargs
     info["kwargs"] = kwargs
 
     if issubclass(opt.__class__, torch.optim.Optimizer):

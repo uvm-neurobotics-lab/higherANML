@@ -21,13 +21,25 @@ def create_model(input_shape, nm_channels, rln_channels, device):
     # For backward compatibility, we use the original ANML if the images are <=30 px.
     # Otherwise, we automatically size the net as appropriate.
     if input_shape[-1] <= 30:
-        anml = LegacyANML(input_shape, rln_channels, nm_channels, num_classes).to(device)
+        model_args = {
+            "input_shape": input_shape,
+            "rln_chs": rln_channels,
+            "nm_chs": nm_channels,
+            "num_classes": num_classes,
+        }
+        anml = LegacyANML(**model_args).to(device)
     else:
-        num_blocks = recommended_number_of_convblocks(input_shape)
-        pool_rln_output = True
-        anml = ANML(input_shape, rln_channels, nm_channels, num_classes, num_blocks, pool_rln_output).to(device)
+        model_args = {
+            "input_shape": input_shape,
+            "rln_chs": rln_channels,
+            "nm_chs": nm_channels,
+            "num_classes": num_classes,
+            "num_conv_blocks": recommended_number_of_convblocks(input_shape),
+            "pool_rln_output": True,
+        }
+        anml = ANML(**model_args).to(device)
     logging.debug(f"Model shape:\n{anml}")
-    return anml
+    return anml, model_args
 
 
 def load_model(model_path, sampler_input_shape):
@@ -75,18 +87,16 @@ def train(sampler, input_shape, rln_channels, nm_channels, inner_lr=1e-1, outer_
     assert outer_lr > 0
     assert its > 0
 
-    anml = create_model(input_shape, nm_channels, rln_channels, device)
+    anml, model_args = create_model(input_shape, nm_channels, rln_channels, device)
 
     # Set up progress/checkpoint logger. Name according to the supported input size, just for convenience.
-    name = "-".join(map(str, input_shape))
-    log = Log("ANML-" + name)
+    name = "ANML-" + "-".join(map(str, input_shape))
+    log = Log(name, model_args)
 
     # inner optimizer used during the learning phase
-    inner_opt = SGD(
-        list(anml.rln.parameters()) + list(anml.fc.parameters()), lr=inner_lr
-    )
-    # outer optimizer used during the remembering phase, the learning is propagate through the
-    # inner loop optimizations computing second order gradients
+    inner_opt = SGD(list(anml.rln.parameters()) + list(anml.fc.parameters()), lr=inner_lr)
+    # outer optimizer used during the remembering phase; the learning is propagated through the inner loop
+    # optimizations, computing second order gradients.
     outer_opt = Adam(anml.parameters(), lr=outer_lr)
 
     for it in range(its):
