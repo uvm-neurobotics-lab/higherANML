@@ -38,7 +38,7 @@ def create_model(input_shape, nm_channels, rln_channels, device):
             "pool_rln_output": True,
         }
         anml = ANML(**model_args).to(device)
-    logging.debug(f"Model shape:\n{anml}")
+    logging.info(f"Model shape:\n{anml}")
     return anml, model_args
 
 
@@ -68,7 +68,7 @@ def load_model(model_path, sampler_input_shape):
         supported = (".net", ".pt", ".pth")
         raise RuntimeError(f"Unsupported model file type: {model_path}. Expected one of {supported}.")
 
-    logging.debug(f"Model shape:\n{model}")
+    logging.info(f"Model shape:\n{model}")
 
     # Check if the images we are testing on match the dimensions of the images this model was built for.
     if tuple(model.input_shape) != tuple(sampler_input_shape):
@@ -82,7 +82,17 @@ def lobotomize(layer, class_num):
     kaiming_normal_(layer.weight[class_num].unsqueeze(0))
 
 
-def train(sampler, input_shape, rln_channels, nm_channels, inner_lr=1e-1, outer_lr=1e-3, its=30000, device="cuda"):
+def train(
+        sampler,
+        input_shape,
+        rln_channels,
+        nm_channels,
+        inner_lr=1e-1,
+        outer_lr=1e-3,
+        its=30000,
+        device="cuda",
+        verbose=False
+):
     assert inner_lr > 0
     assert outer_lr > 0
     assert its > 0
@@ -91,7 +101,8 @@ def train(sampler, input_shape, rln_channels, nm_channels, inner_lr=1e-1, outer_
 
     # Set up progress/checkpoint logger. Name according to the supported input size, just for convenience.
     name = "ANML-" + "-".join(map(str, input_shape))
-    log = Log(name, model_args)
+    print_freq = 1 if verbose else 10
+    log = Log(name, model_args, print_freq)
 
     # inner optimizer used during the learning phase
     inner_opt = SGD(list(anml.rln.parameters()) + list(anml.fc.parameters()), lr=inner_lr)

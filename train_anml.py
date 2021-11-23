@@ -51,5 +51,6 @@ if __name__ == "__main__":
         outer_lr=args.outer_lr,
         its=args.epochs,
         device=args.device,
+        verbose=args.verbose,
     )
     logging.info("Training complete.")

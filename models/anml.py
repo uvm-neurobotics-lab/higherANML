@@ -15,27 +15,16 @@ def _linear_layer(in_dims, out_dims):
     return nn.Linear(in_dims, out_dims)
 
 
-class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, pooling=True):
-        super(ConvBlock, self).__init__()
-        self.pooling = pooling
-        self.conv = nn.Conv2d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=(3, 3),
-            stride=1,
-            padding=0,
-        )
-        self.norm = nn.InstanceNorm2d(out_channels, affine=True)
-        self.pool = nn.MaxPool2d(2)
-
-    def forward(self, x):
-        x = self.conv(x)
-        x = self.norm(x)
-        x = torch.relu(x)
-        if self.pooling:
-            x = self.pool(x)
-        return x
+def _conv_block(in_channels, out_channels, pooling=True):
+    # NOTE: If the parameters of this conv+pooling change, we also need to change `recommended_number_of_convblocks()`.
+    oplist = [
+        nn.Conv2d(in_channels, out_channels, (3, 3), stride=(1, 1), padding=0),
+        nn.InstanceNorm2d(out_channels, affine=True),
+        nn.ReLU(),
+    ]
+    if pooling:
+        oplist.append(nn.MaxPool2d(2))
+    return nn.Sequential(*oplist)
 
 
 def recommended_number_of_convblocks(input_shape):
@@ -62,7 +51,7 @@ def _construct_convnet(in_channels, block_descriptions):
     assert len(block_descriptions) > 0
     blocks = []
     for channels, should_pool in block_descriptions:
-        blocks.append(ConvBlock(in_channels, channels, should_pool))
+        blocks.append(_conv_block(in_channels, channels, should_pool))
         in_channels = channels
     return nn.Sequential(*blocks)
 
@@ -93,6 +82,7 @@ class NM(nn.Module):
         shape_after_conv = self.forward_conv(torch.zeros(batch_shape)).shape
         assert len(shape_after_conv) == 2, "Conv output should only be two dims."
         self.fc = _linear_layer(shape_after_conv[-1], mask_size)
+        self.sigmoid = nn.Sigmoid()
 
     def forward_conv(self, x):
         x = self.encoder(x)
@@ -100,7 +90,7 @@ class NM(nn.Module):
 
     def forward_linear(self, x):
         x = self.fc(x)
-        x = torch.sigmoid(x)
+        x = self.sigmoid(x)
         return x
 
     def forward(self, x):
