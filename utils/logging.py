@@ -15,7 +15,7 @@ class Log:
         self.name = name
         self.print_freq = print_freq
         self.save_freq = save_freq
-        Path("../trained_anmls").mkdir(exist_ok=True)
+        Path("./trained_anmls").mkdir(exist_ok=True)
 
     def __call__(self, it, loss, acc, model):
         if self.start < 0:

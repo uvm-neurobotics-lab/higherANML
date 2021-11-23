@@ -5,6 +5,7 @@ Utilities for saving/loading models to/from disk.
 import dis
 import importlib
 import inspect
+import logging
 import sys
 import tempfile
 import time
@@ -14,10 +15,13 @@ from pathlib import Path
 
 import unittest
 
+_logger = logging.getLogger(__name__)
+
 
 def check_ext(file, expect="net"):
     ext = file.split(".")[-1]
-    assert ext == expect, f"Expect file extension to be .net, got .{ext}"
+    if ext != expect:
+        raise RuntimeError(f"Expected file extension to be .net, got .{ext}")
 
 
 def load(file):
@@ -47,7 +51,7 @@ def load(file):
     return net
 
 
-def save(net, file, opt=None, check=True, verbose=False, **kwargs):
+def save(net, file, opt=None, check=True, **kwargs):
     # don't call these .pth or something you will never remember, use .net
     # because networks, right? and it's not like anyone else used it before right?
     check_ext(file, expect="net")
@@ -61,20 +65,14 @@ def save(net, file, opt=None, check=True, verbose=False, **kwargs):
         info = net.serialize_info
 
     elif inspect.getmodule(net).__package__ == "torchvision.models":
-        raise RuntimeError(
-            f"This is not the save you are looking for. Use torch.save instead."
-        )
+        raise RuntimeError(f"This is not the save you are looking for. Use torch.save instead.")
 
     elif issubclass(net.__class__, torch.nn.Module):
-
         # if a module uses other local imports we want to include them
         imports = find_localimports(net)
         info["source"] = get_sources(imports)
-
     else:
-        raise RuntimeError(
-            f"Expected torch.nn.Module or coldmodels but got {net.__class__} instead."
-        )
+        raise RuntimeError(f"Expected torch.nn.Module or coldmodels but got {net.__class__} instead.")
 
     # store additional info for forensic
     info["creator"] = get_creator()
@@ -93,8 +91,7 @@ def save(net, file, opt=None, check=True, verbose=False, **kwargs):
     # paranoia check
     if check:
         assert load(file) is not None
-    if verbose:
-        print(f"Model saved to {file}")
+    _logger.info(f"Model saved to {file}")
 
 
 def get_creator():
