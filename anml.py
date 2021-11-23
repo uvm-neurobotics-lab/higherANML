@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import higher
@@ -7,9 +8,62 @@ from torch.nn.functional import cross_entropy
 from torch.nn.init import kaiming_normal_
 from torch.optim import SGD, Adam
 
-from model import ANML
+import utils.storage as storage
+from models import ANML, LegacyANML, recommended_number_of_convblocks
 from utils import divide_chunks
 from utils.logging import Log
+
+
+def create_model(input_shape, nm_channels, rln_channels, device):
+    # TODO: Auto-size this instead.
+    # num_classes = max(sampler.num_train_classes(), sampler.num_test_classes())
+    num_classes = 1000
+    # For backward compatibility, we use the original ANML if the images are <=30 px.
+    # Otherwise, we automatically size the net as appropriate.
+    if input_shape[-1] <= 30:
+        anml = LegacyANML(input_shape, rln_channels, nm_channels, num_classes).to(device)
+    else:
+        num_blocks = recommended_number_of_convblocks(input_shape)
+        pool_rln_output = True
+        anml = ANML(input_shape, rln_channels, nm_channels, num_classes, num_blocks, pool_rln_output).to(device)
+    logging.debug(f"Model shape:\n{anml}")
+    return anml
+
+
+def load_model(model_path, sampler_input_shape):
+    model_path = Path(model_path).resolve()
+    if model_path.suffix == ".net":
+        # Assume this was saved by the storage module, which pickles the entire model.
+        model = storage.load(model_path)
+    elif model_path.suffix == ".pt" or model_path.suffix == ".pth":
+        # Assume the model was saved in the legacy format:
+        #   - Only state_dict is stored.
+        #   - Model shape is identified by the filename.
+        sizes = [int(num) for num in model_path.name.split("_")[:-1]]
+        if len(sizes) != 3:
+            raise RuntimeError(f"Unsupported model shape: {sizes}")
+        rln_chs, nm_chs, mask_size = sizes
+        if mask_size != (rln_chs * 9):
+            raise RuntimeError(f"Unsupported model shape: {sizes}")
+
+        # Backward compatibility: Before we constructed the network based on `input_shape` and `num_classes`. At this
+        # time, `num_classes` was always 1000 and we always used greyscale 28x28 images.
+        input_shape = (1, 28, 28)
+        out_classes = 1000
+        model = LegacyANML(input_shape, rln_chs, nm_chs, out_classes)
+        model.load_state_dict(torch.load(model_path, map_location="cpu"))
+    else:
+        supported = (".net", ".pt", ".pth")
+        raise RuntimeError(f"Unsupported model file type: {model_path}. Expected one of {supported}.")
+
+    logging.debug(f"Model shape:\n{model}")
+
+    # Check if the images we are testing on match the dimensions of the images this model was built for.
+    if tuple(model.input_shape) != tuple(sampler_input_shape):
+        raise RuntimeError("The specified dataset image sizes do not match the size this model was trained for.\n"
+                           f"Data size:  {sampler_input_shape}\n"
+                           f"Model size: {model.input_shape}")
+    return model
 
 
 def lobotomize(layer, class_num):
@@ -21,15 +75,11 @@ def train(sampler, input_shape, rln_channels, nm_channels, inner_lr=1e-1, outer_
     assert outer_lr > 0
     assert its > 0
 
-    # TODO: Auto-size this instead.
-    # num_classes = max(sampler.num_train_classes(), sampler.num_test_classes())
-    num_classes = 1000
-    # For now, we identify the architecture of saved models using their filename.
-    name = ""
-    for num in (*input_shape, rln_channels, nm_channels, num_classes):
-        name += f"{num}_"
-    log = Log(name + "ANML")
-    anml = ANML(input_shape, rln_channels, nm_channels, num_classes).to(device)
+    anml = create_model(input_shape, nm_channels, rln_channels, device)
+
+    # Set up progress/checkpoint logger. Name according to the supported input size, just for convenience.
+    name = "-".join(map(str, input_shape))
+    log = Log("ANML-" + name)
 
     # inner optimizer used during the learning phase
     inner_opt = SGD(
@@ -101,39 +151,7 @@ def test_train(
         device="cuda",
         lr=0.01,
 ):
-    name = Path(model_path).name
-    # Identify architecture by collecting all integers at the beginning of the filename.
-    sizes = []
-    for num in name.split("_")[:-1]:
-        try:
-            sizes.append(int(num))
-        except ValueError:
-            # Not an int, so consider this the end of the list.
-            break
-    sizes = tuple(sizes)
-
-    if len(sizes) > 3:
-        # We'll assume image shapes are 3 dimensions: (C, H, W). Remainder is assumed to be all other params.
-        input_shape = sizes[:3]
-        model = ANML(input_shape, *sizes[3:])
-    elif len(sizes) == 3 and sizes[-1] == 2304:
-        # Backward compatibility: Before we included `input_shape` and `num_classes`. At this time, `num_classes` was
-        # always 1000 and we always used greyscale images.
-        out_classes = 1000
-        input_shape = (1, 28, 28)
-        rln_chs, nm_chs = sizes[:2]
-        model = ANML(input_shape, rln_chs, nm_chs, out_classes)
-    else:
-        # We currently don't need to support any other sizes, but could always change this.
-        raise RuntimeError(f"Unsupported model shape: {sizes}")
-
-    # Check if the images we are testing on match the dimensions of the images this model was built for.
-    if tuple(input_shape) != tuple(sampler_input_shape):
-        raise RuntimeError("The specified dataset image sizes do not match the size this model was trained for.\n"
-                           f"Data size:  {sampler_input_shape}\n"
-                           f"Model size: {input_shape}")
-
-    model.load_state_dict(torch.load(model_path, map_location="cpu"))
+    model = load_model(model_path, sampler_input_shape)
     model = model.to(device)
 
     torch.nn.init.kaiming_normal_(model.fc.weight)

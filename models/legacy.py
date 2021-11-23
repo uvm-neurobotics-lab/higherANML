@@ -1,4 +1,6 @@
-import logging
+"""
+Legacy ANML model, to support loading models from before a refactoring of the model internals.
+"""
 
 import torch
 import torch.nn as nn
@@ -28,11 +30,11 @@ class ConvBlock(nn.Module):
 
 
 class RLN(nn.Module):
-    def __init__(self, in_channels, hidden_channels):
+    def __init__(self, channels):
         super(RLN, self).__init__()
-        self.convBlock1 = ConvBlock(in_channels, hidden_channels)
-        self.convBlock2 = ConvBlock(hidden_channels, hidden_channels)
-        self.convBlock3 = ConvBlock(hidden_channels, hidden_channels, pooling=False)
+        self.convBlock1 = ConvBlock(1, channels)
+        self.convBlock2 = ConvBlock(channels, channels)
+        self.convBlock3 = ConvBlock(channels, channels, pooling=False)
 
     def forward(self, x):
         x = self.convBlock1(x)
@@ -44,52 +46,41 @@ class RLN(nn.Module):
 
 
 class NM(nn.Module):
-    def __init__(self, input_shape, hidden_channels, mask_size):
+    def __init__(self, channels, mask_size):
         super(NM, self).__init__()
-        self.convBlock1 = ConvBlock(input_shape[0], hidden_channels)
-        self.convBlock2 = ConvBlock(hidden_channels, hidden_channels)
-        self.convBlock3 = ConvBlock(hidden_channels, hidden_channels, pooling=False)
-        # To create the correct size of linear layer, we need to first know the size of the conv output.
-        batch_shape = (2,) + tuple(input_shape)
-        shape_after_conv = self.forward_conv(torch.zeros(batch_shape)).shape
-        assert len(shape_after_conv) == 2, "Conv output should only be two dims."
-        logging.debug(f"NM FC layer shape: {shape_after_conv[-1]} x {mask_size}")
-        self.fc = nn.Linear(in_features=shape_after_conv[-1], out_features=mask_size)
+        self.convBlock1 = ConvBlock(1, channels)
+        self.convBlock2 = ConvBlock(channels, channels)
+        self.convBlock3 = ConvBlock(channels, channels, pooling=False)
+        # Assumes an image size of 28x28 s.t. the final reduced size is 3x3.
+        self.fc = nn.Linear(in_features=channels * 3 * 3, out_features=mask_size)
 
-    def forward_conv(self, x):
+    def forward(self, x):
         x = self.convBlock1(x)
         x = self.convBlock2(x)
         x = self.convBlock3(x)
-        x = torch.flatten(x, start_dim=1)
-        return x
 
-    def forward_linear(self, x):
+        x = torch.flatten(x, start_dim=1)
         x = self.fc(x)
         x = torch.sigmoid(x)
-        return x
 
-    def forward(self, x):
-        x = self.forward_conv(x)
-        x = self.forward_linear(x)
         return x
 
 
 class ANML(nn.Module):
     def __init__(self, input_shape, rln_chs, nm_chs, num_classes=1000):
         super(ANML, self).__init__()
-        self.rln = RLN(input_shape[0], rln_chs)
+        self.input_shape = input_shape
+        self.rln = RLN(rln_chs)
         # Automatically determine what the size of the final layer needs to be.
         # Simulate a batch by adding an extra dim at the beginning.
         batch_shape = (2,) + tuple(input_shape)
         shape_after_rln = self.rln(torch.zeros(batch_shape)).shape
         assert len(shape_after_rln) == 2, "RLN output should only be two dims."
         feature_size = shape_after_rln[-1]
-        logging.debug(f"RLN output size: {shape_after_rln}")
-        self.nm = NM(input_shape, nm_chs, feature_size)
-        logging.debug(f"Final layer size: {feature_size} x {num_classes}")
+        self.nm = NM(nm_chs, feature_size)
         self.fc = nn.Linear(feature_size, num_classes)
 
-    def forward(self, x):
+    def forward(self, x, modulation=True):
         features = self.rln(x)
         nm_mask = self.nm(x)
 

@@ -5,7 +5,8 @@ Utilities for logging progress metrics and saving checkpoints.
 import logging
 from pathlib import Path
 from time import time, strftime, gmtime
-from torch import save
+
+from utils.storage import save
 
 
 class Log:
@@ -17,7 +18,6 @@ class Log:
         Path("../trained_anmls").mkdir(exist_ok=True)
 
     def __call__(self, it, loss, acc, model):
-
         if self.start < 0:
             self.start = time()
         else:
@@ -28,7 +28,7 @@ class Log:
                 logging.info(f"{it}: {loss.item():.3f} | {acc:.3f} ({strftime('%H:%M:%S', gmtime(elapsed))})")
 
             if it % self.save_freq == 0:
-                save(model.state_dict(), f"trained_anmls/{self.name}-{it}.pth")
+                save(model, f"trained_anmls/{self.name}-{it}.net")
 
     def close(self, it, model):
-        save(model.state_dict(), f"trained_anmls/{self.name}-{it}.pth")
+        save(model, f"trained_anmls/{self.name}-{it}.net")
