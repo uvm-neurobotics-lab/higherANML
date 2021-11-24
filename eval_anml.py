@@ -44,37 +44,22 @@ def repeats(runs, sampler, sampler_input_shape, path, classes, train_examples, l
 
 
 if __name__ == "__main__":
-    # Training setting
+    # Evaluation setting
     parser = argutils.create_parser("ANML testing")
 
-    argutils.add_dataset_args(parser)
-    parser.add_argument(
-        "-l",
-        "--lr",
-        type=float,
-        help="learning rate to use (check README for suggestions)",
-    )
-    parser.add_argument(
-        "-c", "--classes", type=int, help="number of classes to test",
-    )
-    parser.add_argument(
-        "-r", "--runs", type=int, help="number of repetitions to run",
-    )
-    parser.add_argument(
-        "-t",
-        "--train-examples",
-        type=int,
-        default=15,
-        help="how many examples to use for training (max 20, default 15)",
-    )
-    parser.add_argument(
-        "-m", "--model", type=check_path, help="path to the model to use"
-    )
-    argutils.add_torch_args(parser)
+    argutils.add_dataset_arg(parser)
+    parser.add_argument("-l", "--lr", type=float, help="Learning rate to use (check README for suggestions).")
+    parser.add_argument("-c", "--classes", type=int, help="Number of classes to test.")
+    parser.add_argument("-r", "--runs", type=int, help="Number of repetitions to run.")
+    parser.add_argument("-t", "--train-examples", type=int, default=15, help="How many examples to use for training.")
+    parser.add_argument("-m", "--model", type=check_path, help="Path to the model to use.")
+    argutils.add_device_arg(parser)
+    argutils.add_seed_arg(parser)
     argutils.add_verbose_arg(parser)
 
     args = parser.parse_args()
     argutils.configure_logging(args, level=logging.INFO)
+    device = argutils.get_device(parser, args)
     argutils.set_seed_from_args(args)
     sampler, input_shape = argutils.get_OML_dataset_sampler(parser, args)
 
@@ -86,5 +71,5 @@ if __name__ == "__main__":
         classes=args.classes,
         train_examples=args.train_examples,
         lr=args.lr,
-        device=args.device,
+        device=device,
     )

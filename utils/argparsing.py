@@ -4,6 +4,7 @@ Utilities for frequently used command-line arguments and other main-script thing
 
 import argparse
 import logging
+import sys
 
 
 def configure_logging(parsed_args=None, **kwargs):
@@ -65,7 +66,7 @@ def add_verbose_arg(parser):
     return parser
 
 
-def add_dataset_args(parser):
+def add_dataset_arg(parser):
     """
     Add an argument for the user to specify a dataset.
     """
@@ -105,51 +106,49 @@ def get_OML_dataset_sampler(parser, args, im_size=None, greyscale=True):
         parser.error(f"Unknown dataset: {args.dataset}")
 
 
-class DeviceAction(argparse.Action):
+def add_device_arg(parser):
     """
-    A class for letting the user specify their PyTorch device.
+    Adds an argument which allows the user to specify their device to use for PyTorch.
+
+    Args:
+        parser (ArgumentParser): The parser to modify.
+    """
+    parser.add_argument("-d", "--device", choices=["cpu", "cuda"], type=str.lower, help="Device to use for PyTorch.",)
+    return parser
+
+
+def get_device(parser, parsed_args):
+    """
+    Get the PyTorch device from args, for use with `add_device_arg()`.
+    Args:
+        parser (ArgumentParser): The parser which parsed the args.
+        parsed_args (argparse.Namespace): Arguments from command line.
     """
     # Import in this scope so clients can still use the other utilities in this module without Numpy/Torch.
-    from torch import cuda
+    import torch
 
-    def __init__(self, option_strings, dest, **kwargs):
-        super().__init__(option_strings, dest, **kwargs)
+    if parsed_args.device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    elif parsed_args.device == "cuda" and not torch.cuda.is_available():
+        error_msg = "Torch says CUDA is not available. Remove it from your command to proceed on CPU."
+        parser.error(error_msg)  # Exits.
+        device = "invalid"  # Unreachable, but silences a warning.
+    else:
+        device = parsed_args.device
 
-    def __call__(self, parser, namespace, device, option_string=None):
-        """
-        For function definition, see: https://docs.python.org/3/library/argparse.html#action-classes
-
-        Args:
-            device: The Torch device string, in lowercase.
-        """
-        if device is None:
-            device = "cuda" if self.cuda.is_available() else "cpu"
-        elif device == "cuda" and not self.cuda.is_available():
-            error_msg = "Torch says CUDA is not available. Remove it from your command to proceed on CPU."
-            parser.error(error_msg)
-        logging.info(f"Using device: {device}")
-        setattr(namespace, self.dest, device)
+    logging.info(f"Using device: {device}")
+    return device
 
 
-def add_torch_args(parser, default_seed=None):
+def add_seed_arg(parser, default_seed=None):
     """
-    Adds arguments which may be useful for most programs that use PyTorch:
-        - device
-        - seed
+    Adds an argument which allows the user to specify a seed for deterministic random number generation.
 
     Args:
         parser (ArgumentParser): The parser to modify.
         default_seed (int or list[int] or None): Supply a custom seed if you want your program to be deterministic by
             default. Otherwise, defaults to true stochasticity.
     """
-    parser.add_argument(
-        "-d",
-        "--device",
-        choices=["cpu", "cuda"],
-        type=str.lower,
-        action=DeviceAction,
-        help="Device to use for PyTorch.",
-    )
     parser.add_argument("--seed", type=int, default=default_seed, help="Random seed.")
     return parser
 
