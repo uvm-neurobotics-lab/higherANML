@@ -98,6 +98,8 @@ def train(
         input_shape,
         rln_channels,
         nm_channels,
+        train_size=20,
+        remember_size=64,
         inner_lr=1e-1,
         outer_lr=1e-3,
         its=30000,
@@ -123,7 +125,11 @@ def train(
 
     for it in range(its):
 
-        train_data, train_class, (valid_ims, valid_labels) = sampler.sample_train(device=device)
+        train_data, train_class, (valid_ims, valid_labels) = sampler.sample_train(
+            train_size=train_size,
+            remember_size=remember_size,
+            device=device,
+        )
 
         # To facilitate the propagation of gradients through the model we prevent memorization of
         # training examples by randomizing the weights in the last fully connected layer corresponding
