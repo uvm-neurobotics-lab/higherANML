@@ -98,8 +98,10 @@ def train(
         input_shape,
         rln_channels,
         nm_channels,
-        train_size=20,
+        batch_size=1,
+        num_batches=20,
         remember_size=64,
+        train_cycles=1,
         inner_lr=1e-1,
         outer_lr=1e-3,
         its=30000,
@@ -126,7 +128,8 @@ def train(
     for it in range(its):
 
         train_data, train_class, (valid_ims, valid_labels) = sampler.sample_train(
-            train_size=train_size,
+            batch_size=batch_size,
+            num_batches=num_batches,
             remember_size=remember_size,
             device=device,
         )
@@ -143,9 +146,9 @@ def train(
                 diffopt,
         ):
             # Inner loop of 1 random task (20 images), one by one
-            for im, label in train_data:
-                out = fnet(im)
-                loss = cross_entropy(out, label)
+            for ims, labels in (train_data * train_cycles):
+                out = fnet(ims)
+                loss = cross_entropy(out, labels)
                 diffopt.step(loss)
 
             # Outer "loop" of 1 task (20 images) + 64 random chars, one batch of 84,1,28,28

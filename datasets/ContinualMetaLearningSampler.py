@@ -9,7 +9,9 @@ from utils import unzip, divide_chunks
 
 
 def collate_fn(samples):
-    # takes a list of (im,label) and returns [ims],[labels]
+    """
+    Takes a list of (im,label) and returns two tensors: [ims], [labels].
+    """
     xs = torch.stack([sample[0] for sample in samples])
     ys = torch.tensor([sample[1] for sample in samples])
     return xs, ys
@@ -47,12 +49,13 @@ class ContinualMetaLearningSampler:
     def num_total_classes(self):
         return len(self.train.class_index) + len(self.test.class_index)
 
-    def sample_train(self, train_size=20, remember_size=64, device="cuda"):
+    def sample_train(self, batch_size=1, num_batches=20, remember_size=64, device=None):
         """
         Samples a single episode ("outer loop") of the meta-train procedure.
 
         Args:
-            train_size (int): Number of examples to train on in the inner loop.
+            batch_size (int): Number of examples per training batch in the inner loop.
+            num_batches (int): Number of training batches in the inner loop.
             remember_size (int): Number of examples to test (meta-train) on in the outer loop.
             device (str): The device to send the torch arrays to.
 
@@ -61,29 +64,30 @@ class ContinualMetaLearningSampler:
             train_class (int): The index of the class being trained on in this episode.
             tuple: A pair of torch arrays for the meta-train test phase (valid_ims, valid_labels).
         """
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+
         # Sample a random class for inner loop training. This gives us a list of example indices for that class.
         class_indices = self.rng.choice(self.train.class_index)
-        sample_indices = self.rng.choice(class_indices, size=train_size, replace=False)
-        samples = [self.train[idx] for idx in sample_indices]
-        train_ims, train_labels = collate_fn(samples)
+        sample_indices = self.rng.choice(class_indices, size=batch_size * num_batches, replace=False)
+        train_samples = [self.train[idx] for idx in sample_indices]
+        # Split into batches.
+        batched_train_samples = [train_samples[batch_size * i: batch_size * (i + 1)] for i in range(num_batches)]
+        # Collate into tensors.
+        train_data = [collate_fn(batch) for batch in batched_train_samples]
+        train_class = train_samples[0][1]  # just take the first label off the top, since they should all be the same.
 
         # Sample some number of random instances for meta-training.
         indices = self.rng.choice(self.train_sample_index, size=remember_size, replace=False)
-        samples = [self.train[idx] for idx in indices]
-        valid_ims, valid_labels = collate_fn(samples)
+        valid_samples = [self.train[idx] for idx in indices]
+        valid_ims, valid_labels = collate_fn(valid_samples)
 
         # valid = outer loop training
         # randomly sampled "remember" images + all images from the last training trajectory are concatenated in one
         # single batch of shape [B,C,H,W], where B = train_size + remember_size.
+        train_ims, train_labels = collate_fn(train_samples)  # all training samples together (unbatched).
         valid_ims = torch.cat([train_ims, valid_ims]).squeeze(1).to(device)
         valid_labels = torch.cat([train_labels, valid_labels]).to(device)
-
-        # train = inner loop training
-        train_labels = train_labels.unsqueeze(1).to(device)
-        # training images are processed one at a time so we zip them together with labels
-        train_data = list(zip(train_ims.to(device), train_labels))
-
-        train_class = train_labels[0][0].cpu().item()
 
         return (
             train_data,

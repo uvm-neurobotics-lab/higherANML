@@ -17,8 +17,13 @@ if __name__ == "__main__":
                         help="Number of channels to use in the RLN.")
     parser.add_argument("--nm", metavar="NUM_CHANNELS", type=int, default=112,
                         help="Number of channels to use in the NM.")
-    parser.add_argument("--train-size", metavar="INT", type=int, default=20,
-                        help="Number of training examples to use in each inner loop.")
+    parser.add_argument("--batch-size", metavar="INT", type=int, default=1,
+                        help="Number of examples per training batch in the inner loop.")
+    parser.add_argument("--num-batches", metavar="INT", type=int, default=20,
+                        help="Number of training batches in the inner loop.")
+    parser.add_argument("--train-cycles", metavar="INT", type=int, default=1,
+                        help="Number of times to run through all training batches, to comprise a single outer loop."
+                        " Total number of gradient updates will be num_batches * train_cycles.")
     parser.add_argument("--remember-size", metavar="INT", type=int, default=64,
                         help="Number of extra examples to add to training examples to compute the meta-loss.")
     parser.add_argument("--inner-lr", metavar="RATE", type=float, default=1e-1, help="Inner learning rate.")
@@ -40,8 +45,10 @@ if __name__ == "__main__":
         input_shape,
         args.rln,
         args.nm,
-        train_size=args.train_size,
+        batch_size=args.batch_size,
+        num_batches=args.num_batches,
         remember_size=args.remember_size,
+        train_cycles=args.train_cycles,
         inner_lr=args.inner_lr,
         outer_lr=args.outer_lr,
         its=args.epochs,

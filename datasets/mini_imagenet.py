@@ -174,18 +174,13 @@ def create_OML_sampler(root, im_size=None, greyscale=False, seed=None):
     """
     # Use the default data size if a specific size is not requested.
     if im_size is None:
-        transforms = [
-            ToTensor(),
-            Lambda(lambda x: x.unsqueeze(0)),  # used to add batch dimension
-        ]
+        transforms = ToTensor()
     else:
-        transforms = [
+        transforms = Compose([
             Resize(im_size, InterpolationMode.LANCZOS),
             ToTensor(),
-            Lambda(lambda x: x.unsqueeze(0)),  # used to add batch dimension
-        ]
-    transforms = Compose(transforms)
-    t_transforms = Lambda(lambda x: torch.tensor(x).unsqueeze(0))
+        ])
+    t_transforms = Lambda(lambda x: torch.tensor(x))
     train = MiniImageNet(
         root=root,
         split=Split.TRAIN,

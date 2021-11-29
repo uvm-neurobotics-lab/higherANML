@@ -161,14 +161,11 @@ def create_OML_sampler(root, preload_train=False, preload_test=False, im_size=28
     if im_size is None:
         # For now, use 28x28 as default, instead of the Omniglot default of 105x105.
         im_size = 28
-    transforms = Compose(
-        [
-            Resize(im_size, InterpolationMode.LANCZOS),
-            ToTensor(),
-            Lambda(lambda x: x.unsqueeze(0)),  # used to add batch dimension
-        ]
-    )
-    t_transforms = Lambda(lambda x: torch.tensor(x).unsqueeze(0))
+    transforms = Compose([
+        Resize(im_size, InterpolationMode.LANCZOS),
+        ToTensor(),
+    ])
+    t_transforms = Lambda(lambda x: torch.tensor(x))
     omni_train = Omniglot(
         root=root,
         background=True,
