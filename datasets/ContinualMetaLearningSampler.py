@@ -86,7 +86,7 @@ class ContinualMetaLearningSampler:
         # randomly sampled "remember" images + all images from the last training trajectory are concatenated in one
         # single batch of shape [B,C,H,W], where B = train_size + remember_size.
         train_ims, train_labels = collate_fn(train_samples, device)  # all training samples together (unbatched).
-        valid_ims = torch.cat([train_ims, valid_ims]).squeeze(1)
+        valid_ims = torch.cat([train_ims, valid_ims])
         valid_labels = torch.cat([train_labels, valid_labels])
 
         return (
