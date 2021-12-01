@@ -11,7 +11,7 @@ from torch.optim import SGD, Adam
 import utils.storage as storage
 from models import ANML, LegacyANML, recommended_number_of_convblocks
 from utils import divide_chunks
-from utils.logging import Log
+from utils.logging import accuracy, Log
 
 
 def create_model(input_shape, nm_channels, rln_channels, device):
@@ -93,6 +93,13 @@ def lobotomize(layer, class_num):
     kaiming_normal_(layer.weight[class_num].unsqueeze(0))
 
 
+def forward_pass(model, ims, labels):
+    out = model(ims)
+    loss = cross_entropy(out, labels)
+    acc = accuracy(out, labels)
+    return out, loss, acc
+
+
 def train(
         sampler,
         input_shape,
@@ -106,7 +113,7 @@ def train(
         outer_lr=1e-3,
         its=30000,
         device="cuda",
-        verbose=False
+        verbose=0
 ):
     assert inner_lr > 0
     assert outer_lr > 0
@@ -116,7 +123,7 @@ def train(
 
     # Set up progress/checkpoint logger. Name according to the supported input size, just for convenience.
     name = "ANML-" + "-".join(map(str, input_shape))
-    print_freq = 1 if verbose else 10
+    print_freq = 1 if verbose > 1 else 10
     log = Log(name, model_args, print_freq)
 
     # inner optimizer used during the learning phase
@@ -147,15 +154,11 @@ def train(
         ):
             # Inner loop of 1 random task, in batches, for some number of cycles.
             for ims, labels in (train_data * train_cycles):
-                out = fnet(ims)
-                loss = cross_entropy(out, labels)
+                out, loss, inner_acc = forward_pass(fnet, ims, labels)
                 diffopt.step(loss)
 
             # Outer "loop" of 1 task (all training batches) + `remember_size` random chars, in a single large batch.
-            m_out = fnet(valid_ims)
-            m_loss = cross_entropy(m_out, valid_labels)
-            correct = (m_out.argmax(axis=1) == valid_labels).sum().item()
-            m_acc = correct / len(valid_labels)
+            m_out, m_loss, m_acc = forward_pass(fnet, valid_ims, valid_labels)
             m_loss.backward()
 
         outer_opt.step()

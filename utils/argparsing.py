@@ -62,7 +62,8 @@ def add_verbose_arg(parser):
     Args:
         parser (ArgumentParser): The parser to modify.
     """
-    parser.add_argument("-v", "--verbose", action="store_true", help="Turn on verbose logging.")
+    parser.add_argument("-v", "--verbose", action="count", default=0,
+                        help="Use verbose logging. Use this flag multiple times to request extra verbosity.")
     return parser
 
 
@@ -113,7 +114,7 @@ def add_device_arg(parser):
     Args:
         parser (ArgumentParser): The parser to modify.
     """
-    parser.add_argument("-d", "--device", choices=["cpu", "cuda"], type=str.lower, help="Device to use for PyTorch.",)
+    parser.add_argument("-d", "--device", choices=["cpu", "cuda"], type=str.lower, help="Device to use for PyTorch.", )
     return parser
 
 
