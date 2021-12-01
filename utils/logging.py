@@ -58,7 +58,7 @@ def fraction_wrong_predicted_as_train_class(preds, labels, train_class):
     return num_predicted_as_train / is_wrong.sum().item()
 
 
-def print_validation_stats(output, labels, loss, num_train_ex, train_class, print_fn):
+def print_validation_stats(output, labels, loss, num_train_ex, train_class, verbose, print_fn):
     # NOTE: Assumes that all training examples are first in the batch.
     train_out = output[:num_train_ex]
     val_out = output[num_train_ex:]
@@ -89,9 +89,10 @@ def print_validation_stats(output, labels, loss, num_train_ex, train_class, prin
     print_fn(f"Portion of remember wrongly predicted as {train_class} = "
              f"{fraction_wrong_predicted_as_train_class(val_out, val_labels, train_class):.1%}")
 
-    # Print the entire prediction.
-    # pred_label_pairs = np.array(list(zip(output.argmax(axis=1), labels)))
-    # print(pred_label_pairs)
+    # If super verbose, print the entire prediction.
+    if verbose >= 3:
+        pred_label_pairs = np.array(list(zip(output.argmax(axis=1), labels)))
+        print_fn("\n" + str(pred_label_pairs))
 
 
 def forward_pass(model, ims, labels):
@@ -118,41 +119,42 @@ class Log:
     def debug(self, msg):
         self.logger.debug(msg)
 
-    def reset_outer_timer(self):
-        self.start = time()
+    def outer_begin(self):
+        if self.start < 0:
+            self.start = time()
 
-    def outer_begin(self, it, train_class):
+    def outer_info(self, it, train_class):
         if it % self.print_freq == 0:
             self.info(f"**** Outer loop {it}: Learning on class {train_class}...")
 
     def inner(self, outer_it, inner_it, train_class, inner_loss, inner_acc, valid_ims, valid_labels, num_train_ex,
-              model):
+              model, verbose):
         # Only print inner loop info when verbose is turned on.
         if (self.verbose_freq > 0) and (outer_it % self.verbose_freq == 0):
             m_out, m_loss, m_acc = forward_pass(model, valid_ims, valid_labels)
             if inner_it < 2:
                 self.debug(f"  Inner iter {inner_it}: Loss = {inner_loss:.5f}, Acc = {inner_acc:.1%}")
-                print_validation_stats(m_out, valid_labels, m_loss, num_train_ex, train_class,
+                print_validation_stats(m_out, valid_labels, m_loss, num_train_ex, train_class, verbose,
                                        lambda msg: self.debug("    " + msg))
 
-    def outer_end(self, it, train_class, out, loss, acc, valid_ims, valid_labels, num_train_ex, model):
+    def outer_end(self, it, train_class, out, loss, acc, valid_ims, valid_labels, num_train_ex, model, verbose):
         if it % self.print_freq == 0:
             end = time()
             elapsed = end - self.start
-            self.start = end
-            self.info(f"Final Meta-Loss = {loss.item():.3f} | Meta-Acc = {acc:.1%} "
+            self.start = -1
+            self.info(f"  Final Meta-Loss = {loss.item():.3f} | Meta-Acc = {acc:.1%} "
                       f"({strftime('%H:%M:%S', gmtime(elapsed))})")
 
         # If verbose, then also evaluate the new meta-model on the previous train/validation data so we can see the
         # impact of meta-learning.
         if (self.verbose_freq > 0) and (it % self.verbose_freq == 0):
-            self.debug("End Model Performance:")
-            print_validation_stats(out, valid_labels, loss, num_train_ex, train_class,
+            self.debug("  End Model Performance:")
+            print_validation_stats(out, valid_labels, loss, num_train_ex, train_class, verbose,
                                    lambda msg: self.debug("    " + msg))
 
             m_out, m_loss, m_acc = forward_pass(model, valid_ims, valid_labels)
-            self.debug("Meta-Model Performance:")
-            print_validation_stats(m_out, valid_labels, m_loss, num_train_ex, train_class,
+            self.debug("  Meta-Model Performance:")
+            print_validation_stats(m_out, valid_labels, m_loss, num_train_ex, train_class, verbose,
                                    lambda msg: self.debug("    " + msg))
 
         if it % self.save_freq == 0:

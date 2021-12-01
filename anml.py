@@ -134,7 +134,7 @@ def train(
 
     for it in range(its):
 
-        log.reset_outer_timer()
+        log.outer_begin()
 
         num_train_ex = batch_size * num_batches
         train_data, train_class, (valid_ims, valid_labels) = sampler.sample_train(
@@ -143,7 +143,7 @@ def train(
             remember_size=remember_size,
             device=device,
         )
-        log.outer_begin(it, train_class)
+        log.outer_info(it, train_class)
 
         # To facilitate the propagation of gradients through the model we prevent memorization of
         # training examples by randomizing the weights in the last fully connected layer corresponding
@@ -159,7 +159,7 @@ def train(
             # Inner loop of 1 random task, in batches, for some number of cycles.
             for i, (ims, labels) in enumerate(train_data * train_cycles):
                 out, loss, inner_acc = forward_pass(fnet, ims, labels)
-                log.inner(it, i, train_class, loss, inner_acc, valid_ims, valid_labels, num_train_ex, fnet)
+                log.inner(it, i, train_class, loss, inner_acc, valid_ims, valid_labels, num_train_ex, fnet, verbose)
                 diffopt.step(loss)
 
             # Outer "loop" of 1 task (all training batches) + `remember_size` random chars, in a single large batch.
@@ -169,7 +169,7 @@ def train(
         outer_opt.step()
         outer_opt.zero_grad()
 
-        log.outer_end(it, train_class, m_out, m_loss, m_acc, valid_ims, valid_labels, num_train_ex, anml)
+        log.outer_end(it, train_class, m_out, m_loss, m_acc, valid_ims, valid_labels, num_train_ex, anml, verbose)
 
     log.close(it, anml)
 
