@@ -145,13 +145,13 @@ def train(
                 fnet,
                 diffopt,
         ):
-            # Inner loop of 1 random task (20 images), one by one
+            # Inner loop of 1 random task, in batches, for some number of cycles.
             for ims, labels in (train_data * train_cycles):
                 out = fnet(ims)
                 loss = cross_entropy(out, labels)
                 diffopt.step(loss)
 
-            # Outer "loop" of 1 task (20 images) + 64 random chars, one batch of 84,1,28,28
+            # Outer "loop" of 1 task (all training batches) + `remember_size` random chars, in a single large batch.
             m_out = fnet(valid_ims)
             m_loss = cross_entropy(m_out, valid_labels)
             correct = (m_out.argmax(axis=1) == valid_labels).sum().item()
