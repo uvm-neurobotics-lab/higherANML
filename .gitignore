@@ -9,8 +9,9 @@ __pycache__/
 # Slurm output files
 *.out
 
-# Torch checkpoints
+# Model checkpoints
 *.pth
+*.net
 
 # Distribution / packaging
 .Python
