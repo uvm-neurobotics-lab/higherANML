@@ -11,7 +11,7 @@ from torch.optim import SGD, Adam
 import utils.storage as storage
 from models import ANML, LegacyANML, recommended_number_of_convblocks
 from utils import divide_chunks
-from utils.logging import accuracy, Log
+from utils.logging import forward_pass, Log
 
 
 def create_model(input_shape, nm_channels, rln_channels, device):
@@ -93,13 +93,6 @@ def lobotomize(layer, class_num):
     kaiming_normal_(layer.weight[class_num].unsqueeze(0))
 
 
-def forward_pass(model, ims, labels):
-    out = model(ims)
-    loss = cross_entropy(out, labels)
-    acc = accuracy(out, labels)
-    return out, loss, acc
-
-
 def train(
         sampler,
         input_shape,
@@ -115,6 +108,12 @@ def train(
         device="cuda",
         verbose=0
 ):
+    assert rln_channels > 0
+    assert nm_channels > 0
+    assert batch_size > 0
+    assert num_batches > 0
+    assert remember_size > 0
+    assert train_cycles > 0
     assert inner_lr > 0
     assert outer_lr > 0
     assert its > 0
@@ -123,8 +122,9 @@ def train(
 
     # Set up progress/checkpoint logger. Name according to the supported input size, just for convenience.
     name = "ANML-" + "-".join(map(str, input_shape))
-    print_freq = 1 if verbose > 1 else 10
-    log = Log(name, model_args, print_freq)
+    print_freq = 1 if verbose > 1 else 10  # if double-verbose, print every iteration
+    verbose_freq = print_freq if verbose > 0 else 0  # if verbose, then print verbose info at the same frequency
+    log = Log(name, model_args, print_freq, verbose_freq)
 
     # inner optimizer used during the learning phase
     inner_opt = SGD(list(anml.rln.parameters()) + list(anml.fc.parameters()), lr=inner_lr)
@@ -134,12 +134,16 @@ def train(
 
     for it in range(its):
 
+        log.reset_outer_timer()
+
+        num_train_ex = batch_size * num_batches
         train_data, train_class, (valid_ims, valid_labels) = sampler.sample_train(
             batch_size=batch_size,
             num_batches=num_batches,
             remember_size=remember_size,
             device=device,
         )
+        log.outer_begin(it, train_class)
 
         # To facilitate the propagation of gradients through the model we prevent memorization of
         # training examples by randomizing the weights in the last fully connected layer corresponding
@@ -153,8 +157,9 @@ def train(
                 diffopt,
         ):
             # Inner loop of 1 random task, in batches, for some number of cycles.
-            for ims, labels in (train_data * train_cycles):
+            for i, (ims, labels) in enumerate(train_data * train_cycles):
                 out, loss, inner_acc = forward_pass(fnet, ims, labels)
+                log.inner(it, i, train_class, loss, inner_acc, valid_ims, valid_labels, num_train_ex, fnet)
                 diffopt.step(loss)
 
             # Outer "loop" of 1 task (all training batches) + `remember_size` random chars, in a single large batch.
@@ -164,7 +169,7 @@ def train(
         outer_opt.step()
         outer_opt.zero_grad()
 
-        log(it, m_loss, m_acc, anml)
+        log.outer_end(it, train_class, m_out, m_loss, m_acc, valid_ims, valid_labels, num_train_ex, anml)
 
     log.close(it, anml)
 
