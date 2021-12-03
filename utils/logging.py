@@ -70,6 +70,10 @@ def print_validation_stats(output, labels, loss, num_train_ex, train_class, verb
     val_acc = accuracy(val_out, val_labels)
     print_fn(f"Meta-Loss = {loss:.5f}")
     print_fn(f"Train Acc = {train_acc:.1%}, Remember Acc = {val_acc:.1%}")
+    # TODO: report accuracy of non-train classes instead of remember set?
+    # TODO: report how much of each set was "seen" before?
+    # TODO: or separately report total fraction of classes seen and examples seen
+    # TODO: report overall accuracy on "things seen so far"? Maybe explicitly sample from things seen.
 
     # "Entropy"
     train_spread = normalized_spread(train_out)
@@ -77,6 +81,8 @@ def print_validation_stats(output, labels, loss, num_train_ex, train_class, verb
     print_fn(f"Train Spread = {train_spread:.2f}, Remember Spread = {val_spread:.2f}")
 
     # Top Classes
+    # TODO: Start tracking seen and unseen classes here?
+    # TODO: Also in outer loop printout.
     train_mode = classes_sorted_by_frequency(train_out)[0]
     train_mode_freq = train_mode[1] / len(train_out)
     print_fn(f"Most frequent train prediction: {train_mode[0]} ({train_mode_freq:.1%} of predictions)")
@@ -133,6 +139,10 @@ class Log:
         if (self.verbose_freq > 0) and (outer_it % self.verbose_freq == 0):
             m_out, m_loss, m_acc = forward_pass(model, valid_ims, valid_labels)
             if inner_it < 2:
+                # TODO: plot change in performance b/w first and second iteration.
+                # TODO: plot change in performance b/w first and last iteration.
+                # TODO: report when/if train acc reaches 100% - some idea of how fast learning is happening
+                # TODO: and/or plot some idea of how much outputs are changing, in general
                 self.debug(f"  Inner iter {inner_it}: Loss = {inner_loss:.5f}, Acc = {inner_acc:.1%}")
                 print_validation_stats(m_out, valid_labels, m_loss, num_train_ex, train_class, verbose,
                                        lambda msg: self.debug("    " + msg))
@@ -148,6 +158,7 @@ class Log:
         # If verbose, then also evaluate the new meta-model on the previous train/validation data so we can see the
         # impact of meta-learning.
         if (self.verbose_freq > 0) and (it % self.verbose_freq == 0):
+            # TODO: Idea: report difference b/w meta-model and end-model perf.
             self.debug("  End Model Performance:")
             print_validation_stats(out, valid_labels, loss, num_train_ex, train_class, verbose,
                                    lambda msg: self.debug("    " + msg))
