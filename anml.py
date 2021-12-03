@@ -53,11 +53,11 @@ def create_model(input_shape, nm_channels, rln_channels, device):
     return anml, model_args
 
 
-def load_model(model_path, sampler_input_shape):
+def load_model(model_path, sampler_input_shape, device=None):
     model_path = Path(model_path).resolve()
     if model_path.suffix == ".net":
         # Assume this was saved by the storage module, which pickles the entire model.
-        model = storage.load(model_path)
+        model = storage.load(model_path, device=device)
     elif model_path.suffix == ".pt" or model_path.suffix == ".pth":
         # Assume the model was saved in the legacy format:
         #   - Only state_dict is stored.
@@ -200,7 +200,7 @@ def test_train(
         device="cuda",
         lr=0.01,
 ):
-    model = load_model(model_path, sampler_input_shape)
+    model = load_model(model_path, sampler_input_shape, device)
     model = model.to(device)
 
     torch.nn.init.kaiming_normal_(model.fc.weight)

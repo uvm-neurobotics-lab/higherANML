@@ -24,12 +24,14 @@ def check_ext(file, expect="net"):
         raise RuntimeError(f"Expected file extension to be .net, got .{ext}")
 
 
-def load(file):
+def load(file, device=None):
     """
     Load a saved PyTorch module.
 
     Args:
         file (str or Path): The file from which to load. Should have been saved using `save()`.
+        device (str or torch.device): The device onto which to load the module. If None, this will be the same device
+            where the module was originally saved from.
 
     Returns:
         torch.nn.Module: The re-constituted module.
@@ -39,7 +41,7 @@ def load(file):
 
     import torch
 
-    info = torch.load(file)
+    info = torch.load(file, map_location=device)
     source = info["source"]
     # from https://stackoverflow.com/a/53080237
     # recover the module from the stored source code
