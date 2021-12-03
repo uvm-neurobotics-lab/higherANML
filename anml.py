@@ -197,6 +197,7 @@ def test_train(
         sampler_input_shape,
         num_classes=10,
         train_examples=15,
+        test_examples=5,
         device="cuda",
         lr=0.01,
 ):
@@ -207,7 +208,6 @@ def test_train(
     model.nm.requires_grad_(False)
     model.rln.requires_grad_(False)
 
-    test_examples = 20 - train_examples
     train_tasks, test_data = sampler.sample_test(num_classes, train_examples, test_examples, device)
 
     opt = torch.optim.Adam(model.parameters(), lr=lr)

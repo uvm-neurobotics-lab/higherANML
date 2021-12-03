@@ -23,7 +23,7 @@ def check_path(path):
         raise argparse.ArgumentTypeError(f"model: {path} is not a valid path")
 
 
-def repeats(runs, sampler, sampler_input_shape, path, classes, train_examples, lr, device):
+def repeats(runs, sampler, sampler_input_shape, path, classes, train_examples, test_examples, lr, device):
 
     def run():
         return test_train(
@@ -32,6 +32,7 @@ def repeats(runs, sampler, sampler_input_shape, path, classes, train_examples, l
             sampler_input_shape=sampler_input_shape,
             num_classes=classes,
             train_examples=train_examples,
+            test_examples=test_examples,
             device=device,
             lr=lr,
         )
@@ -48,11 +49,12 @@ if __name__ == "__main__":
     parser = argutils.create_parser("ANML testing")
 
     argutils.add_dataset_arg(parser)
+    parser.add_argument("-m", "--model", type=check_path, help="Path to the model to evaluate.")
     parser.add_argument("-l", "--lr", type=float, help="Learning rate to use (check README for suggestions).")
     parser.add_argument("-c", "--classes", type=int, help="Number of classes to test.")
     parser.add_argument("-r", "--runs", type=int, help="Number of repetitions to run.")
-    parser.add_argument("-t", "--train-examples", type=int, default=15, help="How many examples to use for training.")
-    parser.add_argument("-m", "--model", type=check_path, help="Path to the model to use.")
+    parser.add_argument("--train-examples", type=int, default=15, help="Number of examples per class, for training.")
+    parser.add_argument("--test-examples", type=int, default=5, help="Number of examples per class, for testing.")
     argutils.add_device_arg(parser)
     argutils.add_seed_arg(parser)
     argutils.add_verbose_arg(parser)
@@ -70,6 +72,7 @@ if __name__ == "__main__":
         path=args.model,
         classes=args.classes,
         train_examples=args.train_examples,
+        test_examples=args.test_examples,
         lr=args.lr,
         device=device,
     )
