@@ -5,16 +5,7 @@ import torch
 from numpy.random import default_rng, SeedSequence
 from sklearn.model_selection import train_test_split
 
-from utils import unzip, divide_chunks
-
-
-def collate_fn(samples, device):
-    """
-    Takes a list of (im,label) and returns two tensors: [ims], [labels].
-    """
-    xs = torch.stack([sample[0] for sample in samples]).to(device)
-    ys = torch.tensor([sample[1] for sample in samples]).to(device)
-    return xs, ys
+from utils import collate_images, divide_chunks, unzip
 
 
 class ContinualMetaLearningSampler:
@@ -74,18 +65,18 @@ class ContinualMetaLearningSampler:
         # Split into batches.
         batched_train_samples = [train_samples[batch_size * i: batch_size * (i + 1)] for i in range(num_batches)]
         # Collate into tensors.
-        train_data = [collate_fn(batch, device) for batch in batched_train_samples]
+        train_data = [collate_images(batch, device) for batch in batched_train_samples]
         train_class = train_samples[0][1]  # just take the first label off the top, since they should all be the same.
 
         # Sample some number of random instances for meta-training.
         indices = self.rng.choice(self.train_sample_index, size=remember_size, replace=False)
         valid_samples = [self.train[idx] for idx in indices]
-        valid_ims, valid_labels = collate_fn(valid_samples, device)
+        valid_ims, valid_labels = collate_images(valid_samples, device)
 
         # valid = outer loop training
         # randomly sampled "remember" images + all images from the last training trajectory are concatenated in one
         # single batch of shape [B,C,H,W], where B = train_size + remember_size.
-        train_ims, train_labels = collate_fn(train_samples, device)  # all training samples together (unbatched).
+        train_ims, train_labels = collate_images(train_samples, device)  # all training samples together (unbatched).
         valid_ims = torch.cat([train_ims, valid_ims])
         valid_labels = torch.cat([train_labels, valid_labels])
 
@@ -135,6 +126,6 @@ class ContinualMetaLearningSampler:
         train_episodes = [chunk2device(chunk) for chunk in divide_chunks(train_traj, n=train_size)]
 
         # test-test classes are collected into a massive tensor for one-pass evaluation
-        test_data = collate_fn(test_traj, device)
+        test_data = collate_images(test_traj, device)
 
         return train_episodes, test_data

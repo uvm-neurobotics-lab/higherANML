@@ -26,22 +26,29 @@ def check_path(path):
 def repeats(runs, sampler, sampler_input_shape, path, classes, train_examples, test_examples, lr, device):
 
     def run():
-        return test_train(
+        train_traj, test_traj = test_train(
             path,
             sampler=sampler,
             sampler_input_shape=sampler_input_shape,
             num_classes=classes,
-            train_examples=train_examples,
-            test_examples=test_examples,
+            num_train_examples=train_examples,
+            num_test_examples=test_examples,
             device=device,
             lr=lr,
         )
+        # For now, we are just reporting the final result, so just pluck off the last set of accuracies.
+        return train_traj[-1], test_traj[-1]
 
-    results = []
+    train_results = []
+    test_results = []
     for _ in trange(runs):
-        results.append(run().mean())
+        # NOTE: This averaging method assumes we have the same number of examples per each class.
+        train_acc_per_class, test_acc_per_class = run()
+        train_results.append(train_acc_per_class.mean())
+        test_results.append(test_acc_per_class.mean())
 
-    print(f"Classes {classes} Accuracy {np.mean(results):.2f} (std {np.std(results):.2f})")
+    print(f"Classes: {classes} | Train Accuracy: {np.mean(train_results):.1%} (std {np.std(train_results):.1%})"
+          f" | Test Accuracy: {np.mean(test_results):.1%} (std {np.std(test_results):.1%})")
 
 
 if __name__ == "__main__":

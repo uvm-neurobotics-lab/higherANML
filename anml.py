@@ -10,7 +10,7 @@ from torch.optim import SGD, Adam
 
 import utils.storage as storage
 from models import ANML, LegacyANML, recommended_number_of_convblocks
-from utils import divide_chunks
+from utils import collate_images, divide_chunks
 from utils.logging import forward_pass, Log
 
 
@@ -174,21 +174,32 @@ def train(
     log.close(it, anml)
 
 
-def test_test(model, test_data, test_examples=5):
-    # Meta-test-test
-    # given a meta-test-trained model, evaluate accuracy on the held out set
-    # of classes used
-    x, y = test_data
+def evaluate(model, data, num_examples_per_class=5):
+    """
+    Meta-test-test
+
+    Given a meta-test-trained model, evaluate accuracy on the given data batch. Assumes this batch can be sub-divided
+    into N classes where each class has `num_examples_per_class` examples.
+
+    Args:
+        model (callable): The model to evaluate.
+        data (tuple): A pair of tensors (inputs, targets).
+        num_examples_per_class (int): Number of examples per class; number of rows in the `data` should be a
+            multiple of this.
+
+    Returns:
+        list: A list of accuracy per class.
+    """
+    x, y = data
     with torch.no_grad():
         logits = model(x)
-        # report performance per class
-        ys = list(divide_chunks(y, test_examples))
-        tasks = list(divide_chunks(logits, test_examples))
-        t_accs = [
-            torch.eq(task.argmax(dim=1), ys).sum().item() / test_examples
-            for task, ys in zip(tasks, ys)
+        ys = list(divide_chunks(y, num_examples_per_class))
+        classes = list(divide_chunks(logits, num_examples_per_class))
+        acc_per_class = [
+            torch.eq(preds.argmax(dim=1), ys).sum().item() / num_examples_per_class
+            for preds, ys in zip(classes, ys)
         ]
-    return t_accs
+    return np.array(acc_per_class)
 
 
 def test_train(
@@ -196,8 +207,8 @@ def test_train(
         sampler,
         sampler_input_shape,
         num_classes=10,
-        train_examples=15,
-        test_examples=5,
+        num_train_examples=15,
+        num_test_examples=5,
         device="cuda",
         lr=0.01,
 ):
@@ -208,20 +219,32 @@ def test_train(
     model.nm.requires_grad_(False)
     model.rln.requires_grad_(False)
 
-    train_tasks, test_data = sampler.sample_test(num_classes, train_examples, test_examples, device)
+    train_tasks, test_data = sampler.sample_test(num_classes, num_train_examples, num_test_examples, device)
 
     opt = torch.optim.Adam(model.parameters(), lr=lr)
 
-    for task in train_tasks:
-        # meta-test-TRAIN
+    all_train_examples = []
+    train_perf_trajectory = []
+    test_perf_trajectory = []
+
+    # meta-test-TRAIN
+    for i, task in enumerate(train_tasks):
+        # Gradient steps.
         for x, y in task:
+            all_train_examples.append((x, y))
             logits = model(x)
             opt.zero_grad()
             loss = cross_entropy(logits, y)
             loss.backward()
             opt.step()
 
-    # meta-test-TEST
-    t_accs = np.array(test_test(model, test_data, test_examples))
+        # Evaluation on classes seen so far.
+        train_perf_trajectory.append(evaluate(model, collate_images(all_train_examples), num_train_examples))
+        # NOTE: Assumes that test tasks are in the same ordering as train tasks.
+        test_perf_trajectory.append(evaluate(model, test_data[:(i + 1) * num_test_examples], num_test_examples))
 
-    return t_accs
+    # meta-test-TEST
+    train_perf_trajectory.append(evaluate(model, collate_images(all_train_examples), num_train_examples))
+    test_perf_trajectory.append(evaluate(model, test_data, num_test_examples))
+
+    return train_perf_trajectory, test_perf_trajectory
