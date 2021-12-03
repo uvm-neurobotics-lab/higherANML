@@ -130,12 +130,11 @@ class ContinualMetaLearningSampler:
 
         # test-train examples are divided by task and sent to device (cpu/cuda)
         def chunk2device(chunk):
-            return [(im.to(device), label.to(device)) for im, label in chunk]
+            return [(im.unsqueeze(0).to(device), label.unsqueeze(0).to(device)) for im, label in chunk]
 
         train_episodes = [chunk2device(chunk) for chunk in divide_chunks(train_traj, n=train_size)]
 
         # test-test classes are collected into a massive tensor for one-pass evaluation
-        ims, labels = list(zip(*test_traj))
-        test_data = (torch.cat(ims).to(device), torch.cat(labels).to(device))
+        test_data = collate_fn(test_traj, device)
 
         return train_episodes, test_data
