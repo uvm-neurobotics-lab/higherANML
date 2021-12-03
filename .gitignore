@@ -13,6 +13,9 @@ __pycache__/
 *.pth
 *.net
 
+# Experiments folder
+experiments/
+
 # Distribution / packaging
 .Python
 build/
