@@ -58,12 +58,24 @@ def fraction_wrong_predicted_as_train_class(preds, labels, train_class):
     return num_predicted_as_train / is_wrong.sum().item()
 
 
-def print_validation_stats(output, labels, loss, num_train_ex, train_class, verbose, print_fn):
+def extract_train(all_samples, num_train_ex):
     # NOTE: Assumes that all training examples are first in the batch.
-    train_out = output[:num_train_ex]
-    val_out = output[num_train_ex:]
-    train_labels = labels[:num_train_ex]
-    val_labels = labels[num_train_ex:]
+    return all_samples[:num_train_ex]
+
+
+def extract_remember(all_samples, num_train_ex):
+    # NOTE: Assumes that all training examples are first in the batch.
+    return all_samples[num_train_ex:]
+
+
+def train_val_split(data, num_train_ex):
+    return extract_train(data, num_train_ex), extract_remember(data, num_train_ex)
+
+
+def print_validation_stats(output, labels, loss, num_train_ex, train_class, verbose, print_fn):
+    # Separate out the train examples from the "remember" examples.
+    train_out, val_out = train_val_split(output, num_train_ex)
+    train_labels, val_labels = train_val_split(labels, num_train_ex)
 
     # Loss & Accuracy
     train_acc = accuracy(train_out, train_labels)
@@ -147,13 +159,16 @@ class Log:
                 print_validation_stats(m_out, valid_labels, m_loss, num_train_ex, train_class, verbose,
                                        lambda msg: self.debug("    " + msg))
 
-    def outer_end(self, it, train_class, out, loss, acc, valid_ims, valid_labels, num_train_ex, model, verbose):
+    def outer_end(self, it, train_class, out, loss, acc, valid_ims, valid_labels, num_train_ex, meta_model, verbose):
         if it % self.print_freq == 0:
             end = time()
             elapsed = end - self.start
             self.start = -1
-            self.info(f"  Final Meta-Loss = {loss.item():.3f} | Meta-Acc = {acc:.1%} "
-                      f"({strftime('%H:%M:%S', gmtime(elapsed))})")
+
+            train_acc = accuracy(extract_train(out, num_train_ex), extract_train(valid_labels, num_train_ex))
+            rem_acc = accuracy(extract_remember(out, num_train_ex), extract_remember(valid_labels, num_train_ex))
+            self.info(f"  Final Meta-Loss = {loss.item():.3f} | Meta-Acc = {acc:.1%} | Train Acc = {train_acc:.1%}"
+                      f" | Remember Acc = {rem_acc:.1%} ({strftime('%H:%M:%S', gmtime(elapsed))})")
 
         # If verbose, then also evaluate the new meta-model on the previous train/validation data so we can see the
         # impact of meta-learning.
@@ -163,13 +178,13 @@ class Log:
             print_validation_stats(out, valid_labels, loss, num_train_ex, train_class, verbose,
                                    lambda msg: self.debug("    " + msg))
 
-            m_out, m_loss, m_acc = forward_pass(model, valid_ims, valid_labels)
+            m_out, m_loss, m_acc = forward_pass(meta_model, valid_ims, valid_labels)
             self.debug("  Meta-Model Performance:")
             print_validation_stats(m_out, valid_labels, m_loss, num_train_ex, train_class, verbose,
                                    lambda msg: self.debug("    " + msg))
 
         if it % self.save_freq == 0:
-            save(model, f"trained_anmls/{self.name}-{it}.net", **self.model_args)
+            save(meta_model, f"trained_anmls/{self.name}-{it}.net", **self.model_args)
 
     def close(self, it, model):
         save(model, f"trained_anmls/{self.name}-{it}.net", **self.model_args)
