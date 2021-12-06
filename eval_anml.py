@@ -33,8 +33,8 @@ def repeats(runs, sampler, sampler_input_shape, path, classes, train_examples, t
             num_classes=classes,
             num_train_examples=train_examples,
             num_test_examples=test_examples,
-            device=device,
             lr=lr,
+            device=device,
         )
         # For now, we are just reporting the final result, so just pluck off the last set of accuracies.
         return train_traj[-1], test_traj[-1]

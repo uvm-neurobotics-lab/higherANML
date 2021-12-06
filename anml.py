@@ -209,8 +209,9 @@ def test_train(
         num_classes=10,
         num_train_examples=15,
         num_test_examples=5,
-        device="cuda",
         lr=0.01,
+        evaluate_complete_trajectory=False,
+        device="cuda",
 ):
     model = load_model(model_path, sampler_input_shape, device)
     model = model.to(device)
@@ -238,10 +239,11 @@ def test_train(
             loss.backward()
             opt.step()
 
-        # Evaluation on classes seen so far.
-        train_perf_trajectory.append(evaluate(model, collate_images(all_train_examples), num_train_examples))
-        # NOTE: Assumes that test tasks are in the same ordering as train tasks.
-        test_perf_trajectory.append(evaluate(model, test_data[:(i + 1) * num_test_examples], num_test_examples))
+        if evaluate_complete_trajectory:
+            # Evaluation on classes seen so far.
+            train_perf_trajectory.append(evaluate(model, collate_images(all_train_examples), num_train_examples))
+            # NOTE: Assumes that test tasks are in the same ordering as train tasks.
+            test_perf_trajectory.append(evaluate(model, test_data[:(i + 1) * num_test_examples], num_test_examples))
 
     # meta-test-TEST
     train_perf_trajectory.append(evaluate(model, collate_images(all_train_examples), num_train_examples))
