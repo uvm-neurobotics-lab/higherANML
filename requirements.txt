@@ -1,5 +1,6 @@
 gdown
 higher
+pandas
 scikit-learn
 torchvision
 tqdm

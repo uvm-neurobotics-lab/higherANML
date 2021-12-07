@@ -3,7 +3,6 @@ Script for evaluation of ANML using OML-style continual learning trajectories.
 """
 
 import argparse
-import logging
 import warnings
 from pathlib import Path
 
@@ -53,21 +52,22 @@ def repeats(runs, sampler, sampler_input_shape, path, classes, train_examples, t
 
 if __name__ == "__main__":
     # Evaluation setting
-    parser = argutils.create_parser("ANML testing")
+    parser = argutils.create_parser(__doc__)
 
     argutils.add_dataset_arg(parser)
-    parser.add_argument("-m", "--model", type=check_path, help="Path to the model to evaluate.")
-    parser.add_argument("-l", "--lr", type=float, help="Learning rate to use (check README for suggestions).")
-    parser.add_argument("-c", "--classes", type=int, help="Number of classes to test.")
-    parser.add_argument("-r", "--runs", type=int, help="Number of repetitions to run.")
+    parser.add_argument("-m", "--model", type=check_path, required=True, help="Path to the model to evaluate.")
+    parser.add_argument("-l", "--lr", type=float, required=True,
+                        help="Learning rate to use (check README for suggestions).")
+    parser.add_argument("-c", "--classes", type=int, required=True, help="Number of classes to test.")
     parser.add_argument("--train-examples", type=int, default=15, help="Number of examples per class, for training.")
     parser.add_argument("--test-examples", type=int, default=5, help="Number of examples per class, for testing.")
+    parser.add_argument("-r", "--runs", type=int, default=10, help="Number of repetitions to run.")
     argutils.add_device_arg(parser)
     argutils.add_seed_arg(parser)
     argutils.add_verbose_arg(parser)
 
     args = parser.parse_args()
-    argutils.configure_logging(args, level=logging.INFO)
+    argutils.configure_logging(args)
     device = argutils.get_device(parser, args)
     argutils.set_seed_from_args(args)
     sampler, input_shape = argutils.get_OML_dataset_sampler(parser, args)

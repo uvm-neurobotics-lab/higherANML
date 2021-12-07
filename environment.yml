@@ -9,6 +9,7 @@ dependencies:
   - pytorch
   - tqdm
   - numpy
+  - pandas
   - scikit-learn
   - pip:
     - higher
