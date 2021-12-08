@@ -257,7 +257,9 @@ def test_train(
             test_perf_trajectory.append(evaluate(model, test_data, num_test_examples))
 
     # meta-test-TEST
-    train_perf_trajectory.append(evaluate(model, train_data, num_train_examples))
-    test_perf_trajectory.append(evaluate(model, test_data, num_test_examples))
+    # We only need to do this if we didn't already do it in the last iteration of the loop.
+    if not evaluate_complete_trajectory:
+        train_perf_trajectory.append(evaluate(model, train_data, num_train_examples))
+        test_perf_trajectory.append(evaluate(model, test_data, num_test_examples))
 
     return train_perf_trajectory, test_perf_trajectory
