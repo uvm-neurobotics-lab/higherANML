@@ -1,4 +1,5 @@
 import logging
+from itertools import count
 from pathlib import Path
 
 import higher
@@ -220,33 +221,43 @@ def test_train(
     model.nm.requires_grad_(False)
     model.rln.requires_grad_(False)
 
-    train_tasks, test_data = sampler.sample_test(num_classes, num_train_examples, num_test_examples, device)
+    train_data, test_data = sampler.sample_test(num_classes, num_train_examples, num_test_examples, device)
 
     opt = torch.optim.Adam(model.parameters(), lr=lr)
 
-    all_train_examples = []
     train_perf_trajectory = []
     test_perf_trajectory = []
 
     # meta-test-TRAIN
-    for i, task in enumerate(train_tasks):
-        # Gradient steps.
-        for x, y in task:
-            all_train_examples.append((x, y))
-            logits = model(x)
-            opt.zero_grad()
-            loss = cross_entropy(logits, y)
-            loss.backward()
-            opt.step()
+    # Go through samples one-at-a-time.
+    for i, x, y in zip(count(1), *train_data):
+        # Create a "batch" of one.
+        x = x.unsqueeze(0)
+        y = y.unsqueeze(0)
 
-        if evaluate_complete_trajectory:
-            # Evaluation on classes seen so far.
-            train_perf_trajectory.append(evaluate(model, collate_images(all_train_examples), num_train_examples))
+        # Gradient step.
+        logits = model(x)
+        opt.zero_grad()
+        loss = cross_entropy(logits, y)
+        loss.backward()
+        opt.step()
+
+        # Evaluation, once per class (hence the mod).
+        if evaluate_complete_trajectory and i % num_train_examples == 0:
+            # Evaluation on all classes.
+            # NOTE: We often only care about performance on classes seen so far. We can extract this after-the-fact,
+            # by slicing into the results: `acc_per_class[:i]` (if `i` is 1-based, as it is here).
+            # If we wanted to only run inference on classes already seen, we would pre-slice the tensors:
+            #     train_eval = tuple(d[:i] for d in train_data)
+            # and for test data:
+            #     num_classes_seen = i // num_train_examples
+            #     test_eval = tuple(d[:num_classes_seen * num_test_examples] for d in test_data)
+            train_perf_trajectory.append(evaluate(model, train_data, num_train_examples))
             # NOTE: Assumes that test tasks are in the same ordering as train tasks.
-            test_perf_trajectory.append(evaluate(model, test_data[:(i + 1) * num_test_examples], num_test_examples))
+            test_perf_trajectory.append(evaluate(model, test_data, num_test_examples))
 
     # meta-test-TEST
-    train_perf_trajectory.append(evaluate(model, collate_images(all_train_examples), num_train_examples))
+    train_perf_trajectory.append(evaluate(model, train_data, num_train_examples))
     test_perf_trajectory.append(evaluate(model, test_data, num_test_examples))
 
     return train_perf_trajectory, test_perf_trajectory

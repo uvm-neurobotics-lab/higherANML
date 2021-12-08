@@ -115,17 +115,12 @@ class ContinualMetaLearningSampler:
             for indices in class_sets
         )
 
-        # assemble the train/test trajectories, one long list of (sample, target) tuples
+        # Assemble the train/test trajectories; one long list of (sample, target) tuples.
         train_traj = [self.test[idx] for train_task in train_classes for idx in train_task]
         test_traj = [self.test[idx] for test_task in test_classes for idx in test_task]
 
-        # test-train examples are divided by task and sent to device (cpu/cuda)
-        def chunk2device(chunk):
-            return [(im.unsqueeze(0).to(device), label.unsqueeze(0).to(device)) for im, label in chunk]
-
-        train_episodes = [chunk2device(chunk) for chunk in divide_chunks(train_traj, n=train_size)]
-
-        # test-test classes are collected into a massive tensor for one-pass evaluation
+        # Now collect each trajectory into a single, large tensor for one-pass evaluation.
+        train_data = collate_images(train_traj, device)
         test_data = collate_images(test_traj, device)
 
-        return train_episodes, test_data
+        return train_data, test_data

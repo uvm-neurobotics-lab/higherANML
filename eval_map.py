@@ -39,8 +39,10 @@ def repeats(runs, **kwargs):
             # Extend each result to make sure it has the full number of classes.
             tr = list(tr) + nanfill * (num_classes - len(tr))
             te = list(te) + nanfill * (num_classes - len(te))
-            # NOTE: This assumes that 1 epoch == all examples from 1 class.
-            classes_trained = (epoch + 1) * kwargs["num_train_examples"]
+            # NOTE: This assumes that 1 epoch == 1 class.
+            # Capped b/c we might have one more eval at the end after the last epoch, but still the same number of
+            # classes were trained.
+            classes_trained = min(epoch + 1, num_classes)
             index = [r, epoch, classes_trained]
             results.append((index, tr, te))
 
@@ -64,6 +66,9 @@ def save_results(results, output_path, num_classes, **kwargs):
     # Now assemble the data into a dataframe and save it.
     colnames = eval_param_names + ["trial", "epoch", "classes_trained", "class_id", "train_acc", "test_acc"]
     result_matrix = pd.DataFrame(full_data, columns=colnames)
+    # Although it makes some operations more cumbersome, we can save a lot of space and maybe some time by treating
+    # most of the columns as a MultiIndex. Also makes indexing easier. All but the final metrics columns.
+    result_matrix.set_index(colnames[:-2], inplace=True)
     result_matrix.to_pickle(output_path)
     print(f"Saved result matrix of size {result_matrix.shape} to: {output_path}")
 
@@ -96,6 +101,13 @@ def main(args=None):
     argutils.set_seed_from_args(args)
     sampler, input_shape = argutils.get_OML_dataset_sampler(parser, args)
 
+    # Ensure the destination can be written.
+    outpath = Path(args.output).resolve()
+    if outpath.exists():
+        print(f"WARNING: Will overwrite existing file: {outpath}", file=sys.stderr)
+    else:
+        outpath.parent.mkdir(parents=True, exist_ok=True)
+
     # The name of these keyword arguments needs to match the ones in `test_train()`, as we will pass them on.
     results = repeats(
         model_path=args.model,
@@ -111,15 +123,16 @@ def main(args=None):
     )
 
     # Assemble and save the result matrix.
+    model_abspath = str(Path(args.model).resolve())
     save_results(
         results,
-        args.output,
+        outpath,
         args.classes,
+        model=model_abspath,
+        dataset=args.dataset,
         num_train_examples=args.train_examples,
         num_test_examples=args.test_examples,
         lr=args.lr,
-        dataset=args.dataset,
-        model=args.model,
     )
 
 
