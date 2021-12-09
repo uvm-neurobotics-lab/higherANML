@@ -12,6 +12,27 @@ from pathlib import Path
 import utils.argparsing as argutils
 
 
+def get_output_directory(args, parser):
+    if args.output:
+        outpath = Path(args.output).resolve()
+    elif len(args.model) == 1:
+        # Assuming the model is inside a "trained_anmls/" folder, this places an "eval/" folder right next to it.
+        outpath = args.model[0].parent.parent / "eval"
+    else:
+        parser.error("You must supply an output destination (-o/--output) when evaluating more than one model.")
+        sys.exit(os.EX_USAGE)  # unreachable, but avoids a warning about outpath being potentially undefined.
+
+    # Ensure the destination can be written.
+    if outpath.is_file():
+        parser.error(f"Output already exists as a file, not a directory: {outpath}")
+    elif args.dry_run:
+        print(f"Output directory that would be created: {outpath}")
+    else:
+        outpath.mkdir(parents=True, exist_ok=True)
+
+    return outpath
+
+
 def build_commands(args, outpath):
     # Build up the full product of all possible input choices.
     repeated_args = (args.model, args.dataset, args.classes, args.train_examples, args.test_examples, args.lr)
@@ -97,7 +118,7 @@ def main(args=None):
                              " record final performance. This saves a lot of time.")
     parser.add_argument("-r", "--runs", metavar="INT", type=int, default=10,
                         help="Number of repetitions to run for EACH unique combination of arguments.")
-    parser.add_argument("-o", "--output", metavar="PATH", required=True,
+    parser.add_argument("-o", "--output", metavar="PATH",
                         help="The folder to save all results. This folder should NOT already contain any .pkl files,"
                              " because we will assume that ALL .pkl files are the result of this job.")
     parser.add_argument("-f", "--force", action="store_true",
@@ -116,17 +137,13 @@ def main(args=None):
     # Parse
     args = parser.parse_args(args)
 
-    # Ensure the destination can be written.
-    # TODO: Make this optional if we are only using one model: use a folder within the model's experiment directory.
-    outpath = Path(args.output).resolve()
-    if outpath.is_file():
-        raise RuntimeError(f"Output must be a directory: {outpath}")
-    else:
-        outpath.mkdir(parents=True, exist_ok=True)
+    # Get destination path.
+    outpath = get_output_directory(args, parser)
 
     # Get all argument lists.
     commands = build_commands(args, outpath)
 
+    # Launch the jobs.
     return launch_jobs(commands, outpath, args.launch_verbose, args.dry_run)
 
 
