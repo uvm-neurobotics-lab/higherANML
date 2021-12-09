@@ -1,5 +1,14 @@
 """
 A script to launch a full sweep of eval_map.py jobs.
+
+Launches the full combination of all options provided. You can provide multiple
+possible learning rates, models to evaluate, etc.
+
+Note: To debug the Slurm-launching behavior of this script, you may run as:
+    DEBUG=1 python launch_eval_map.py [...] --launch-verbose
+
+This will not launch any jobs. To launch jobs, but still see the full output,
+drop the `DEBUG=1` flag.
 """
 
 import argparse
@@ -76,13 +85,23 @@ def launch_jobs(commands, outdir, verbose=False, dry_run=False):
     for cmd in commands:
         try:
             print("Launching command: " + " ".join(cmd))
-            stderr = subprocess.STDOUT if not verbose else None
-            subprocess.run(["launcher", "dggpu", "-f", "-d", outdir] + cmd, text=True, check=True,
-                           capture_output=(not verbose), stderr=stderr)
+            if verbose:
+                # If verbose, just let the launcher output directly to console.
+                stderr = None
+                stdout = None
+            else:
+                # Normally, redirect stderr -> stdout and capture them both into stdout.
+                stderr = subprocess.STDOUT
+                stdout = subprocess.PIPE
+            subprocess.run(["launcher", "dggpu", "-f", "-d", outdir] + cmd, text=True, check=True, stdout=stdout,
+                           stderr=stderr)
         except subprocess.CalledProcessError as e:
             # Print the output if we captured it, to allow for debugging.
             if not verbose:
+                print("LAUNCH FAILED. Launcher output:")
+                print("-" * 80)
                 print(e.stdout)
+                print("-" * 80)
             raise
 
 
