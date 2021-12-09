@@ -4,8 +4,6 @@ General utility functions.
 
 import itertools
 
-import torch
-
 
 def unzip(l):
     """ Transpose a list of lists. """
@@ -40,6 +38,9 @@ def collate_images(samples, device=None):
         torch.tensor: An image batch; dimensionality [B, C, H, W].
         torch.tensor: A label batch; dimensionality [B].
     """
+    # Import torch locally so people can still use other util functions without having torch installed.
+    import torch
+
     # Consistency checks.
     if not samples or not samples[0]:
         return torch.tensor([]), torch.tensor([])
