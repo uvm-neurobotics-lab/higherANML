@@ -56,7 +56,7 @@ class MiniImageNet(ClassIndexedDataset):
         Args:
             root (string): Desired root directory for the dataset (usually named `mini-imagenet/`, one directory above
                 the `processed_images/` folder).
-            split (Subset, optional): Which split of the dataset to use (train, test, or validation).
+            split (Subset): Which split of the dataset to use (train, test, or validation).
             transform (callable, optional): A function/transform that  takes in an PIL image
                 and returns a transformed version. E.g, ``transforms.RandomCrop``
             target_transform (callable, optional): A function/transform that takes in the
@@ -79,12 +79,13 @@ class MiniImageNet(ClassIndexedDataset):
         self.quiet = quiet
 
         if download:
-            self.download()
-        else:
-            self._extract_if_needed()
-
+            self._download_if_needed()
         if not self._check_integrity():
-            raise RuntimeError("Dataset not found or corrupted. You can use download=True to re-download it.")
+            msg = f"Dataset not found or corrupted: {self.tarpath}."
+            if not download:
+                msg += " You can use download=True to download it."
+            raise RuntimeError(msg)
+        self._extract_if_needed()
 
         # self.classes is a mapping from class ID (ImageNet class IDs like "n01855672") to a sorted list of images, for
         # all classes and images in this dataset. Keys are sorted alphabetically for determinism.
@@ -140,30 +141,30 @@ class MiniImageNet(ClassIndexedDataset):
         """
         if not self.target_folder.exists():
             if not self.quiet:
-                print(f"Unpacking {self.split.filename} to [self.target_folder]...", end=" ", flush=True)
+                print(f"Unpacking {self.split.filename} to {self.target_folder}...", end=" ", flush=True)
             extract_archive(self.tarpath, self.target_folder.parent)
             if not self.quiet:
                 print("done.")
         else:
             if not self.quiet:
-                print(self.target_folder, "already exists.")
+                print("Using existing dataset:", self.target_folder)
 
-    def download(self):
+    def _download_if_needed(self):
         """
         Only downloads the dataset if it doesn't already exist, or if it seems corrupted.
         """
         # This will also check the integrity of the file for us and re-download if md5 doesn't match.
         gdown.cached_download(id=self.split.gid, path=self.tarpath, md5=self.split.md5, quiet=self.quiet)
-        self._extract_if_needed()
 
 
-def create_OML_sampler(root, im_size=None, greyscale=False, seed=None):
+def create_OML_sampler(root, download=True, im_size=None, greyscale=False, seed=None):
     """
     Create a sampler for Mini-ImageNet data that will return examples in the framework specified by OML (see
     ContinualMetaLearningSampler).
 
     Args:
         root (str or Path): Folder where the dataset will be located.
+        download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
         im_size (int): Desired size of images, or None to use the on-disk sizes.
         greyscale (bool): Whether to convert images to greyscale.
         seed (int or list[int]): Random seed for sampling.
@@ -187,7 +188,7 @@ def create_OML_sampler(root, im_size=None, greyscale=False, seed=None):
         transform=transforms,
         target_transform=t_transforms,
         greyscale=greyscale,
-        download=True,
+        download=download,
     )
     test = MiniImageNet(
         root=root,
@@ -195,7 +196,7 @@ def create_OML_sampler(root, im_size=None, greyscale=False, seed=None):
         transform=transforms,
         target_transform=t_transforms,
         greyscale=greyscale,
-        download=True,
+        download=download,
     )
     # We know that by default this dataset has 84x84 color images.
     actual_size = 84 if im_size is None else im_size

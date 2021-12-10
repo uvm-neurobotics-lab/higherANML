@@ -44,15 +44,17 @@ class HelpFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefau
     pass
 
 
-def create_parser(desc):
+def create_parser(desc, allow_abbrev=True):
     """
     A base parser with sensible default formatting.
     Args:
         desc (str): Description of the program.
+        allow_abbrev (bool): An argument to the ArgumentParser constructor; whether to allow long options to be
+            abbreviated.
     Returns:
         ArgumentParser: A new parser.
     """
-    return argparse.ArgumentParser(description=desc, formatter_class=HelpFormatter)
+    return argparse.ArgumentParser(description=desc, formatter_class=HelpFormatter, allow_abbrev=allow_abbrev)
 
 
 def add_verbose_arg(parser):
@@ -73,9 +75,11 @@ def add_dataset_arg(parser):
     """
     parser.add_argument("--dataset", choices=["omni", "miniimagenet"], type=str.lower, default="omni",
                         help="The dataset to use.")
-    parser.add_argument("--data-path", metavar="PATH", type=Path, default="../data",
+    parser.add_argument("--data-path", "--data-dir", metavar="PATH", type=Path, default="../data",
                         help="The root path in which to look for the dataset (or store a new one if it isn't already"
                              " present).")
+    parser.add_argument("--no-download", dest="download", action="store_false",
+                        help="Do not download the dataset automatically if it doesn't already exist; raise an error.")
     return parser
 
 
@@ -98,9 +102,11 @@ def get_OML_dataset_sampler(parser, args, im_size=None, greyscale=True):
     if args.dataset == "omni":
         if not greyscale:
             raise ValueError("Omniglot is only available in greyscale.")
-        return omniglot.create_OML_sampler(root=args.data_path / "omni", im_size=im_size, seed=args.seed)
+        return omniglot.create_OML_sampler(root=args.data_path / "omni", download=args.download, im_size=im_size,
+                                           seed=args.seed)
     elif args.dataset == "miniimagenet":
-        return imagenet.create_OML_sampler(root=args.data_path / "mini-imagenet", im_size=im_size, seed=args.seed)
+        return imagenet.create_OML_sampler(root=args.data_path / "mini-imagenet", download=args.download,
+                                           im_size=im_size, seed=args.seed)
     else:
         parser.error(f"Unknown dataset: {args.dataset}")
 
