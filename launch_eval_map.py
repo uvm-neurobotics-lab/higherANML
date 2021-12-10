@@ -2,12 +2,23 @@
 A script to launch a full sweep of eval_map.py jobs.
 
 Launches the full combination of all options provided. You can provide multiple
-possible learning rates, models to evaluate, etc.
+possible learning rates, datasets, models, etc.
+
+Furthermore, any settings accepted by `sbatch` OR `launcher` may be supplied on
+the command line. These will override the options provided by the launch config,
+as well as the ones this script would normally pass to `launcher`. For example,
+to allocate more memory than the default, and to run in a location other than
+the one specified by `--output` (this means paths will be relative to this
+folder and the slurm-*.out log will be placed here):
+    > python launch_eval_map.py [...] --mem=64G --rundir [my-output-dir]
+
+IMPORTANT: The sbatch options must be supplied in "--name=value" fashion, with an
+equals sign; "--name value" will NOT parse correctly. For any other options
+(including script flags) you may use either format.
 
 Note: To debug the Slurm-launching behavior of this script, you may run as:
-    DEBUG=1 python launch_eval_map.py [...] --launch-verbose
-
-This will not launch any jobs. To launch jobs, but still see the full output,
+    > DEBUG=1 python launch_eval_map.py [...] --launch-verbose
+The above will not launch any jobs. To launch jobs, but still see the full output,
 drop the `DEBUG=1` flag.
 """
 
@@ -42,7 +53,7 @@ def get_output_directory(args, parser):
     return outpath
 
 
-def build_commands(args, outpath):
+def build_commands(args, outpath, launcher_args):
     # Build up the full product of all possible input choices.
     repeated_args = (args.model, args.dataset, args.classes, args.train_examples, args.test_examples, args.lr)
     repeated_args = [frozenset(v) for v in repeated_args]  # ensure no duplicates
@@ -51,8 +62,10 @@ def build_commands(args, outpath):
     # Build the commands.
     commands = []
     for c in combos:
+        # Determine output path based on arg settings.
         unique_filename = "-".join([str(v) for v in c]).replace("/", "-").strip("-") + ".pkl"
         outfile = outpath / unique_filename
+        # Build up inner command args.
         cmd = [
             "eval_map.py",
             "--model", c[0],
@@ -71,20 +84,23 @@ def build_commands(args, outpath):
             cmd.extend(["--device", args.device])
         if args.verbose:
             cmd.append("-" + ("v" * args.verbose))
+        # Add launcher wrapper.
+        cmd = ["launcher", "dggpu", "-f", "-d", outpath] + launcher_args + cmd
         commands.append([str(v) for v in cmd])
+
     return commands
 
 
-def launch_jobs(commands, outdir, verbose=False, dry_run=False):
+def launch_jobs(commands, verbose=False, dry_run=False):
     if dry_run:
-        print("Commands that would be launched:")
+        print("Commands that would be run:")
         for cmd in commands:
             print("    " + " ".join(cmd))
         return os.EX_OK
 
     for cmd in commands:
         try:
-            print("Launching command: " + " ".join(cmd))
+            print("Running command: " + " ".join(cmd))
             if verbose:
                 # If verbose, just let the launcher output directly to console.
                 stderr = None
@@ -93,8 +109,7 @@ def launch_jobs(commands, outdir, verbose=False, dry_run=False):
                 # Normally, redirect stderr -> stdout and capture them both into stdout.
                 stderr = subprocess.STDOUT
                 stdout = subprocess.PIPE
-            subprocess.run(["launcher", "dggpu", "-f", "-d", outdir] + cmd, text=True, check=True, stdout=stdout,
-                           stderr=stderr)
+            subprocess.run(cmd, text=True, check=True, stdout=stdout, stderr=stderr)
         except subprocess.CalledProcessError as e:
             # Print the output if we captured it, to allow for debugging.
             if not verbose:
@@ -154,16 +169,16 @@ def main(args=None):
                         help="Be verbose when launching the job (output all the launcher print statements).")
 
     # Parse
-    args = parser.parse_args(args)
+    args, launcher_args = parser.parse_known_args(args)
 
     # Get destination path.
     outpath = get_output_directory(args, parser)
 
     # Get all argument lists.
-    commands = build_commands(args, outpath)
+    commands = build_commands(args, outpath, launcher_args)
 
     # Launch the jobs.
-    return launch_jobs(commands, outpath, args.launch_verbose, args.dry_run)
+    return launch_jobs(commands, args.launch_verbose, args.dry_run)
 
 
 if __name__ == "__main__":
