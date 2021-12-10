@@ -4,7 +4,7 @@ Utilities for frequently used command-line arguments and other main-script thing
 
 import argparse
 import logging
-import sys
+from pathlib import Path
 
 
 def configure_logging(parsed_args=None, **kwargs):
@@ -71,13 +71,11 @@ def add_dataset_arg(parser):
     """
     Add an argument for the user to specify a dataset.
     """
-    parser.add_argument(
-        "--dataset",
-        choices=["omni", "miniimagenet"],
-        type=str.lower,
-        default="omni",
-        help="The dataset to use."
-    )
+    parser.add_argument("--dataset", choices=["omni", "miniimagenet"], type=str.lower, default="omni",
+                        help="The dataset to use.")
+    parser.add_argument("--data-path", metavar="PATH", type=Path, default="../data",
+                        help="The root path in which to look for the dataset (or store a new one if it isn't already"
+                             " present).")
     return parser
 
 
@@ -100,9 +98,9 @@ def get_OML_dataset_sampler(parser, args, im_size=None, greyscale=True):
     if args.dataset == "omni":
         if not greyscale:
             raise ValueError("Omniglot is only available in greyscale.")
-        return omniglot.create_OML_sampler(root="../data/omni", im_size=im_size, seed=args.seed)
+        return omniglot.create_OML_sampler(root=args.data_path / "omni", im_size=im_size, seed=args.seed)
     elif args.dataset == "miniimagenet":
-        return imagenet.create_OML_sampler(root="../data/mini-imagenet", im_size=im_size, seed=args.seed)
+        return imagenet.create_OML_sampler(root=args.data_path / "mini-imagenet", im_size=im_size, seed=args.seed)
     else:
         parser.error(f"Unknown dataset: {args.dataset}")
 
