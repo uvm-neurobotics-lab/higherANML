@@ -24,6 +24,7 @@ drop the `DEBUG=1` flag.
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from itertools import product
@@ -129,7 +130,14 @@ def launch_jobs(commands, verbose=False, dry_run=False):
                 # Normally, redirect stderr -> stdout and capture them both into stdout.
                 stderr = subprocess.STDOUT
                 stdout = subprocess.PIPE
-            subprocess.run(cmd, text=True, check=True, stdout=stdout, stderr=stderr)
+            res = subprocess.run(cmd, text=True, check=True, stdout=stdout, stderr=stderr)
+            # Find the Slurm job ID in the output and print it, if we captured the output.
+            if not verbose:
+                match = re.search("Submitted batch job (\d+)", res.stdout)
+                if not match:
+                    print("    WARNING: Could not find Slurm job ID in launcher output. This should not happen.")
+                else:
+                    print("    " + match.group(0))
         except subprocess.CalledProcessError as e:
             # Print the output if we captured it, to allow for debugging.
             if not verbose:
