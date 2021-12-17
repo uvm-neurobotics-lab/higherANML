@@ -10,7 +10,7 @@ import gdown
 import numpy as np
 import torch
 from PIL import Image
-from torchvision.transforms import Compose, ToTensor, Resize, Lambda
+from torchvision.transforms import Compose, Lambda, Normalize, Resize, ToTensor
 from torchvision.transforms.functional import InterpolationMode
 
 from .class_indexed_dataset import ClassIndexedDataset
@@ -173,14 +173,20 @@ def create_OML_sampler(root, download=True, im_size=None, greyscale=False, seed=
         ContinualMetaLearningSampler: The sampler class.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
-    # Use the default data size if a specific size is not requested.
-    if im_size is None:
-        transforms = ToTensor()
-    else:
-        transforms = Compose([
-            Resize(im_size, InterpolationMode.LANCZOS),
-            ToTensor(),
-        ])
+    transforms = [
+        ToTensor(),
+        # Normalize images as done in prior work:
+        #   - https://github.com/yinboc/few-shot-meta-baseline/blob/779fae39dad3537e7c801049c858923e2a352dfe/datasets/mini_imagenet.py#L35-L37
+        #   - https://github.com/wyharveychen/CloserLookFewShot/blob/e03aca8a2d01c9b5861a5a816cd5d3fdfc47cd45/data/datamgr.py#L13
+        #   - https://github.com/dragen1860/MAML-Pytorch/blob/98a00d41724c133bd29619a2fb2cc46dd128a368/MiniImagenet.py#L49-L62
+        #   - https://github.com/khurramjaved96/mrcl/blob/2855a6b7e820f171432981b58c49664fcdbf00ed/datasets/miniimagenet.py#L49-L62
+        # Some other works simply divide by 255.
+        Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    ]
+    # Only resize if a specific size is requested.
+    if im_size is not None:
+        transforms.insert(0, Resize(im_size, InterpolationMode.LANCZOS))
+    transforms = Compose(transforms)
     t_transforms = Lambda(lambda x: torch.tensor(x))
     train = MiniImageNet(
         root=root,
