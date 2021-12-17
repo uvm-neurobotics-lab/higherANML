@@ -10,7 +10,7 @@ from torch.optim import SGD, Adam
 
 import utils.storage as storage
 from models import ANML, LegacyANML, recommended_number_of_convblocks
-from utils import collate_images, divide_chunks
+from utils import divide_chunks
 from utils.logging import forward_pass, Log
 
 
@@ -18,36 +18,16 @@ def create_model(input_shape, nm_channels, rln_channels, device):
     # TODO: Auto-size this instead.
     # num_classes = max(sampler.num_train_classes(), sampler.num_test_classes())
     num_classes = 1000
-    # For backward compatibility, we use the original ANML if the images are <=30 px.
-    # Otherwise, we automatically size the net as appropriate.
-    if input_shape[-1] <= 30:
-        # Temporarily turn off the "legacy" model so we can test parity with the new model.
-        # model_args = {
-        #     "input_shape": input_shape,
-        #     "rln_chs": rln_channels,
-        #     "nm_chs": nm_channels,
-        #     "num_classes": num_classes,
-        # }
-        # anml = LegacyANML(**model_args)
-        model_args = {
-            "input_shape": input_shape,
-            "rln_chs": rln_channels,
-            "nm_chs": nm_channels,
-            "num_classes": num_classes,
-            "num_conv_blocks": 3,
-            "pool_rln_output": False,
-        }
-        anml = ANML(**model_args)
-    else:
-        model_args = {
-            "input_shape": input_shape,
-            "rln_chs": rln_channels,
-            "nm_chs": nm_channels,
-            "num_classes": num_classes,
-            "num_conv_blocks": recommended_number_of_convblocks(input_shape),
-            "pool_rln_output": True,
-        }
-        anml = ANML(**model_args)
+    model_args = {
+        "input_shape": input_shape,
+        "rln_chs": rln_channels,
+        "nm_chs": nm_channels,
+        "num_classes": num_classes,
+        "num_conv_blocks": recommended_number_of_convblocks(input_shape),
+        # For backward compatibility, we turn off final pooling if the images are <=30 px, as done in the original ANML.
+        "pool_rln_output": input_shape[-1] > 30,
+    }
+    anml = ANML(**model_args)
     anml.to(device)
     logging.info(f"Model shape:\n{anml}")
     return anml, model_args
