@@ -113,6 +113,14 @@ class ANML(nn.Module):
         self.nm = NM(input_shape, nm_chs, feature_size, num_conv_blocks)
         self.fc = _linear_layer(feature_size, num_classes)
 
+        # Don't use PyTorch default initialization.
+        # https://adityassrana.github.io/blog/theory/2020/08/26/Weight-Init.html#Solution
+        for m in self.modules():
+            # TODO: Should we include linear layers here? Seems to be most important for the conv, though.
+            if isinstance(m, nn.Conv2d):
+                # TODO: If bias is present, we may want to re-init that; not sure.
+                nn.init.kaiming_normal_(m.weight)
+
     def forward(self, x):
         features = self.rln(x)
         nm_mask = self.nm(x)
