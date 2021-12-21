@@ -55,6 +55,8 @@ def fraction_wrong_predicted_as_train_class(preds, labels, train_class):
     pred_classes = preds.argmax(axis=1)
     is_wrong = pred_classes != labels
     num_predicted_as_train = (pred_classes[is_wrong] == train_class).sum().item()
+    if is_wrong.sum() == 0:
+        return np.nan
     return num_predicted_as_train / is_wrong.sum().item()
 
 
