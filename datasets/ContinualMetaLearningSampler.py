@@ -99,10 +99,10 @@ class ContinualMetaLearningSampler:
         Returns:
             train_episodes (list): A list of lists of (image, target) tuples, where each list represents a new class to
                 be learned.
-            test_data (tuple): A tuple of (images, labels) torch arrays, for evaluation in one large batch.
+            test_data (list): A list of lists of (image, target) tuples, where each list represents a class to test on.
         """
-        assert num_classes <= len(self.test.class_index), (
-            f"Number of classes requested is too large: {num_classes} > {len(self.test.class_index)}")
+        if num_classes > len(self.test.class_index):
+            raise ValueError(f"Number of classes requested is too large: {num_classes} > {len(self.test.class_index)}")
 
         # choose the n classes to use
         class_sets = self.rng.choice(self.test.class_index, size=num_classes, replace=False)
@@ -115,12 +115,12 @@ class ContinualMetaLearningSampler:
             for indices in class_sets
         )
 
-        # Assemble the train/test trajectories; one long list of (sample, target) tuples.
-        train_traj = [self.test[idx] for train_task in train_classes for idx in train_task]
-        test_traj = [self.test[idx] for test_task in test_classes for idx in test_task]
+        # Assemble the train/test trajectories; a list of classes, each of which is a list of (sample, target) tuples.
+        train_traj = [[self.test[idx] for idx in train_task] for train_task in train_classes]
+        test_traj = [[self.test[idx] for idx in test_task] for test_task in test_classes]
 
-        # Now collect each trajectory into a single, large tensor for one-pass evaluation.
-        train_data = collate_images(train_traj, device)
-        test_data = collate_images(test_traj, device)
+        # Now batch each class into a single tensor.
+        train_data = [collate_images(samples, device) for samples in train_traj]
+        test_data = [collate_images(samples, device) for samples in test_traj]
 
         return train_data, test_data

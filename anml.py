@@ -1,5 +1,4 @@
 import logging
-from itertools import count
 from pathlib import Path
 
 import higher
@@ -175,32 +174,30 @@ def train(
     log.close(it, anml)
 
 
-def evaluate(model, data, num_examples_per_class=5):
+def evaluate(model, classes):
     """
     Meta-test-test
 
-    Given a meta-test-trained model, evaluate accuracy on the given data batch. Assumes this batch can be sub-divided
-    into N classes where each class has `num_examples_per_class` examples.
+    Given a meta-test-trained model, evaluate accuracy on the given data. Assumes the classes are ordered in the order
+    in which they are trained on.
 
     Args:
         model (callable): The model to evaluate.
-        data (tuple): A pair of tensors (inputs, targets).
-        num_examples_per_class (int): Number of examples per class; number of rows in the `data` should be a
-            multiple of this.
+        classes (list): A list of tensor pairs (inputs, targets), where each tensor is a batch from a single class.
 
     Returns:
         list: A list of accuracy per class.
     """
-    x, y = data
+    # NOTE: It would be great to do this operation in one large batch over all classes, but unfortunately that may be
+    # too large to fit onto the GPU, for some datasets. For now, for simplicity, we'll assume one batch per class is an
+    # appropriate size. In the future we might like to chunk up data more cleverly so we are always maxing out the GPU
+    # memory but never going over.
+    acc_per_class = np.zeros(len(classes))
     with torch.no_grad():
-        logits = model(x)
-        ys = list(divide_chunks(y, num_examples_per_class))
-        classes = list(divide_chunks(logits, num_examples_per_class))
-        acc_per_class = [
-            torch.eq(preds.argmax(dim=1), ys).sum().item() / num_examples_per_class
-            for preds, ys in zip(classes, ys)
-        ]
-    return np.array(acc_per_class)
+        for i, (x, y) in enumerate(classes):
+            logits = model(x)
+            acc_per_class[i] = torch.eq(logits.argmax(dim=1), y).sum().item() / len(y)
+    return acc_per_class
 
 
 def test_train(
@@ -221,7 +218,7 @@ def test_train(
     model.nm.requires_grad_(False)
     model.rln.requires_grad_(False)
 
-    train_data, test_data = sampler.sample_test(num_classes, num_train_examples, num_test_examples, device)
+    train_classes, test_classes = sampler.sample_test(num_classes, num_train_examples, num_test_examples, device)
 
     opt = torch.optim.Adam(model.parameters(), lr=lr)
 
@@ -229,37 +226,36 @@ def test_train(
     test_perf_trajectory = []
 
     # meta-test-TRAIN
-    # Go through samples one-at-a-time.
-    for i, x, y in zip(count(1), *train_data):
-        # Create a "batch" of one.
-        x = x.unsqueeze(0)
-        y = y.unsqueeze(0)
+    for train_data in train_classes:
+        # One full episode: Go through samples one-at-a-time and learn on each one.
+        for x, y in zip(*train_data):
+            # Create a "batch" of one.
+            x = x.unsqueeze(0)
+            y = y.unsqueeze(0)
 
-        # Gradient step.
-        logits = model(x)
-        opt.zero_grad()
-        loss = cross_entropy(logits, y)
-        loss.backward()
-        opt.step()
+            # Gradient step.
+            logits = model(x)
+            opt.zero_grad()
+            loss = cross_entropy(logits, y)
+            loss.backward()
+            opt.step()
 
-        # Evaluation, once per class (hence the mod).
-        if evaluate_complete_trajectory and i % num_train_examples == 0:
+        # Evaluation, once per class.
+        if evaluate_complete_trajectory:
             # Evaluation on all classes.
             # NOTE: We often only care about performance on classes seen so far. We can extract this after-the-fact,
-            # by slicing into the results: `acc_per_class[:i]` (if `i` is 1-based, as it is here).
-            # If we wanted to only run inference on classes already seen, we would pre-slice the tensors:
-            #     train_eval = tuple(d[:i] for d in train_data)
-            # and for test data:
-            #     num_classes_seen = i // num_train_examples
-            #     test_eval = tuple(d[:num_classes_seen * num_test_examples] for d in test_data)
-            train_perf_trajectory.append(evaluate(model, train_data, num_train_examples))
+            # by slicing into the results: `acc_per_class[:i + 1]`.
+            # If we wanted to only run inference on classes already seen, we would take a slice of the data:
+            #     evaluate(model, train_classes[:idx + 1])
+            # where `idx` is keeping track of the current training class index.
+            train_perf_trajectory.append(evaluate(model, train_classes))
             # NOTE: Assumes that test tasks are in the same ordering as train tasks.
-            test_perf_trajectory.append(evaluate(model, test_data, num_test_examples))
+            test_perf_trajectory.append(evaluate(model, test_classes))
 
     # meta-test-TEST
     # We only need to do this if we didn't already do it in the last iteration of the loop.
     if not evaluate_complete_trajectory:
-        train_perf_trajectory.append(evaluate(model, train_data, num_train_examples))
-        test_perf_trajectory.append(evaluate(model, test_data, num_test_examples))
+        train_perf_trajectory.append(evaluate(model, train_classes))
+        test_perf_trajectory.append(evaluate(model, test_classes))
 
     return train_perf_trajectory, test_perf_trajectory
