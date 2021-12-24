@@ -40,7 +40,8 @@ class ContinualMetaLearningSampler:
     def num_total_classes(self):
         return len(self.train.class_index) + len(self.test.class_index)
 
-    def sample_train(self, batch_size=1, num_batches=20, remember_size=64, device=None):
+    def sample_train(self, batch_size=1, num_batches=20, remember_size=64, include_train_data_in_validation=True,
+                     device=None):
         """
         Samples a single episode ("outer loop") of the meta-train procedure.
 
@@ -48,6 +49,7 @@ class ContinualMetaLearningSampler:
             batch_size (int): Number of examples per training batch in the inner loop.
             num_batches (int): Number of training batches in the inner loop.
             remember_size (int): Number of examples to test (meta-train) on in the outer loop.
+            include_train_data_in_validation (bool): Whether to add the training examples into the validation set.
             device (str): The device to send the torch arrays to.
 
         Returns:
@@ -68,17 +70,18 @@ class ContinualMetaLearningSampler:
         train_data = [collate_images(batch, device) for batch in batched_train_samples]
         train_class = train_samples[0][1]  # just take the first label off the top, since they should all be the same.
 
+        # valid = outer loop training
         # Sample some number of random instances for meta-training.
         indices = self.rng.choice(self.train_sample_index, size=remember_size, replace=False)
         valid_samples = [self.train[idx] for idx in indices]
         valid_ims, valid_labels = collate_images(valid_samples, device)
 
-        # valid = outer loop training
-        # randomly sampled "remember" images + all images from the last training trajectory are concatenated in one
-        # single batch of shape [B,C,H,W], where B = train_size + remember_size.
-        train_ims, train_labels = collate_images(train_samples, device)  # all training samples together (unbatched).
-        valid_ims = torch.cat([train_ims, valid_ims])
-        valid_labels = torch.cat([train_labels, valid_labels])
+        if include_train_data_in_validation:
+            # randomly sampled "remember" images + all images from the last training trajectory are concatenated in one
+            # single batch of shape [B,C,H,W], where B = train_size + remember_size.
+            train_ims, train_labels = collate_images(train_samples, device)  # all training samples together (unbatched)
+            valid_ims = torch.cat([train_ims, valid_ims])
+            valid_labels = torch.cat([train_labels, valid_labels])
 
         return (
             train_data,

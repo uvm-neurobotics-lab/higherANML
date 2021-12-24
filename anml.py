@@ -81,6 +81,7 @@ def train(
         batch_size=1,
         num_batches=20,
         remember_size=64,
+        remember_only=False,
         train_cycles=1,
         inner_lr=1e-1,
         outer_lr=1e-3,
@@ -121,6 +122,7 @@ def train(
             batch_size=batch_size,
             num_batches=num_batches,
             remember_size=remember_size,
+            include_train_data_in_validation=not remember_only,
             device=device,
         )
         log.outer_info(it, train_class)

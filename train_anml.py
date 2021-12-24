@@ -26,6 +26,9 @@ if __name__ == "__main__":
                         " Total number of gradient updates will be num_batches * train_cycles.")
     parser.add_argument("--remember-size", metavar="INT", type=int, default=64,
                         help="Number of extra examples to add to training examples to compute the meta-loss.")
+    parser.add_argument("--remember-only", action="store_true",
+                        help="Do not include the training examples from the inner loop into the meta-loss (only use"
+                             " the remember set for the outer loop of training).")
     parser.add_argument("--inner-lr", metavar="RATE", type=float, default=1e-1, help="Inner learning rate.")
     parser.add_argument("--outer-lr", metavar="RATE", type=float, default=1e-3, help="Outer learning rate.")
     parser.add_argument("--epochs", type=int, default=30000, help="Number of epochs to train (default: 30000).")
@@ -48,6 +51,7 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         num_batches=args.num_batches,
         remember_size=args.remember_size,
+        remember_only=args.remember_only,
         train_cycles=args.train_cycles,
         inner_lr=args.inner_lr,
         outer_lr=args.outer_lr,
