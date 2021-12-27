@@ -118,19 +118,19 @@ def train(
         log.outer_begin()
 
         num_train_ex = batch_size * num_batches
-        train_data, train_class, (valid_ims, valid_labels) = sampler.sample_train(
+        episode = sampler.sample_train(
             batch_size=batch_size,
             num_batches=num_batches,
             remember_size=remember_size,
-            include_train_data_in_validation=not remember_only,
+            add_inner_train_to_outer_train=not remember_only,
             device=device,
         )
-        log.outer_info(it, train_class)
+        log.outer_info(it, episode.train_class)
 
         # To facilitate the propagation of gradients through the model we prevent memorization of
         # training examples by randomizing the weights in the last fully connected layer corresponding
         # to the task that is about to be learned
-        lobotomize(anml.fc, train_class)
+        lobotomize(anml.fc, episode.train_class)
 
         # higher turns a standard pytorch model into a functional version that can be used to
         # preserve the computation graph across multiple optimization steps
@@ -139,19 +139,19 @@ def train(
                 diffopt,
         ):
             # Inner loop of 1 random task, in batches, for some number of cycles.
-            for i, (ims, labels) in enumerate(train_data * train_cycles):
+            for i, (ims, labels) in enumerate(episode.train_traj * train_cycles):
                 out, loss, inner_acc = forward_pass(fnet, ims, labels)
-                log.inner(it, i, train_class, loss, inner_acc, valid_ims, valid_labels, num_train_ex, fnet, verbose)
+                log.inner(it, i, loss, inner_acc, episode, fnet, verbose)
                 diffopt.step(loss)
 
             # Outer "loop" of 1 task (all training batches) + `remember_size` random chars, in a single large batch.
-            m_out, m_loss, m_acc = forward_pass(fnet, valid_ims, valid_labels)
+            m_out, m_loss, m_acc = forward_pass(fnet, episode.meta_ims, episode.meta_labels)
             m_loss.backward()
 
         outer_opt.step()
         outer_opt.zero_grad()
 
-        log.outer_end(it, train_class, m_out, m_loss, m_acc, valid_ims, valid_labels, num_train_ex, anml, verbose)
+        log.outer_end(it, m_loss, m_acc, episode, fnet, anml, verbose)
 
     log.close(it, anml)
 

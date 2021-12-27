@@ -5,7 +5,40 @@ import torch
 from numpy.random import default_rng, SeedSequence
 from sklearn.model_selection import train_test_split
 
-from utils import collate_images, divide_chunks, unzip
+from utils import collate_images, unzip
+
+
+class MetaTrainingSample:
+    """
+    A structure containing samples for a single outer-loop episode of meta-training:
+        - A training trajectory for inner-loop adaptation (a list of batches).
+        - All training examples in a single batch (for single-pass evaluation).
+        - A set of validation examples, for checking performance on examples from other classes.
+        - The complete set of meta-training examples, for outer-loop meta-updates.
+    """
+    def __init__(self, train_class, train_traj, train_ims, train_labels, valid_ims, valid_labels, meta_ims,
+                 meta_labels):
+        """
+        Create the data structure.
+
+        Args:
+            train_class (int): The index of the class being trained on in this episode.
+            train_traj (list): A list of (image, label) tuples. Each is either a single example or a batch.
+            train_ims (tensor): All training images.
+            train_labels (tensor): All training labels.
+            valid_ims (tensor): All validation images.
+            valid_labels (tensor): All validation labels.
+            meta_ims (tensor): All images to be trained on in the meta-train test phase (outer loop update).
+            meta_labels (tensor): All labels to be trained on in the meta-train test phase (outer loop update).
+        """
+        self.train_class = train_class
+        self.train_traj = train_traj
+        self.train_ims = train_ims
+        self.train_labels = train_labels
+        self.valid_ims = valid_ims
+        self.valid_labels = valid_labels
+        self.meta_ims = meta_ims
+        self.meta_labels = meta_labels
 
 
 class ContinualMetaLearningSampler:
@@ -40,7 +73,7 @@ class ContinualMetaLearningSampler:
     def num_total_classes(self):
         return len(self.train.class_index) + len(self.test.class_index)
 
-    def sample_train(self, batch_size=1, num_batches=20, remember_size=64, include_train_data_in_validation=True,
+    def sample_train(self, batch_size=1, num_batches=20, remember_size=64, add_inner_train_to_outer_train=True,
                      device=None):
         """
         Samples a single episode ("outer loop") of the meta-train procedure.
@@ -49,13 +82,11 @@ class ContinualMetaLearningSampler:
             batch_size (int): Number of examples per training batch in the inner loop.
             num_batches (int): Number of training batches in the inner loop.
             remember_size (int): Number of examples to test (meta-train) on in the outer loop.
-            include_train_data_in_validation (bool): Whether to add the training examples into the validation set.
+            add_inner_train_to_outer_train (bool): Whether to add the training examples into the validation set.
             device (str): The device to send the torch arrays to.
 
         Returns:
-            train_data (list): A list of (image, label) tuples.
-            train_class (int): The index of the class being trained on in this episode.
-            tuple: A pair of torch arrays for the meta-train test phase (valid_ims, valid_labels).
+            MetaTrainingSample: All data needed for a single episode of training & logging.
         """
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -67,7 +98,8 @@ class ContinualMetaLearningSampler:
         # Split into batches.
         batched_train_samples = [train_samples[batch_size * i: batch_size * (i + 1)] for i in range(num_batches)]
         # Collate into tensors.
-        train_data = [collate_images(batch, device) for batch in batched_train_samples]
+        train_traj = [collate_images(batch, device) for batch in batched_train_samples]
+        train_ims, train_labels = collate_images(train_samples, device)  # all training samples together (unbatched)
         train_class = train_samples[0][1]  # just take the first label off the top, since they should all be the same.
 
         # valid = outer loop training
@@ -76,18 +108,18 @@ class ContinualMetaLearningSampler:
         valid_samples = [self.train[idx] for idx in indices]
         valid_ims, valid_labels = collate_images(valid_samples, device)
 
-        if include_train_data_in_validation:
+        if add_inner_train_to_outer_train:
             # randomly sampled "remember" images + all images from the last training trajectory are concatenated in one
             # single batch of shape [B,C,H,W], where B = train_size + remember_size.
-            train_ims, train_labels = collate_images(train_samples, device)  # all training samples together (unbatched)
-            valid_ims = torch.cat([train_ims, valid_ims])
-            valid_labels = torch.cat([train_labels, valid_labels])
+            meta_ims = torch.cat([train_ims, valid_ims])
+            meta_labels = torch.cat([train_labels, valid_labels])
+        else:
+            # just the randomly sampled "remember" images; B = remember_size.
+            meta_ims = valid_ims
+            meta_labels = valid_labels
 
-        return (
-            train_data,
-            train_class,
-            (valid_ims, valid_labels),
-        )
+        return MetaTrainingSample(train_class, train_traj, train_ims, train_labels, valid_ims, valid_labels, meta_ims,
+                                  meta_labels)
 
     def sample_test(self, num_classes, train_size=15, test_size=5, device="cuda"):
         """
