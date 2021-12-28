@@ -12,7 +12,7 @@ if __name__ == "__main__":
     # Training settings
     parser = argutils.create_parser("ANML training")
 
-    argutils.add_dataset_arg(parser)
+    argutils.add_dataset_arg(parser, add_train_size_arg=True)
     parser.add_argument("--rln", metavar="NUM_CHANNELS", type=int, default=256,
                         help="Number of channels to use in the RLN.")
     parser.add_argument("--nm", metavar="NUM_CHANNELS", type=int, default=112,
@@ -24,9 +24,6 @@ if __name__ == "__main__":
     parser.add_argument("--train-cycles", metavar="INT", type=int, default=1,
                         help="Number of times to run through all training batches, to comprise a single outer loop."
                         " Total number of gradient updates will be num_batches * train_cycles.")
-    parser.add_argument("--train-size", metavar="INT", type=int, default=500,
-                        help="Number of examples per class to use in training split. Remainder (if any) will be"
-                             " reserved for validation.")
     parser.add_argument("--val-size", metavar="INT", type=int, default=200,
                         help="Total number of test examples to sample from the validation set each iteration (for"
                              " testing generalization to never-seen examples).")
@@ -57,7 +54,6 @@ if __name__ == "__main__":
         args.nm,
         batch_size=args.batch_size,
         num_batches=args.num_batches,
-        train_size=args.train_size,
         val_size=args.val_size,
         remember_size=args.remember_size,
         remember_only=args.remember_only,

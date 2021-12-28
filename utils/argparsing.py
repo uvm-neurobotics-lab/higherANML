@@ -69,7 +69,7 @@ def add_verbose_arg(parser):
     return parser
 
 
-def add_dataset_arg(parser):
+def add_dataset_arg(parser, add_train_size_arg=False):
     """
     Add an argument for the user to specify a dataset.
     """
@@ -80,6 +80,10 @@ def add_dataset_arg(parser):
                              " present).")
     parser.add_argument("--no-download", dest="download", action="store_false",
                         help="Do not download the dataset automatically if it doesn't already exist; raise an error.")
+    if add_train_size_arg:
+        parser.add_argument("--train-size", metavar="INT", type=int, default=500,
+                            help="Number of examples per class to use in training split. Remainder (if any) will be"
+                                 " reserved for validation.")
     return parser
 
 
@@ -99,14 +103,15 @@ def get_OML_dataset_sampler(parser, args, im_size=None, greyscale=True):
     import datasets.mini_imagenet as imagenet
     import datasets.omniglot as omniglot
 
+    train_size = getattr(args, "train_size", None)
     if args.dataset == "omni":
         if not greyscale:
             raise ValueError("Omniglot is only available in greyscale.")
         return omniglot.create_OML_sampler(root=args.data_path / "omni", download=args.download, im_size=im_size,
-                                           seed=args.seed)
+                                           train_size=train_size, seed=args.seed)
     elif args.dataset == "miniimagenet":
         return imagenet.create_OML_sampler(root=args.data_path / "mini-imagenet", download=args.download,
-                                           im_size=im_size, seed=args.seed)
+                                           im_size=im_size, train_size=train_size, seed=args.seed)
     else:
         parser.error(f"Unknown dataset: {args.dataset}")
 

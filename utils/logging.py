@@ -130,15 +130,18 @@ def forward_pass(model, ims, labels):
     return out, loss, acc
 
 
-def test_accuracy(model, test_data):
-    # Allow test tensors to be empty (means we used all data for training).
-    if len(test_data[0][0]) == 0:
+def overall_accuracy(model, all_batches):
+    """
+    Evaluate the model on each batch and return the average accuracy over all samples.
+    WARNING: Assumes all batches are the same size, or else the average will be wrong.
+    """
+    # Allow the tensors to be empty.
+    if len(all_batches) == 0 or len(all_batches[0][0]) == 0:
         return np.nan
-    per_class_output = [forward_pass(model, ims, labels)[0] for ims, labels in test_data]
-    acc_per_class = [accuracy(out, labels) for out, (_, labels) in zip(per_class_output, test_data)]
-    # WARNING: Assumes all test classes have the same number of examples!
-    test_acc = np.array(acc_per_class).mean()
-    return test_acc.item()
+    acc_per_class = [forward_pass(model, ims, labels)[2] for ims, labels in all_batches]
+    # WARNING: Assumes all batches have the same number of examples!
+    overall_acc = np.array(acc_per_class).mean()
+    return overall_acc.item()
 
 
 class Log:
@@ -161,8 +164,6 @@ class Log:
     def outer_begin(self, it):
         if self.start < 0:
             self.start = time()
-        # Return whether to sample the full test set.
-        return (it > 0) and (it % self.save_freq == 0)
 
     def outer_info(self, it, train_class):
         if it % self.print_freq == 0:
@@ -185,7 +186,7 @@ class Log:
                 print_validation_stats(episode, train_out, rem_out, val_out, verbose,
                                        lambda msg: self.debug("    " + msg))
 
-    def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, verbose):
+    def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, sampler, verbose):
         time_to_print = (it % self.print_freq == 0)
         time_to_verbose_print = (self.verbose_freq > 0) and (it % self.verbose_freq == 0)
         if time_to_print or time_to_verbose_print:
@@ -221,8 +222,9 @@ class Log:
                                        lambda msg: self.debug("    " + msg))
 
         if (it > 0) and (it % self.save_freq == 0):
-            meta_test_acc = test_accuracy(meta_model, episode.full_test_data)
-            self.info(f"Full Test Acc = {meta_test_acc:.1%}")
+            meta_train_acc = overall_accuracy(meta_model, sampler.full_train_data())
+            meta_test_acc = overall_accuracy(meta_model, sampler.full_val_data())
+            self.info(f"Meta-Model Performance: Train Acc = {meta_train_acc:.1%} | Full Test Acc = {meta_test_acc:.1%}")
             save(meta_model, f"trained_anmls/{self.name}-{it}.net", **self.model_args)
 
     def close(self, it, model):

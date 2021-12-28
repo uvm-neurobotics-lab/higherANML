@@ -157,7 +157,7 @@ class MiniImageNet(ClassIndexedDataset):
         gdown.cached_download(id=self.split.gid, path=self.tarpath, md5=self.split.md5, quiet=self.quiet)
 
 
-def create_OML_sampler(root, download=True, im_size=None, greyscale=False, seed=None):
+def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train_size=None, seed=None):
     """
     Create a sampler for Mini-ImageNet data that will return examples in the framework specified by OML (see
     ContinualMetaLearningSampler).
@@ -167,6 +167,7 @@ def create_OML_sampler(root, download=True, im_size=None, greyscale=False, seed=
         download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
         im_size (int): Desired size of images, or None to use the on-disk sizes.
         greyscale (bool): Whether to convert images to greyscale.
+        train_size (int): Total number of samples from the train set to actually use for training.
         seed (int or list[int]): Random seed for sampling.
 
     Returns:
@@ -207,4 +208,4 @@ def create_OML_sampler(root, download=True, im_size=None, greyscale=False, seed=
     # We know that by default this dataset has 84x84 color images.
     actual_size = 84 if im_size is None else im_size
     image_shape = (1 if greyscale else 3, actual_size, actual_size)
-    return ContinualMetaLearningSampler(train, test, seed), image_shape
+    return ContinualMetaLearningSampler(train, test, seed, train_size), image_shape

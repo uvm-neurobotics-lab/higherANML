@@ -80,7 +80,6 @@ def train(
         nm_channels,
         batch_size=1,
         num_batches=20,
-        train_size=20,
         val_size=200,
         remember_size=64,
         remember_only=False,
@@ -96,7 +95,6 @@ def train(
     assert nm_channels > 0
     assert batch_size > 0
     assert num_batches > 0
-    assert train_size > 0
     assert val_size > 0
     assert remember_size > 0
     assert train_cycles > 0
@@ -121,17 +119,14 @@ def train(
 
     for it in range(its):
 
-        sample_full_test_data = log.outer_begin(it)
+        log.outer_begin(it)
 
-        num_train_ex = batch_size * num_batches
         episode = sampler.sample_train(
             batch_size=batch_size,
             num_batches=num_batches,
-            train_size=train_size,
             remember_size=remember_size,
             val_size=val_size,
             add_inner_train_to_outer_train=not remember_only,
-            sample_full_test_data=sample_full_test_data,
             device=device,
         )
         log.outer_info(it, episode.train_class)
@@ -160,7 +155,7 @@ def train(
         outer_opt.step()
         outer_opt.zero_grad()
 
-        log.outer_end(it, m_loss, m_acc, episode, fnet, anml, verbose)
+        log.outer_end(it, m_loss, m_acc, episode, fnet, anml, sampler, verbose)
 
     log.close(it, anml)
 
