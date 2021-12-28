@@ -9,12 +9,16 @@ from time import time, strftime, gmtime
 
 import numpy as np
 import scipy
+import torch
 from torch.nn.functional import cross_entropy
 
 from utils.storage import save
 
 
 def accuracy(preds, labels):
+    assert len(preds) == len(labels)
+    if len(preds) == 0:
+        return np.nan
     return (preds.argmax(axis=1) == labels).sum().item() / len(labels)
 
 
@@ -60,25 +64,22 @@ def fraction_wrong_predicted_as_train_class(preds, labels, train_class):
     return num_predicted_as_train / is_wrong.sum().item()
 
 
-def extract_train(all_samples, num_train_ex):
-    # NOTE: Assumes that all training examples are first in the batch.
-    return all_samples[:num_train_ex]
+def print_validation_stats(episode, train_out, rem_out, val_out, verbose, print_fn):
+    # For convenience of running the same code on all three sets.
+    set_list = (("Train", train_out, episode.train_labels),
+                ("Remember", rem_out, episode.rem_labels),
+                ("Test", val_out, episode.val_labels))
 
-
-def extract_remember(all_samples, num_train_ex):
-    # NOTE: Assumes that all training examples are first in the batch.
-    return all_samples[num_train_ex:]
-
-
-def train_val_split(data, num_train_ex):
-    return extract_train(data, num_train_ex), extract_remember(data, num_train_ex)
-
-
-def print_validation_stats(train_out, train_labels, val_out, val_labels, train_class, verbose, print_fn):
     # Loss & Accuracy
-    train_acc = accuracy(train_out, train_labels)
-    val_acc = accuracy(val_out, val_labels)
-    print_fn(f"Train Acc = {train_acc:.1%}, Remember Acc = {val_acc:.1%}")
+    train_acc = accuracy(train_out, episode.train_labels)
+    msg = f"Train Acc = {train_acc:.1%}"
+    if len(rem_out) > 0:
+        rem_acc = accuracy(rem_out, episode.rem_labels)
+        msg += f", Remember Acc = {rem_acc:.1%}"
+    if len(val_out) > 0:
+        val_acc = accuracy(val_out, episode.val_labels)
+        msg += f", Test Acc = {val_acc:.1%}"
+    print_fn(msg)
     # TODO: report accuracy of non-train classes instead of remember set?
     # TODO: report how much of each set was "seen" before?
     # TODO: or separately report total fraction of classes seen and examples seen
@@ -86,37 +87,58 @@ def print_validation_stats(train_out, train_labels, val_out, val_labels, train_c
 
     # "Entropy"
     train_spread = normalized_spread(train_out)
-    val_spread = normalized_spread(val_out)
-    print_fn(f"Train Spread = {train_spread:.2f}, Remember Spread = {val_spread:.2f}")
+    msg = f"Train Spread = {train_spread:.2f}"
+    if len(rem_out) > 0:
+        rem_spread = normalized_spread(rem_out)
+        msg += f", Remember Spread = {rem_spread:.2f}"
+    if len(val_out) > 0:
+        val_spread = normalized_spread(val_out)
+        msg += f", Test Spread = {val_spread:.2f}"
+    print_fn(msg)
 
     # Top Classes
     # TODO: Start tracking seen and unseen classes here?
     # TODO: Also in outer loop printout.
-    train_mode = classes_sorted_by_frequency(train_out)[0]
-    train_mode_freq = train_mode[1] / len(train_out)
-    print_fn(f"Most frequent train prediction: {train_mode[0]} ({train_mode_freq:.1%} of predictions)")
-    val_mode = classes_sorted_by_frequency(val_out)[0]
-    val_mode_freq = val_mode[1] / len(val_out)
-    print_fn(f"Most frequent remember prediction: {val_mode[0]} ({val_mode_freq:.1%} of predictions)")
+    for name, output, labels in set_list:
+        mode = classes_sorted_by_frequency(output)[0]
+        mode_freq = mode[1] / len(output)
+        print_fn(f"Most frequent {name} prediction: {mode[0]} ({mode_freq:.1%} of predictions)")
 
     # Print percentage of over-prediction of target class. (How many "remember" items were wrong b/c they were
     # predicted as the class currently being learned.)
-    print_fn(f"Portion of remember wrongly predicted as {train_class} = "
-             f"{fraction_wrong_predicted_as_train_class(val_out, val_labels, train_class):.1%}")
+    for name, output, labels in set_list[1:]:  # Skip the training set.
+        print_fn(f"Portion of {name} wrongly predicted as {episode.train_class} = "
+                 f"{fraction_wrong_predicted_as_train_class(output, labels, episode.train_class):.1%}")
 
     # If super verbose, print the entire prediction.
     if verbose >= 3:
-        for name, output, labels in (("Train", train_out, train_labels), ("Validation", val_out, val_labels)):
+        for name, output, labels in set_list:
             pred_label_pairs = np.array(list(zip(output.argmax(axis=1), labels)))
             print_fn(f"\n{name} (pred, label) pairs:")
             print_fn(str(pred_label_pairs))
 
 
 def forward_pass(model, ims, labels):
-    out = model(ims)
-    loss = cross_entropy(out, labels)
-    acc = accuracy(out, labels)
+    if len(ims) == 0:
+        out = torch.tensor([])
+        loss = np.nan
+        acc = np.nan
+    else:
+        out = model(ims)
+        loss = cross_entropy(out, labels)
+        acc = accuracy(out, labels)
     return out, loss, acc
+
+
+def test_accuracy(model, test_data):
+    # Allow test tensors to be empty (means we used all data for training).
+    if len(test_data[0][0]) == 0:
+        return np.nan
+    per_class_output = [forward_pass(model, ims, labels)[0] for ims, labels in test_data]
+    acc_per_class = [accuracy(out, labels) for out, (_, labels) in zip(per_class_output, test_data)]
+    # WARNING: Assumes all test classes have the same number of examples!
+    test_acc = np.array(acc_per_class).mean()
+    return test_acc.item()
 
 
 class Log:
@@ -136,9 +158,11 @@ class Log:
     def debug(self, msg):
         self.logger.debug(msg)
 
-    def outer_begin(self):
+    def outer_begin(self, it):
         if self.start < 0:
             self.start = time()
+        # Return whether to sample the full test set.
+        return (it > 0) and (it % self.save_freq == 0)
 
     def outer_info(self, it, train_class):
         if it % self.print_freq == 0:
@@ -147,49 +171,58 @@ class Log:
     def inner(self, outer_it, inner_it, inner_loss, inner_acc, episode, model, verbose):
         # Only print inner loop info when verbose is turned on.
         if (self.verbose_freq > 0) and (outer_it % self.verbose_freq == 0):
-            if inner_it < 2:
+            if inner_it < 20000:
                 # TODO: plot change in performance b/w first and second iteration.
                 # TODO: plot change in performance b/w first and last iteration.
                 # TODO: report when/if train acc reaches 100% - some idea of how fast learning is happening
                 # TODO: and/or plot some idea of how much outputs are changing, in general
-                self.debug(f"  Inner iter {inner_it}: Loss = {inner_loss:.5f}, Acc = {inner_acc:.1%}")
+                val_out = forward_pass(model, episode.val_ims, episode.val_labels)[0]
+                val_acc = accuracy(val_out, episode.val_labels)
+                self.debug(f"  Inner iter {inner_it}: Loss = {inner_loss:.5f}, Acc = {inner_acc:.1%}"
+                           f", Test Acc = {val_acc:.1%}")
                 train_out = forward_pass(model, episode.train_ims, episode.train_labels)[0]
-                valid_out = forward_pass(model, episode.valid_ims, episode.valid_labels)[0]
-                print_validation_stats(train_out, episode.train_labels, valid_out, episode.valid_labels,
-                                       episode.train_class, verbose, lambda msg: self.debug("    " + msg))
+                rem_out = forward_pass(model, episode.rem_ims, episode.rem_labels)[0]
+                print_validation_stats(episode, train_out, rem_out, val_out, verbose,
+                                       lambda msg: self.debug("    " + msg))
 
     def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, verbose):
-        ada_train_out = None
-        ada_valid_out = None
-        if (it % self.print_freq == 0) or (it % self.verbose_freq == 0):
+        time_to_print = (it % self.print_freq == 0)
+        time_to_verbose_print = (self.verbose_freq > 0) and (it % self.verbose_freq == 0)
+        if time_to_print or time_to_verbose_print:
             ada_train_out = forward_pass(adapted_model, episode.train_ims, episode.train_labels)[0]
-            ada_valid_out = forward_pass(adapted_model, episode.valid_ims, episode.valid_labels)[0]
+            ada_rem_out = forward_pass(adapted_model, episode.rem_ims, episode.rem_labels)[0]
+            ada_val_out = forward_pass(adapted_model, episode.val_ims, episode.val_labels)[0]
 
-        if it % self.print_freq == 0:
-            end = time()
-            elapsed = end - self.start
-            self.start = -1
+            if time_to_print:
+                end = time()
+                elapsed = end - self.start
+                self.start = -1
 
-            train_acc = accuracy(ada_train_out, episode.train_labels)
-            rem_acc = accuracy(ada_valid_out, episode.valid_labels)
-            self.info(f"  Final Meta-Loss = {loss.item():.3f} | Meta-Acc = {acc:.1%} | Train Acc = {train_acc:.1%}"
-                      f" | Remember Acc = {rem_acc:.1%} ({strftime('%H:%M:%S', gmtime(elapsed))})")
+                train_acc = accuracy(ada_train_out, episode.train_labels)
+                rem_acc = accuracy(ada_rem_out, episode.rem_labels)
+                val_acc = accuracy(ada_val_out, episode.val_labels)
+                self.info(f"  Final Meta-Loss = {loss.item():.3f} | Meta-Acc = {acc:.1%} | Train Acc = {train_acc:.1%}"
+                          f" | Remember Acc = {rem_acc:.1%} | Test Acc = {val_acc:.1%}"
+                          f" ({strftime('%H:%M:%S', gmtime(elapsed))})")
 
-        # If verbose, then also evaluate the new meta-model on the previous train/validation data so we can see the
-        # impact of meta-learning.
-        if (self.verbose_freq > 0) and (it % self.verbose_freq == 0):
-            # TODO: Idea: report difference b/w meta-model and end-model perf.
-            self.debug("  End Model Performance:")
-            print_validation_stats(ada_train_out, episode.train_labels, ada_valid_out, episode.valid_labels,
-                                   episode.train_class, verbose, lambda msg: self.debug("    " + msg))
+            # If verbose, then also evaluate the new meta-model on the previous train/validation data so we can see the
+            # impact of meta-learning.
+            if time_to_verbose_print:
+                # TODO: Idea: report difference b/w meta-model and end-model perf.
+                self.debug("  End Model Performance:")
+                print_validation_stats(episode, ada_train_out, ada_rem_out, ada_val_out, verbose,
+                                       lambda msg: self.debug("    " + msg))
 
-            self.debug("  Meta-Model Performance:")
-            meta_train_out = forward_pass(meta_model, episode.train_ims, episode.train_labels)[0]
-            meta_valid_out = forward_pass(meta_model, episode.valid_ims, episode.valid_labels)[0]
-            print_validation_stats(meta_train_out, episode.train_labels, meta_valid_out, episode.valid_labels,
-                                   episode.train_class, verbose, lambda msg: self.debug("    " + msg))
+                self.debug("  Meta-Model Performance:")
+                meta_train_out = forward_pass(meta_model, episode.train_ims, episode.train_labels)[0]
+                meta_rem_out = forward_pass(meta_model, episode.rem_ims, episode.rem_labels)[0]
+                meta_val_out = forward_pass(meta_model, episode.val_ims, episode.val_labels)[0]
+                print_validation_stats(episode, meta_train_out, meta_rem_out, meta_val_out, verbose,
+                                       lambda msg: self.debug("    " + msg))
 
-        if it % self.save_freq == 0:
+        if (it > 0) and (it % self.save_freq == 0):
+            meta_test_acc = test_accuracy(meta_model, episode.full_test_data)
+            self.info(f"Full Test Acc = {meta_test_acc:.1%}")
             save(meta_model, f"trained_anmls/{self.name}-{it}.net", **self.model_args)
 
     def close(self, it, model):

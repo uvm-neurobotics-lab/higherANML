@@ -24,14 +24,21 @@ if __name__ == "__main__":
     parser.add_argument("--train-cycles", metavar="INT", type=int, default=1,
                         help="Number of times to run through all training batches, to comprise a single outer loop."
                         " Total number of gradient updates will be num_batches * train_cycles.")
+    parser.add_argument("--train-size", metavar="INT", type=int, default=500,
+                        help="Number of examples per class to use in training split. Remainder (if any) will be"
+                             " reserved for validation.")
+    parser.add_argument("--val-size", metavar="INT", type=int, default=200,
+                        help="Total number of test examples to sample from the validation set each iteration (for"
+                             " testing generalization to never-seen examples).")
     parser.add_argument("--remember-size", metavar="INT", type=int, default=64,
-                        help="Number of extra examples to add to training examples to compute the meta-loss.")
+                        help="Number of randomly sampled training examples to compute the meta-loss.")
     parser.add_argument("--remember-only", action="store_true",
                         help="Do not include the training examples from the inner loop into the meta-loss (only use"
                              " the remember set for the outer loop of training).")
     parser.add_argument("--inner-lr", metavar="RATE", type=float, default=1e-1, help="Inner learning rate.")
     parser.add_argument("--outer-lr", metavar="RATE", type=float, default=1e-3, help="Outer learning rate.")
-    parser.add_argument("--epochs", type=int, default=30000, help="Number of epochs to train (default: 30000).")
+    parser.add_argument("--save-freq", type=int, default=1000, help="Number of epochs between each saved model.")
+    parser.add_argument("--epochs", type=int, default=30000, help="Number of epochs to train.")
     argutils.add_device_arg(parser)
     argutils.add_seed_arg(parser, default_seed=1)
     argutils.add_verbose_arg(parser)
@@ -50,12 +57,15 @@ if __name__ == "__main__":
         args.nm,
         batch_size=args.batch_size,
         num_batches=args.num_batches,
+        train_size=args.train_size,
+        val_size=args.val_size,
         remember_size=args.remember_size,
         remember_only=args.remember_only,
         train_cycles=args.train_cycles,
         inner_lr=args.inner_lr,
         outer_lr=args.outer_lr,
         its=args.epochs,
+        save_freq=args.save_freq,
         device=device,
         verbose=args.verbose,
     )

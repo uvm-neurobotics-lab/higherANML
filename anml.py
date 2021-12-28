@@ -80,12 +80,15 @@ def train(
         nm_channels,
         batch_size=1,
         num_batches=20,
+        train_size=20,
+        val_size=200,
         remember_size=64,
         remember_only=False,
         train_cycles=1,
         inner_lr=1e-1,
         outer_lr=1e-3,
         its=30000,
+        save_freq=1000,
         device="cuda",
         verbose=0
 ):
@@ -93,11 +96,14 @@ def train(
     assert nm_channels > 0
     assert batch_size > 0
     assert num_batches > 0
+    assert train_size > 0
+    assert val_size > 0
     assert remember_size > 0
     assert train_cycles > 0
     assert inner_lr > 0
     assert outer_lr > 0
     assert its > 0
+    assert save_freq > 0
 
     anml, model_args = create_model(input_shape, nm_channels, rln_channels, device)
 
@@ -105,7 +111,7 @@ def train(
     name = "ANML-" + "-".join(map(str, input_shape))
     print_freq = 1 if verbose > 1 else 10  # if double-verbose, print every iteration
     verbose_freq = print_freq if verbose > 0 else 0  # if verbose, then print verbose info at the same frequency
-    log = Log(name, model_args, print_freq, verbose_freq)
+    log = Log(name, model_args, print_freq, verbose_freq, save_freq)
 
     # inner optimizer used during the learning phase
     inner_opt = SGD(list(anml.rln.parameters()) + list(anml.fc.parameters()), lr=inner_lr)
@@ -115,14 +121,17 @@ def train(
 
     for it in range(its):
 
-        log.outer_begin()
+        sample_full_test_data = log.outer_begin(it)
 
         num_train_ex = batch_size * num_batches
         episode = sampler.sample_train(
             batch_size=batch_size,
             num_batches=num_batches,
+            train_size=train_size,
             remember_size=remember_size,
+            val_size=val_size,
             add_inner_train_to_outer_train=not remember_only,
+            sample_full_test_data=sample_full_test_data,
             device=device,
         )
         log.outer_info(it, episode.train_class)
