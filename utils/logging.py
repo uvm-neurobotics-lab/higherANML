@@ -132,16 +132,19 @@ def forward_pass(model, ims, labels):
 
 def overall_accuracy(model, all_batches):
     """
-    Evaluate the model on each batch and return the average accuracy over all samples.
-    WARNING: Assumes all batches are the same size, or else the average will be wrong.
+    Evaluate the model on each batch and return the average accuracy over all samples. If there are no batches, or all
+    batches are empty, then this will return NaN.
     """
     # Allow the tensors to be empty.
-    if len(all_batches) == 0 or len(all_batches[0][0]) == 0:
+    if len(all_batches) == 0:
         return np.nan
-    acc_per_class = [forward_pass(model, ims, labels)[2] for ims, labels in all_batches]
-    # WARNING: Assumes all batches have the same number of examples!
-    overall_acc = np.array(acc_per_class).mean()
-    return overall_acc.item()
+    acc_per_batch = np.array([(forward_pass(model, ims, labels)[2], len(labels)) for ims, labels in all_batches])
+    accs = acc_per_batch[:, 0]
+    weights = acc_per_batch[:, 1]
+    if weights.sum() == 0:
+        return np.nan
+    else:
+        return np.ma.average(accs, weights=weights)
 
 
 class Log:
