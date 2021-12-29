@@ -130,7 +130,7 @@ def forward_pass(model, ims, labels):
     return out, loss, acc
 
 
-def overall_accuracy(model, all_batches):
+def overall_accuracy(model, all_batches, print_fn):
     """
     Evaluate the model on each batch and return the average accuracy over all samples. If there are no batches, or all
     batches are empty, then this will return NaN.
@@ -138,6 +138,7 @@ def overall_accuracy(model, all_batches):
     # Allow the tensors to be empty.
     if len(all_batches) == 0:
         return np.nan
+    print_fn(f"Computing accuracy of {len(all_batches)} batches, {len(all_batches[0][0])} samples per batch...")
     acc_per_batch = np.array([(forward_pass(model, ims, labels)[2], len(labels)) for ims, labels in all_batches])
     accs = acc_per_batch[:, 0]
     weights = acc_per_batch[:, 1]
@@ -224,9 +225,9 @@ class Log:
                 print_validation_stats(episode, meta_train_out, meta_rem_out, meta_val_out, verbose,
                                        lambda msg: self.debug("    " + msg))
 
-        if (it > 0) and (it % self.save_freq == 0):
-            meta_train_acc = overall_accuracy(meta_model, sampler.full_train_data(device))
-            meta_test_acc = overall_accuracy(meta_model, sampler.full_val_data(device))
+        if it % self.save_freq == 0:
+            meta_train_acc = overall_accuracy(meta_model, sampler.full_train_data(device), self.debug)
+            meta_test_acc = overall_accuracy(meta_model, sampler.full_val_data(device), self.debug)
             self.info(f"Meta-Model Performance: Train Acc = {meta_train_acc:.1%} | Full Test Acc = {meta_test_acc:.1%}")
             save(meta_model, f"trained_anmls/{self.name}-{it}.net", **self.model_args)
 

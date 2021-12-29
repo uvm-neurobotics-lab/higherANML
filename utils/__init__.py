@@ -22,6 +22,36 @@ def divide_chunks(l, n):
         yield l[i: i + n]
 
 
+def memory_constrained_batches(dataset, indices, max_gb):
+    """
+    A function to batch up the desired samples from the given dataset into chunks that are as large as possible without
+    exceeding the specified memory limit.
+
+    This function assumes all data points are the same size. The first data point in the list will be used as a
+    prototype to predict the memory usage of a batch.
+
+    Args:
+        dataset: The dataset to pull from.
+        indices: The indices to sample from the dataset.
+        max_gb: The maximum amount of memory to use for a single (inputs, labels) pair.
+
+    Returns:
+        list: A list of lists, where each list is a batch of indices. Indices will appear in the order given by
+            `indices`. All batches will be the same size, except for the last batch which may be smaller.
+    """
+    if not indices:
+        return []
+
+    # Grab the first data point to estimate size.
+    data, label = dataset[indices[0]]
+    data_mem_bytes = data.element_size() * data.nelement()
+    label_mem_bytes = label.element_size() * label.nelement()
+    GB = 1024**4
+    mem_per_sample_gb = (data_mem_bytes + label_mem_bytes) / GB
+    num_allowable_samples = int(max_gb / mem_per_sample_gb)
+    return list(divide_chunks(indices, num_allowable_samples))
+
+
 def collate_images(samples, device=None):
     """
     Takes a list of (image, label) pairs and returns two tensors: [images], [labels]. Each pair could consist of a

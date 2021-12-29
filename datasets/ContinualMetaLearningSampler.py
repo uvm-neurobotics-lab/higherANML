@@ -5,7 +5,12 @@ import torch
 from numpy.random import default_rng, SeedSequence
 from sklearn.model_selection import train_test_split
 
-from utils import collate_images, unzip
+from utils import collate_images, divide_chunks, unzip
+
+
+# Heuristic: Based on experimentation, it seems like this is a reasonable max batch size for most of our current models
+# and datasets to avoid running out of memory on the VACC.
+_MAX_BATCH_SIZE = 200
 
 
 class BatchList:
@@ -133,10 +138,27 @@ class ContinualMetaLearningSampler:
         return len(self.train.class_index) + len(self.test.class_index)
 
     def full_train_data(self, device=None):
-        return BatchList(self.train, self.train_class_index, device)
+        """
+        Return all training data, chunked up into batches of reasonable size, so as not to run out of memory on the GPU.
+        Args:
+            device: The device where batches should be instantiated.
+        Returns:
+            BatchList: A random-access object that will lazily load each batch as requested.
+        """
+        batches = list(divide_chunks(self.train_sample_index, _MAX_BATCH_SIZE))
+        return BatchList(self.train, batches, device)
 
     def full_val_data(self, device=None):
-        return BatchList(self.train, self.val_class_index, device)
+        """
+        Return all validation data, chunked up into batches of reasonable size, so as not to run out of memory on the
+        GPU.
+        Args:
+            device: The device where batches should be instantiated.
+        Returns:
+            BatchList: A random-access object that will lazily load each batch as requested.
+        """
+        batches = list(divide_chunks(self.val_sample_index, _MAX_BATCH_SIZE))
+        return BatchList(self.train, batches, device)
 
     def sample_train(self, batch_size=1, num_batches=20, remember_size=64, val_size=200,
                      add_inner_train_to_outer_train=True, device=None):
