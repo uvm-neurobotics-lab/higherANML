@@ -186,7 +186,7 @@ class Log:
                 print_validation_stats(episode, train_out, rem_out, val_out, verbose,
                                        lambda msg: self.debug("    " + msg))
 
-    def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, sampler, verbose):
+    def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, sampler, device, verbose):
         time_to_print = (it % self.print_freq == 0)
         time_to_verbose_print = (self.verbose_freq > 0) and (it % self.verbose_freq == 0)
         if time_to_print or time_to_verbose_print:
@@ -222,8 +222,8 @@ class Log:
                                        lambda msg: self.debug("    " + msg))
 
         if (it > 0) and (it % self.save_freq == 0):
-            meta_train_acc = overall_accuracy(meta_model, sampler.full_train_data())
-            meta_test_acc = overall_accuracy(meta_model, sampler.full_val_data())
+            meta_train_acc = overall_accuracy(meta_model, sampler.full_train_data(device))
+            meta_test_acc = overall_accuracy(meta_model, sampler.full_val_data(device))
             self.info(f"Meta-Model Performance: Train Acc = {meta_train_acc:.1%} | Full Test Acc = {meta_test_acc:.1%}")
             save(meta_model, f"trained_anmls/{self.name}-{it}.net", **self.model_args)
 

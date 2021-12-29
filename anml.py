@@ -155,7 +155,7 @@ def train(
         outer_opt.step()
         outer_opt.zero_grad()
 
-        log.outer_end(it, m_loss, m_acc, episode, fnet, anml, sampler, verbose)
+        log.outer_end(it, m_loss, m_acc, episode, fnet, anml, sampler, device, verbose)
 
     log.close(it, anml)
 
