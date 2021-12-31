@@ -1,6 +1,7 @@
 gdown
 higher
 pandas
+pyyaml
 scikit-learn
 torchvision
 tqdm

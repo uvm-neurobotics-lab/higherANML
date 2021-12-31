@@ -3,6 +3,7 @@ Utilities for logging progress metrics and saving checkpoints.
 """
 
 import logging
+import os
 from collections import Counter
 from pathlib import Path
 from time import time, strftime, gmtime
@@ -10,6 +11,7 @@ from time import time, strftime, gmtime
 import numpy as np
 import scipy
 import torch
+import yaml
 from torch.nn.functional import cross_entropy
 
 from utils.storage import save
@@ -64,37 +66,32 @@ def fraction_wrong_predicted_as_train_class(preds, labels, train_class):
     return num_predicted_as_train / is_wrong.sum().item()
 
 
+def print_oneline(set_list, print_fn, metric):
+    msg = ""
+    for name, output, labels in set_list:
+        if msg:
+            msg += ", "
+        msg += metric(name, output, labels)
+    print_fn(msg)
+
+
 def print_validation_stats(episode, train_out, rem_out, val_out, verbose, print_fn):
     # For convenience of running the same code on all three sets.
-    set_list = (("Train", train_out, episode.train_labels),
-                ("Remember", rem_out, episode.rem_labels),
-                ("Test", val_out, episode.val_labels))
+    set_list = [("Train", train_out, episode.train_labels)]
+    if len(rem_out) > 0:
+        set_list.append(("Remember", rem_out, episode.rem_labels))
+    if len(val_out) > 0:
+        set_list.append(("Test", val_out, episode.val_labels))
 
     # Loss & Accuracy
-    train_acc = accuracy(train_out, episode.train_labels)
-    msg = f"Train Acc = {train_acc:.1%}"
-    if len(rem_out) > 0:
-        rem_acc = accuracy(rem_out, episode.rem_labels)
-        msg += f", Remember Acc = {rem_acc:.1%}"
-    if len(val_out) > 0:
-        val_acc = accuracy(val_out, episode.val_labels)
-        msg += f", Test Acc = {val_acc:.1%}"
-    print_fn(msg)
+    print_oneline(set_list, print_fn, lambda name, output, labels: f"{name} Acc = {accuracy(output, labels) :.1%}")
     # TODO: report accuracy of non-train classes instead of remember set?
     # TODO: report how much of each set was "seen" before?
     # TODO: or separately report total fraction of classes seen and examples seen
     # TODO: report overall accuracy on "things seen so far"? Maybe explicitly sample from things seen.
 
     # "Entropy"
-    train_spread = normalized_spread(train_out)
-    msg = f"Train Spread = {train_spread:.2f}"
-    if len(rem_out) > 0:
-        rem_spread = normalized_spread(rem_out)
-        msg += f", Remember Spread = {rem_spread:.2f}"
-    if len(val_out) > 0:
-        val_spread = normalized_spread(val_out)
-        msg += f", Test Spread = {val_spread:.2f}"
-    print_fn(msg)
+    print_oneline(set_list, print_fn, lambda name, output, labels: f"{name} Spread = {normalized_spread(output) :.2f}")
 
     # Top Classes
     # TODO: Start tracking seen and unseen classes here?
@@ -149,15 +146,18 @@ def overall_accuracy(model, all_batches, print_fn):
 
 
 class Log:
-    def __init__(self, name, model_args, print_freq=10, verbose_freq=None, save_freq=1000):
+    def __init__(self, name, config, model_args, print_freq=10, verbose_freq=None, save_freq=1000):
         self.start = -1
         self.name = name
+        self.config = config
         self.model_args = model_args
         self.print_freq = print_freq
         self.verbose_freq = verbose_freq
         self.save_freq = save_freq
         self.logger = logging.getLogger(name)
-        Path("./trained_anmls").mkdir(exist_ok=True)
+        self.save_path = Path("./trained_anmls")
+        self.save_path.mkdir(exist_ok=True)
+        yaml.dump(config, open(self.save_path / "train-config.yml", "w"))
 
     def info(self, msg):
         self.logger.info(msg)
@@ -229,7 +229,7 @@ class Log:
             meta_train_acc = overall_accuracy(meta_model, sampler.full_train_data(device), self.debug)
             meta_test_acc = overall_accuracy(meta_model, sampler.full_val_data(device), self.debug)
             self.info(f"Meta-Model Performance: Train Acc = {meta_train_acc:.1%} | Full Test Acc = {meta_test_acc:.1%}")
-            save(meta_model, f"trained_anmls/{self.name}-{it}.net", **self.model_args)
+            save(meta_model, self.save_path / f"{self.name}-{it}.net", **self.model_args)
 
     def close(self, it, model):
-        save(model, f"trained_anmls/{self.name}-{it}.net", **self.model_args)
+        save(model, self.save_path / f"{self.name}-{it}.net", **self.model_args)

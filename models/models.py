@@ -5,13 +5,19 @@ by Yinbo Chen. It was copied on 2021-12-17. The license for this file can be fou
 Some modifications have been made.
 """
 
+import inspect
+
 # Global registry of models.
 models = {}
 
 
 def register(name):
     """
-    A decorator which can be used to register a model. It can decorate either a model class or a factory method.
+    A decorator which can be used to register a model. It can decorate either a model class or a factory method. If a
+    factory method, the method can return one of two things:
+        - Just the model.
+        - A tuple of (model, args), where `args` are the exact arguments that were passed to the model constructor.
+
     Args:
         name: The name to register the model under. Must be globally unique.
     """
@@ -31,13 +37,39 @@ def make(name, device=None, **kwargs):
         **kwargs: The constructor arguments for the specified model.
 
     Returns:
-        torch.nn.Module: The new model.
+        tuple: A tuple of (model, args), where `args` are the exact arguments that were passed to the model constructor.
+            These should be used to save the model using the `utils.storage` module.
     """
-    if name is None:
-        return None
-    model = models[name](**kwargs)
+    if not name:
+        return None, kwargs
+
+    ret = models[name](**kwargs)
+    if isinstance(ret, tuple):
+        model, model_args = ret
+    else:
+        model = ret
+        model_args = kwargs
+
     model.to(device)
-    return model
+    return model, model_args
+
+
+def get_model_arg_names(model_name):
+    """
+    Get the names of the constructor arguments for the given model.
+
+    Args:
+        model_name (str): The name of the model in the global registry.
+
+    Returns:
+        list: The list of argument names.
+    """
+    # This will get the list of arg names for either a factory function or a class constructor.
+    arg_names = inspect.getfullargspec(models[model_name])[0]
+    # If the first arg is 'self', skip it.
+    if arg_names[0] == "self":
+        arg_names = arg_names[1:]
+    return arg_names
 
 
 def load(model_sv, name=None):

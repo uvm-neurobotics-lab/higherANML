@@ -4,6 +4,8 @@ ANML Training Script
 
 import logging
 
+import yaml
+
 import utils.argparsing as argutils
 from anml import train
 
@@ -12,6 +14,7 @@ if __name__ == "__main__":
     # Training settings
     parser = argutils.create_parser("ANML training")
 
+    parser.add_argument("-c", "--config", metavar="PATH", required=True, help="Training config file.")
     argutils.add_dataset_arg(parser, add_train_size_arg=True)
     parser.add_argument("--rln", metavar="NUM_CHANNELS", type=int, default=256,
                         help="Number of channels to use in the RLN.")
@@ -42,27 +45,25 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     argutils.configure_logging(args, level=logging.INFO)
+
+    config = yaml.full_load(open(args.config, 'r'))
+
+    # Command line args optionally override config.
+    overrideable_args = ["dataset", "data_path", "download", "train_size", "batch_size", "num_batches", "train_cycles",
+                         "val_size", "remember_size", "remember_only", "inner_lr", "outer_lr", "save_freq", "epochs",
+                         "seed"]
+    for arg in overrideable_args:
+        # Only replace if value is different from default (meaning it was explicitly specified by the user), or if the
+        # value doesn't already exist in config.
+        dflt = parser.get_default(arg)
+        value = getattr(args, arg, dflt)
+        if arg not in config or value != dflt:
+            config[arg] = value
+
     device = argutils.get_device(parser, args)
-    argutils.set_seed_from_args(args)
-    sampler, input_shape = argutils.get_OML_dataset_sampler(parser, args)
+    argutils.set_seed(config["seed"])
+    sampler, input_shape = argutils.get_OML_dataset_sampler(config)
 
     logging.info("Commencing training.")
-    train(
-        sampler,
-        input_shape,
-        args.rln,
-        args.nm,
-        batch_size=args.batch_size,
-        num_batches=args.num_batches,
-        val_size=args.val_size,
-        remember_size=args.remember_size,
-        remember_only=args.remember_only,
-        train_cycles=args.train_cycles,
-        inner_lr=args.inner_lr,
-        outer_lr=args.outer_lr,
-        its=args.epochs,
-        save_freq=args.save_freq,
-        device=device,
-        verbose=args.verbose,
-    )
+    train(sampler, input_shape, config, device, args.verbose)
     logging.info("Training complete.")

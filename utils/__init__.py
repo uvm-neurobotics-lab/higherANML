@@ -3,6 +3,8 @@ General utility functions.
 """
 
 import itertools
+from pathlib import Path
+from typing import Dict, Iterable
 
 
 def unzip(l):
@@ -20,6 +22,28 @@ def divide_chunks(l, n):
     # looping till length l
     for i in range(0, len(l), n):
         yield l[i: i + n]
+
+
+def make_pretty(config):
+    """
+    Clean up the given YAML config object to make it nicer for printing and writing to file.
+
+    Args:
+        config (Any): The YAML config, or a sub-tree of the config.
+
+    Returns:
+        Any: The new config.
+    """
+    if isinstance(config, Dict):
+        return {k: make_pretty(v) for k, v in config.items()}
+    elif isinstance(config, Iterable) and not isinstance(config, str):
+        # Also has the function of turning tuples into lists, so we get cleaner YAML output.
+        return [make_pretty(v) for v in config]
+    # Replace paths with fully-resolved path strings for improved readability when printing/writing config.
+    elif isinstance(config, Path):
+        return str(config.resolve())
+    else:
+        return config
 
 
 def memory_constrained_batches(dataset, indices, max_gb):

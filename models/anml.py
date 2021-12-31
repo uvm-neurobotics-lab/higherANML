@@ -5,6 +5,8 @@ A Neuromodulated Meta-Learner (ANML)
 import torch
 import torch.nn as nn
 
+from .models import register
+
 
 def _linear_layer(in_dims, out_dims):
     # Sanity check: we can increase this limit if desired.
@@ -130,3 +132,24 @@ class ANML(nn.Module):
         out = self.fc(features)
 
         return out
+
+
+@register("anml")
+def create_anml(input_shape, **kwargs):
+    model_args = dict(kwargs)
+    model_args["input_shape"] = input_shape
+
+    # Auto-derive some arguments if they are not explicitly defined by the user.
+    if "num_classes" not in model_args:
+        # TODO: Auto-size this instead.
+        # model_args["num_classes"] = max(sampler.num_train_classes(), sampler.num_test_classes())
+        model_args["num_classes"] = 1000
+    if "num_conv_blocks" not in model_args:
+        model_args["num_conv_blocks"] = recommended_number_of_convblocks(input_shape)
+    if "pool_rln_output" not in model_args:
+        # For backward compatibility, we turn off final pooling if the images are <=30 px, as done in the original ANML.
+        model_args["pool_rln_output"] = input_shape[-1] > 30
+
+    # Finally, create the model.
+    anml = ANML(**model_args)
+    return anml, model_args

@@ -4,33 +4,16 @@ from pathlib import Path
 import higher
 import numpy as np
 import torch
+import yaml
 from torch.nn.functional import cross_entropy
 from torch.nn.init import kaiming_normal_
 from torch.optim import SGD, Adam
 
+import models
 import utils.storage as storage
-from models import ANML, LegacyANML, recommended_number_of_convblocks
-from utils import divide_chunks
+from models import LegacyANML
+from utils import make_pretty
 from utils.logging import forward_pass, Log
-
-
-def create_model(input_shape, nm_channels, rln_channels, device):
-    # TODO: Auto-size this instead.
-    # num_classes = max(sampler.num_train_classes(), sampler.num_test_classes())
-    num_classes = 1000
-    model_args = {
-        "input_shape": input_shape,
-        "rln_chs": rln_channels,
-        "nm_chs": nm_channels,
-        "num_classes": num_classes,
-        "num_conv_blocks": recommended_number_of_convblocks(input_shape),
-        # For backward compatibility, we turn off final pooling if the images are <=30 px, as done in the original ANML.
-        "pool_rln_output": input_shape[-1] > 30,
-    }
-    anml = ANML(**model_args)
-    anml.to(device)
-    logging.info(f"Model shape:\n{anml}")
-    return anml, model_args
 
 
 def load_model(model_path, sampler_input_shape, device=None):
@@ -69,81 +52,107 @@ def load_model(model_path, sampler_input_shape, device=None):
     return model
 
 
+def ensure_config_param(config, key, condition=None):
+    if key not in config:
+        raise RuntimeError(f'Required key "{key}" not found in config.')
+    value = config[key]
+    if condition and not condition(value):
+        raise RuntimeError(f'Config parameter "{key}" has an invalid value: {value}')
+
+
+def check_config(config):
+    def gt_zero(x):
+        return x > 0
+
+    ensure_config_param(config, "batch_size", gt_zero)
+    ensure_config_param(config, "num_batches", gt_zero)
+    ensure_config_param(config, "val_size", lambda x: x >= 0)
+    ensure_config_param(config, "remember_size", gt_zero)
+    ensure_config_param(config, "train_cycles", gt_zero)
+    ensure_config_param(config, "inner_lr", gt_zero)
+    ensure_config_param(config, "outer_lr", gt_zero)
+    ensure_config_param(config, "epochs", gt_zero)
+    ensure_config_param(config, "save_freq", gt_zero)
+    ensure_config_param(config, "inner_params")
+    ensure_config_param(config, "outer_params")
+    ensure_config_param(config, "output_layer")
+    ensure_config_param(config, "model")
+    ensure_config_param(config, "model_args")
+
+
+def collect_opt_params(model, module_list):
+    # Special keyword for "all parameters".
+    if module_list == "all" or module_list[0] == "all":
+        return list(model.parameters())
+
+    params = []
+    for name in module_list:
+        module = getattr(model, name)
+        params.extend(list(module.parameters()))
+    return params
+
+
 def lobotomize(layer, class_num):
     kaiming_normal_(layer.weight[class_num].unsqueeze(0))
 
 
-def train(
-        sampler,
-        input_shape,
-        rln_channels,
-        nm_channels,
-        batch_size=1,
-        num_batches=20,
-        val_size=200,
-        remember_size=64,
-        remember_only=False,
-        train_cycles=1,
-        inner_lr=1e-1,
-        outer_lr=1e-3,
-        its=30000,
-        save_freq=1000,
-        device="cuda",
-        verbose=0
-):
-    assert rln_channels > 0
-    assert nm_channels > 0
-    assert batch_size > 0
-    assert num_batches > 0
-    assert val_size > 0
-    assert remember_size > 0
-    assert train_cycles > 0
-    assert inner_lr > 0
-    assert outer_lr > 0
-    assert its > 0
-    assert save_freq > 0
+def train(sampler, input_shape, config, device="cuda", verbose=0):
+    # Output config for reference. Do it before checking config to assist debugging.
+    config = make_pretty(config)
+    logging.info("\n---- Train Config ----\n" + yaml.dump(config) + "----------------------")
+    check_config(config)
 
-    anml, model_args = create_model(input_shape, nm_channels, rln_channels, device)
+    # Create model.
+    model_name = config["model"]
+    model_args = dict(config["model_args"])  # duplicate so as not to modify original config
+    if "input_shape" in models.get_model_arg_names(model_name):
+        model_args["input_shape"] = input_shape
+    model, model_args = models.make(model_name, device, **model_args)
+    logging.info(f"Model shape:\n{model}")
 
     # Set up progress/checkpoint logger. Name according to the supported input size, just for convenience.
     name = "ANML-" + "-".join(map(str, input_shape))
     print_freq = 1 if verbose > 1 else 10  # if double-verbose, print every iteration
     verbose_freq = print_freq if verbose > 0 else 0  # if verbose, then print verbose info at the same frequency
-    log = Log(name, model_args, print_freq, verbose_freq, save_freq)
+    log = Log(name, config, model_args, print_freq, verbose_freq, config["save_freq"])
 
     # inner optimizer used during the learning phase
-    inner_opt = SGD(list(anml.rln.parameters()) + list(anml.fc.parameters()), lr=inner_lr)
+    inner_params = collect_opt_params(model, config["inner_params"])
+    inner_opt = SGD(inner_params, lr=config["inner_lr"])
     # outer optimizer used during the remembering phase; the learning is propagated through the inner loop
     # optimizations, computing second order gradients.
-    outer_opt = Adam(anml.parameters(), lr=outer_lr)
+    outer_params = collect_opt_params(model, config["outer_params"])
+    outer_opt = Adam(outer_params, lr=config["outer_lr"])
 
-    for it in range(its):
+    for it in range(config["epochs"]):
 
         log.outer_begin(it)
 
         episode = sampler.sample_train(
-            batch_size=batch_size,
-            num_batches=num_batches,
-            remember_size=remember_size,
-            val_size=val_size,
-            add_inner_train_to_outer_train=not remember_only,
+            batch_size=config["batch_size"],
+            num_batches=config["num_batches"],
+            remember_size=config["remember_size"],
+            val_size=config["val_size"],
+            add_inner_train_to_outer_train=not config["remember_only"],
             device=device,
         )
         log.outer_info(it, episode.train_class)
 
-        # To facilitate the propagation of gradients through the model we prevent memorization of
-        # training examples by randomizing the weights in the last fully connected layer corresponding
-        # to the task that is about to be learned
-        lobotomize(anml.fc, episode.train_class)
+        # To facilitate the propagation of gradients through the model we prevent memorization of training examples by
+        # randomizing the weights in the last fully connected layer corresponding to the task that is about to be
+        # learned. The config gives us the name of this final output layer.
+        # output_layer = anml.fc
+        output_layer = getattr(model, config["output_layer"])
+        lobotomize(output_layer, episode.train_class)
 
         # higher turns a standard pytorch model into a functional version that can be used to
         # preserve the computation graph across multiple optimization steps
-        with higher.innerloop_ctx(anml, inner_opt, copy_initial_weights=False) as (
+        with higher.innerloop_ctx(model, inner_opt, copy_initial_weights=False) as (
                 fnet,
                 diffopt,
         ):
             # Inner loop of 1 random task, in batches, for some number of cycles.
-            for i, (ims, labels) in enumerate(episode.train_traj * train_cycles):
+            for i, (ims, labels) in enumerate(episode.train_traj * config["train_cycles"]):
                 out, loss, inner_acc = forward_pass(fnet, ims, labels)
                 log.inner(it, i, loss, inner_acc, episode, fnet, verbose)
                 diffopt.step(loss)
@@ -155,9 +164,9 @@ def train(
         outer_opt.step()
         outer_opt.zero_grad()
 
-        log.outer_end(it, m_loss, m_acc, episode, fnet, anml, sampler, device, verbose)
+        log.outer_end(it, m_loss, m_acc, episode, fnet, model, sampler, device, verbose)
 
-    log.close(it, anml)
+    log.close(it, model)
 
 
 def evaluate(model, classes):

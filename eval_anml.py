@@ -70,7 +70,7 @@ if __name__ == "__main__":
     argutils.configure_logging(args)
     device = argutils.get_device(parser, args)
     argutils.set_seed_from_args(args)
-    sampler, input_shape = argutils.get_OML_dataset_sampler(parser, args)
+    sampler, input_shape = argutils.get_OML_dataset_sampler(args)
 
     repeats(
         runs=args.runs,

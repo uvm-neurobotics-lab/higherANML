@@ -87,13 +87,12 @@ def add_dataset_arg(parser, add_train_size_arg=False):
     return parser
 
 
-def get_OML_dataset_sampler(parser, args, im_size=None, greyscale=True):
+def get_OML_dataset_sampler(args, im_size=None, greyscale=True):
     """
     Parses the dataset arguments, as given by `add_dataset_args()`. Also requires a `seed` argument.
 
     Args:
-        parser (argparse.ArgumentParser): The argument parser.
-        args (argparse.Namespace): The parsed args.
+        args (argparse.Namespace or dict): The parsed args.
         im_size (int): Image size (single integer, to be used as height and width).
         greyscale (bool): Whether to convert images to greyscale.
     Returns:
@@ -103,17 +102,23 @@ def get_OML_dataset_sampler(parser, args, im_size=None, greyscale=True):
     import datasets.mini_imagenet as imagenet
     import datasets.omniglot as omniglot
 
-    train_size = getattr(args, "train_size", None)
-    if args.dataset == "omni":
+    # Turn namespace into dict.
+    if isinstance(args, argparse.Namespace):
+        old_args = args
+        args = {}
+        for k in ("dataset", "data_path", "download", "train_size", "seed"):
+            args[k] = getattr(old_args, k, None)
+
+    if args["dataset"] == "omni":
         if not greyscale:
             raise ValueError("Omniglot is only available in greyscale.")
-        return omniglot.create_OML_sampler(root=args.data_path / "omni", download=args.download, im_size=im_size,
-                                           train_size=train_size, seed=args.seed)
-    elif args.dataset == "miniimagenet":
-        return imagenet.create_OML_sampler(root=args.data_path / "mini-imagenet", download=args.download,
-                                           im_size=im_size, train_size=train_size, seed=args.seed)
+        return omniglot.create_OML_sampler(root=args["data_path"] / "omni", download=args["download"], im_size=im_size,
+                                           train_size=args["train_size"], seed=args["seed"])
+    elif args["dataset"] == "miniimagenet":
+        return imagenet.create_OML_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
+                                           im_size=im_size, train_size=args["train_size"], seed=args["seed"])
     else:
-        parser.error(f"Unknown dataset: {args.dataset}")
+        raise ValueError(f"Unknown dataset: {args['dataset']}")
 
 
 def add_device_arg(parser):

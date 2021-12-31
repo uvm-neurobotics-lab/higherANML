@@ -114,7 +114,8 @@ class ContinualMetaLearningSampler:
         self.train = train
         self.test = test
         # Select which examples will form the training/validation splits.
-        if not train_size or train_size >= len(self.train):
+        # NOTE: This line assumes all classes have the same number of examples.
+        if not train_size or train_size >= len(self.train.class_index[0]):
             # Use all training data.
             self.train_class_index = self.train.class_index
             self.val_class_index = []

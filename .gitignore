@@ -13,6 +13,9 @@ __pycache__/
 *.pth
 *.net
 
+# Saved config files
+trained_anmls/train-config.yml
+
 # Experiments folder
 experiments/
 
