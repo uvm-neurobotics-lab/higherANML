@@ -157,7 +157,8 @@ class Log:
         self.logger = logging.getLogger(name)
         self.save_path = Path("./trained_anmls")
         self.save_path.mkdir(exist_ok=True)
-        yaml.dump(config, open(self.save_path / "train-config.yml", "w"))
+        with open(self.save_path / "train-config.yml", "w") as f:
+            yaml.dump(config, f)
 
     def info(self, msg):
         self.logger.info(msg)

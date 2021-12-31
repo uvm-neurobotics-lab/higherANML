@@ -46,7 +46,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     argutils.configure_logging(args, level=logging.INFO)
 
-    config = yaml.full_load(open(args.config, 'r'))
+    with open(args.config, 'r') as f:
+        config = yaml.full_load(f)
 
     # Command line args optionally override config.
     overrideable_args = ["dataset", "data_path", "download", "train_size", "batch_size", "num_batches", "train_cycles",
