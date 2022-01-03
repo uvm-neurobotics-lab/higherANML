@@ -177,7 +177,7 @@ class Log:
     def inner(self, outer_it, inner_it, inner_loss, inner_acc, episode, model, verbose):
         # Only print inner loop info when verbose is turned on.
         if (self.verbose_freq > 0) and (outer_it % self.verbose_freq == 0):
-            if inner_it < 20000:
+            if inner_it < 2:
                 # TODO: plot change in performance b/w first and second iteration.
                 # TODO: plot change in performance b/w first and last iteration.
                 # TODO: report when/if train acc reaches 100% - some idea of how fast learning is happening
