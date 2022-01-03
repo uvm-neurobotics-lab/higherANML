@@ -2,9 +2,7 @@
 Script for evaluation of ANML using OML-style continual learning trajectories.
 """
 
-import argparse
 import warnings
-from pathlib import Path
 
 import numpy as np
 from tqdm import trange
@@ -13,13 +11,6 @@ import utils.argparsing as argutils
 from anml import test_train
 
 warnings.filterwarnings("ignore")
-
-
-def check_path(path):
-    if Path(path).exists():
-        return path
-    else:
-        raise argparse.ArgumentTypeError(f"model: {path} is not a valid path")
 
 
 def repeats(runs, sampler, sampler_input_shape, path, classes, train_examples, test_examples, lr, device):
@@ -55,7 +46,8 @@ if __name__ == "__main__":
     parser = argutils.create_parser(__doc__)
 
     argutils.add_dataset_arg(parser)
-    parser.add_argument("-m", "--model", type=check_path, required=True, help="Path to the model to evaluate.")
+    parser.add_argument("-m", "--model", type=argutils.existing_path, required=True,
+                        help="Path to the model to evaluate.")
     parser.add_argument("-l", "--lr", type=float, required=True,
                         help="Learning rate to use (check README for suggestions).")
     parser.add_argument("-c", "--classes", type=int, required=True, help="Number of classes to test.")

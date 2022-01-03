@@ -14,7 +14,8 @@ if __name__ == "__main__":
     # Training settings
     parser = argutils.create_parser("ANML training")
 
-    parser.add_argument("-c", "--config", metavar="PATH", required=True, help="Training config file.")
+    parser.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
+                        help="Training config file.")
     argutils.add_dataset_arg(parser, add_train_size_arg=True)
     parser.add_argument("--rln", metavar="NUM_CHANNELS", type=int, default=256,
                         help="Number of channels to use in the RLN.")

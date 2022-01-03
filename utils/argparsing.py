@@ -7,6 +7,25 @@ import logging
 from pathlib import Path
 
 
+def existing_path(str_path):
+    """
+    This function can be used as an argument type to fully resolve a user-supplied path and ensure it exists:
+        parser.add_argument(..., type=argutils.existing_path, ...)
+    An exception will be raised if the path does not exist.
+
+    Args:
+        str_path: The user-supplied path.
+
+    Returns:
+        pathlib.Path: The fully-resolved path object, if it exists.
+    """
+    path = Path(str_path).resolve()
+    if path.exists():
+        return path
+    else:
+        raise argparse.ArgumentTypeError(f"{str_path} ({path}) is not a valid path")
+
+
 def configure_logging(parsed_args=None, **kwargs):
     """
     You are advised to call in your main script, after parsing the args. Then use `logging.info()` throughout the
