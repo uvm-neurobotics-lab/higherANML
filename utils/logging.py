@@ -3,7 +3,6 @@ Utilities for logging progress metrics and saving checkpoints.
 """
 
 import logging
-import os
 from collections import Counter
 from pathlib import Path
 from time import time, strftime, gmtime
@@ -174,6 +173,7 @@ class Log:
         if it % self.print_freq == 0:
             self.info(f"**** Outer loop {it}: Learning on class {train_class}...")
 
+    @torch.no_grad()
     def inner(self, outer_it, inner_it, inner_loss, inner_acc, episode, model, verbose):
         # Only print inner loop info when verbose is turned on.
         if (self.verbose_freq > 0) and (outer_it % self.verbose_freq == 0):
@@ -191,6 +191,7 @@ class Log:
                 print_validation_stats(episode, train_out, rem_out, val_out, verbose,
                                        lambda msg: self.debug("    " + msg))
 
+    @torch.no_grad()
     def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, sampler, device, verbose):
         time_to_print = (it % self.print_freq == 0)
         time_to_verbose_print = (self.verbose_freq > 0) and (it % self.verbose_freq == 0)

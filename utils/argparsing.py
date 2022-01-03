@@ -110,6 +110,9 @@ def get_OML_dataset_sampler(args, greyscale=None):
         args = {}
         for k in ("dataset", "data_path", "download", "im_size", "train_size", "seed"):
             args[k] = getattr(old_args, k, None)
+    else:
+        # Do not modify the config that was passed in.
+        args = args.copy()
 
     # These args are allowed to be missing.
     for arg in ("im_size", "train_size", "seed"):
