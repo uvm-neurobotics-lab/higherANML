@@ -81,7 +81,7 @@ def add_dataset_arg(parser, add_resize_arg=True, add_train_size_arg=False):
     parser.add_argument("--no-download", dest="download", action="store_false",
                         help="Do not download the dataset automatically if it doesn't already exist; raise an error.")
     if add_resize_arg:
-        parser.add_argument("--im-size", metavar="PX", type=int,
+        parser.add_argument("--im-size", metavar="PX", type=int, default=None,
                             help="Resize all input images to the given size (in pixels).")
     if add_train_size_arg:
         parser.add_argument("--train-size", metavar="INT", type=int, default=500,
@@ -90,14 +90,12 @@ def add_dataset_arg(parser, add_resize_arg=True, add_train_size_arg=False):
     return parser
 
 
-def get_OML_dataset_sampler(args, im_size=None, greyscale=None):
+def get_OML_dataset_sampler(args, greyscale=None):
     """
     Parses the dataset arguments, as given by `add_dataset_args()`. Also requires a `seed` argument.
 
     Args:
         args (argparse.Namespace or dict): The parsed args.
-        im_size (int): Image size (single integer, to be used as height and width). If given, overrides any size already
-            given by args.
         greyscale (bool): Whether to convert images to greyscale, or None to use the default coloring.
     Returns:
         ContinualMetaLearningSampler: A sampler for the user-specified dataset.
@@ -113,8 +111,9 @@ def get_OML_dataset_sampler(args, im_size=None, greyscale=None):
         for k in ("dataset", "data_path", "download", "im_size", "train_size", "seed"):
             args[k] = getattr(old_args, k, None)
 
-    if im_size:
-        args["im_size"] = im_size
+    # These args are allowed to be missing.
+    for arg in ("im_size", "train_size", "seed"):
+        args.setdefault(arg)
 
     if args["dataset"] == "omni":
         if greyscale is False:

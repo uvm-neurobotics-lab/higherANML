@@ -50,9 +50,9 @@ if __name__ == "__main__":
         config = yaml.full_load(f)
 
     # Command line args optionally override config.
-    overrideable_args = ["dataset", "data_path", "download", "train_size", "batch_size", "num_batches", "train_cycles",
-                         "val_size", "remember_size", "remember_only", "inner_lr", "outer_lr", "save_freq", "epochs",
-                         "seed"]
+    overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "batch_size", "num_batches",
+                         "train_cycles", "val_size", "remember_size", "remember_only", "inner_lr", "outer_lr",
+                         "save_freq", "epochs", "seed"]
     for arg in overrideable_args:
         # Only replace if value is different from default (meaning it was explicitly specified by the user), or if the
         # value doesn't already exist in config.
