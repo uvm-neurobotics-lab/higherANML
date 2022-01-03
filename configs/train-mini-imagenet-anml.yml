@@ -1,22 +1,22 @@
 #
-# Config for standard training of ANML for continuous learning on Omniglot.
+# Current best known config for training an ANML-like model on Mini-ImageNet.
 #
 
 # Dataset
-dataset: omni
+dataset: miniimagenet
+train_size: 500
 
 # Training Configuration
-train_size: 20
 batch_size: 1
 num_batches: 20
 train_cycles: 1
-val_size: 0
-remember_size: 64
+val_size: 200
+remember_size: 100
 remember_only: false
-inner_lr: 0.1
+inner_lr: 0.001
 outer_lr: 0.001
 
-epochs: 30000
+epochs: 200000
 seed: 1
 
 # Model Architecture
@@ -24,7 +24,6 @@ model: anml
 model_args:
     rln_chs: 256
     nm_chs: 112
-    pool_rln_output: false
 
 # Optimization Configuration
 inner_params: [rln, fc]

@@ -1,0 +1,29 @@
+#
+# Config for reproducing OML results on Omniglot.
+#
+
+# Dataset
+dataset: omni
+train_size: 20
+im_size: 84
+
+# Training Configuration
+batch_size: 1
+num_batches: 20
+train_cycles: 1
+val_size: 0
+remember_size: 64
+remember_only: false
+inner_lr: 0.03
+outer_lr: 0.0001
+
+epochs: 30000
+seed: 1
+
+# Model Architecture
+model: oml
+
+# Optimization Configuration
+inner_params: [pn]
+outer_params: all  # special keyword for "all parameters"
+output_layer: output_layer

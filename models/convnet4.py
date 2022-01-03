@@ -9,7 +9,7 @@ from .models import register
 
 def conv_block(in_channels, out_channels):
     return nn.Sequential(
-        nn.Conv2d(in_channels, out_channels, 3, padding=1),
+        nn.Conv2d(in_channels, out_channels, (3, 3), padding=1),
         nn.BatchNorm2d(out_channels),
         nn.ReLU(),
         nn.MaxPool2d(2)

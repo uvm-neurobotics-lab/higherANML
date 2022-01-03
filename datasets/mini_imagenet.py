@@ -166,7 +166,7 @@ def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train
         root (str or Path): Folder where the dataset will be located.
         download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
         im_size (int): Desired size of images, or None to use the on-disk sizes.
-        greyscale (bool): Whether to convert images to greyscale.
+        greyscale (bool): Whether to convert images to greyscale; False or None to keep the default coloring.
         train_size (int): Total number of samples from the train set to actually use for training.
         seed (int or list[int]): Random seed for sampling.
 

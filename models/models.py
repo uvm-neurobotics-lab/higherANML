@@ -27,6 +27,24 @@ def register(name):
     return decorator
 
 
+def get_model_arg_names(model_name):
+    """
+    Get the names of the constructor arguments for the given model.
+
+    Args:
+        model_name (str): The name of the model in the global registry.
+
+    Returns:
+        list: The list of argument names.
+    """
+    # This will get the list of arg names for either a factory function or a class constructor.
+    arg_names = inspect.getfullargspec(models[model_name])[0]
+    # If the first arg is 'self', skip it.
+    if arg_names[0] == "self":
+        arg_names = arg_names[1:]
+    return arg_names
+
+
 def make(name, device=None, **kwargs):
     """
     Create a new instance of the specified model.
@@ -54,22 +72,25 @@ def make(name, device=None, **kwargs):
     return model, model_args
 
 
-def get_model_arg_names(model_name):
+def make_from_config(config, input_shape=None, device=None):
     """
-    Get the names of the constructor arguments for the given model.
+    Create the model specified by the given config.
 
     Args:
-        model_name (str): The name of the model in the global registry.
+        config (dict): The YAML config containing the desired model parameters.
+        input_shape (tuple): The shape of a single input that would be passed to this model. Some models will use this
+            to auto-size their layers.
+        device (str or device): The device to send the model to after instantiation.
 
     Returns:
-        list: The list of argument names.
+        tuple: A tuple of (model, args), where `args` are the exact arguments that were passed to the model constructor.
+            These should be used to save the model using the `utils.storage` module.
     """
-    # This will get the list of arg names for either a factory function or a class constructor.
-    arg_names = inspect.getfullargspec(models[model_name])[0]
-    # If the first arg is 'self', skip it.
-    if arg_names[0] == "self":
-        arg_names = arg_names[1:]
-    return arg_names
+    model_name = config.get("model", None)
+    model_args = dict(config.get("model_args", {}))  # duplicate so as not to modify original config
+    if "input_shape" in get_model_arg_names(model_name):
+        model_args["input_shape"] = input_shape
+    return make(model_name, device, **model_args)
 
 
 def load(model_sv, name=None):

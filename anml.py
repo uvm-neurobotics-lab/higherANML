@@ -77,7 +77,6 @@ def check_config(config):
     ensure_config_param(config, "outer_params")
     ensure_config_param(config, "output_layer")
     ensure_config_param(config, "model")
-    ensure_config_param(config, "model_args")
 
 
 def collect_opt_params(model, module_list):
@@ -103,11 +102,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     check_config(config)
 
     # Create model.
-    model_name = config["model"]
-    model_args = dict(config["model_args"])  # duplicate so as not to modify original config
-    if "input_shape" in models.get_model_arg_names(model_name):
-        model_args["input_shape"] = input_shape
-    model, model_args = models.make(model_name, device, **model_args)
+    model, model_args = models.make_from_config(config, input_shape, device)
     logging.info(f"Model shape:\n{model}")
 
     # Set up progress/checkpoint logger. Name according to the supported input size, just for convenience.

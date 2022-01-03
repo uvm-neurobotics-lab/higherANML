@@ -69,7 +69,7 @@ def add_verbose_arg(parser):
     return parser
 
 
-def add_dataset_arg(parser, add_train_size_arg=False):
+def add_dataset_arg(parser, add_resize_arg=True, add_train_size_arg=False):
     """
     Add an argument for the user to specify a dataset.
     """
@@ -80,6 +80,9 @@ def add_dataset_arg(parser, add_train_size_arg=False):
                              " present).")
     parser.add_argument("--no-download", dest="download", action="store_false",
                         help="Do not download the dataset automatically if it doesn't already exist; raise an error.")
+    if add_resize_arg:
+        parser.add_argument("--im-size", metavar="PX", type=int,
+                            help="Resize all input images to the given size (in pixels).")
     if add_train_size_arg:
         parser.add_argument("--train-size", metavar="INT", type=int, default=500,
                             help="Number of examples per class to use in training split. Remainder (if any) will be"
@@ -87,14 +90,15 @@ def add_dataset_arg(parser, add_train_size_arg=False):
     return parser
 
 
-def get_OML_dataset_sampler(args, im_size=None, greyscale=True):
+def get_OML_dataset_sampler(args, im_size=None, greyscale=None):
     """
     Parses the dataset arguments, as given by `add_dataset_args()`. Also requires a `seed` argument.
 
     Args:
         args (argparse.Namespace or dict): The parsed args.
-        im_size (int): Image size (single integer, to be used as height and width).
-        greyscale (bool): Whether to convert images to greyscale.
+        im_size (int): Image size (single integer, to be used as height and width). If given, overrides any size already
+            given by args.
+        greyscale (bool): Whether to convert images to greyscale, or None to use the default coloring.
     Returns:
         ContinualMetaLearningSampler: A sampler for the user-specified dataset.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
@@ -106,17 +110,21 @@ def get_OML_dataset_sampler(args, im_size=None, greyscale=True):
     if isinstance(args, argparse.Namespace):
         old_args = args
         args = {}
-        for k in ("dataset", "data_path", "download", "train_size", "seed"):
+        for k in ("dataset", "data_path", "download", "im_size", "train_size", "seed"):
             args[k] = getattr(old_args, k, None)
 
+    if im_size:
+        args["im_size"] = im_size
+
     if args["dataset"] == "omni":
-        if not greyscale:
+        if greyscale is False:
             raise ValueError("Omniglot is only available in greyscale.")
-        return omniglot.create_OML_sampler(root=args["data_path"] / "omni", download=args["download"], im_size=im_size,
-                                           train_size=args["train_size"], seed=args["seed"])
+        return omniglot.create_OML_sampler(root=args["data_path"] / "omni", download=args["download"],
+                                           im_size=args["im_size"], train_size=args["train_size"], seed=args["seed"])
     elif args["dataset"] == "miniimagenet":
         return imagenet.create_OML_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
-                                           im_size=im_size, train_size=args["train_size"], seed=args["seed"])
+                                           im_size=args["im_size"], greyscale=greyscale, train_size=args["train_size"],
+                                           seed=args["seed"])
     else:
         raise ValueError(f"Unknown dataset: {args['dataset']}")
 
