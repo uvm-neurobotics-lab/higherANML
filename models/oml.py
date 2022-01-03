@@ -55,6 +55,14 @@ class OML(nn.Module):
         # Given a special name so we can identify this layer separately.
         self.output_layer = self.pn[-1]
 
+        # Don't use PyTorch default initialization.
+        # https://adityassrana.github.io/blog/theory/2020/08/26/Weight-Init.html#Solution
+        for m in self.modules():
+            # Also initializing linear layers using Kaiming Normal, following the original OML implementation.
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
+                nn.init.kaiming_normal_(m.weight)
+                nn.init.zeros_(m.bias)
+
     def forward(self, x):
         x = self.rln(x)
         return self.pn(x)
