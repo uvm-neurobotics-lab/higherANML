@@ -6,6 +6,7 @@ import dis
 import importlib
 import inspect
 import logging
+import os
 import sys
 import tempfile
 import time
@@ -18,10 +19,10 @@ import unittest
 _logger = logging.getLogger(__name__)
 
 
-def check_ext(file, expect="net"):
-    ext = file.split(".")[-1]
+def check_ext(file, expect=".net"):
+    ext = os.path.splitext(file)[-1]
     if ext != expect:
-        raise RuntimeError(f"Expected file extension to be .net, got .{ext}")
+        raise RuntimeError(f"Expected file extension to be {expect}, got {ext}.")
 
 
 def load(file, device=None):
@@ -76,7 +77,7 @@ def save(net, file, opt=None, check=True, **kwargs):
     """
     # don't call these .pth or something you will never remember, use .net
     # because networks, right? and it's not like anyone else used it before right?
-    check_ext(file, expect="net")
+    check_ext(file, expect=".net")
     import torch
     import torchvision
 
@@ -174,15 +175,15 @@ def summary(file, dsize=8):
     # print information about a stored model
     import torch
 
-    if type(file) == str:
-        check_ext(file, expect="net")
+    if isinstance(file, str) or isinstance(file, Path):
+        check_ext(file, expect=".net")
         info = torch.load(file)
     elif file.__class__.__module__ == "coldmodels":
         # if the model has been retrieved already use the stored info
         info = file.serialize_info
         info["state"] = file.state_dict()
     else:
-        raise RuntimeError(f"Expected coldmodels or str but got {type(file)} instead.")
+        raise RuntimeError(f"Expected coldmodels or path-like, but got {type(file)} instead.")
 
     # "state": count params
     nparams = sum([v.numel() for v in info["state"].values()])
