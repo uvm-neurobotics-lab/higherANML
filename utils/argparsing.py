@@ -50,6 +50,9 @@ def configure_logging(parsed_args=None, **kwargs):
         options["level"] = logging.DEBUG
     logging.basicConfig(**options)
 
+    # We want to keep the storage module in INFO mode unless we really want to debug it.
+    logging.getLogger("utils.storage").setLevel(logging.INFO)
+
     # In addition to our own setup, let's make Pillow a little quieter, because it's very aggressive with the DEBUG
     # messages. See here: https://github.com/camptocamp/pytest-odoo/issues/15
     logging.getLogger("PIL").setLevel(logging.INFO)

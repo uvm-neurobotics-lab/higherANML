@@ -135,26 +135,30 @@ def get_creator():
 def find_localimports(obj):
 
     source_path = inspect.getsourcefile(obj.__class__)
-    # print("entry", source_path)
+    _logger.debug(f"Entry point for {obj.__class__}: {source_path}")
     found = [source_path]
 
-    def _check_nested(source_path):
+    def _check_nested(source_path, level=0):
         # get the source code to look for imports
         with open(source_path, "r") as f:
             source = f.read()
         parent = Path(source_path).parent
+        _logger.debug((" " * level) + f"Parent path: {parent}")
         # adapted from https://www.py4u.net/discuss/14448
         instructions = dis.get_instructions(source)
         imports = [__.argval for __ in instructions if "IMPORT_NAME" == __.opname]
+        _logger.debug((" " * level) + f"Found {len(imports)} imports.")
         # e.g. imports = ['torch', 'torch.nn', 'utils']
+        level += 2
         for imp in imports:
             s = importlib.util.find_spec(imp)
+            _logger.debug((" " * level) + f"Spec for {imp} = {s}")
             name, orig = s.name, s.origin
             # if parent is in the parents then import is in the same dir tree
             if orig is not None and parent in Path(orig).parents:
-                # print(f"Nested: {name} -> {orig} | parent {parent}")
+                _logger.debug((" " * level) + f"Nested: {name} -> {orig} | parent {parent}")
                 found.append(orig)
-                _check_nested(orig)
+                _check_nested(orig, level + 2)
 
     _check_nested(source_path)
     # put the root import at the end
