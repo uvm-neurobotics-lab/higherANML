@@ -192,7 +192,7 @@ class Log:
                                        lambda msg: self.debug("    " + msg))
 
     @torch.no_grad()
-    def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, sampler, device, verbose):
+    def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, sampler, device, full_test, verbose):
         time_to_print = (it % self.print_freq == 0)
         time_to_verbose_print = (self.verbose_freq > 0) and (it % self.verbose_freq == 0)
         if time_to_print or time_to_verbose_print:
@@ -228,9 +228,11 @@ class Log:
                                        lambda msg: self.debug("    " + msg))
 
         if it % self.save_freq == 0:
-            meta_train_acc = overall_accuracy(meta_model, sampler.full_train_data(device), self.debug)
-            meta_test_acc = overall_accuracy(meta_model, sampler.full_val_data(device), self.debug)
-            self.info(f"Meta-Model Performance: Train Acc = {meta_train_acc:.1%} | Full Test Acc = {meta_test_acc:.1%}")
+            if full_test:
+                meta_train_acc = overall_accuracy(meta_model, sampler.full_train_data(device), self.debug)
+                meta_test_acc = overall_accuracy(meta_model, sampler.full_val_data(device), self.debug)
+                self.info(f"Meta-Model Performance:"
+                          f" Train Acc = {meta_train_acc:.1%} | Full Test Acc = {meta_test_acc:.1%}")
             save(meta_model, self.save_path / f"{self.name}-{it}.net", **self.model_args)
 
     def close(self, it, model):

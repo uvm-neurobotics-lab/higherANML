@@ -77,6 +77,7 @@ def check_config(config):
     ensure_config_param(config, "outer_params")
     ensure_config_param(config, "output_layer")
     ensure_config_param(config, "model")
+    config.setdefault("full_test", True)
 
 
 def collect_opt_params(model, module_list):
@@ -160,7 +161,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
         outer_opt.step()
         outer_opt.zero_grad()
 
-        log.outer_end(it, m_loss, m_acc, episode, fnet, model, sampler, device, verbose)
+        log.outer_end(it, m_loss, m_acc, episode, fnet, model, sampler, device, config["full_test"], verbose)
 
     log.close(it, model)
 
