@@ -132,3 +132,57 @@ def collate_images(samples, device=None):
         ys = ys.to(device)
 
     return xs, ys
+
+
+def compute_logits(feat, proto, metric="dot", temp=1.0):
+    """
+    Compute "logits" for zero-shot classification.
+
+    The logits are given by a metric that quantifies similarity to a "prototype" of each class. The likelihood of being
+    a member of a particular class is assumed to be proportional to this similarity. Thus, these logits can be passed
+    into a softmax to produce a distribution over classes.
+
+    TODO: Finish documenting.
+    TODO: Change default to "cos"?
+
+    Args:
+        feat: A set of "query" feature vectors to classify.
+        proto: A set of class prototype feature vectors. Prototype features should be the same size as the ones given by
+            `feat`, and there should be one prototype per class.
+        metric: The metric to use:
+            "dot": Dot product similarity between query features and prototype features. (default)
+            "cos": Cosine similarity between query features and prototype features.
+            "sqr": Squared distance in feature space, between query features and prototype features.
+        temp: TODO: don't know what this is.
+
+    Returns:
+        torch.Tensor: A set of logits for each given feature vector.
+    """
+    # Import torch locally so people can still use other util functions without having torch installed.
+    import torch
+    import torch.nn.functional as F
+
+    if feat.dim() != proto.dim():
+        raise RuntimeError(f"Feature dims ({feat.dim()}) not equal to prototype dims ({proto.dim()}).")
+
+    if feat.dim() == 2:
+        if metric == 'dot':
+            logits = torch.mm(feat, proto.t())
+        elif metric == 'cos':
+            logits = torch.mm(F.normalize(feat, dim=-1),
+                              F.normalize(proto, dim=-1).t())
+        elif metric == 'sqr':
+            logits = -(feat.unsqueeze(1) -
+                       proto.unsqueeze(0)).pow(2).sum(dim=-1)
+
+    elif feat.dim() == 3:
+        if metric == 'dot':
+            logits = torch.bmm(feat, proto.permute(0, 2, 1))
+        elif metric == 'cos':
+            logits = torch.bmm(F.normalize(feat, dim=-1),
+                               F.normalize(proto, dim=-1).permute(0, 2, 1))
+        elif metric == 'sqr':
+            logits = -(feat.unsqueeze(2) -
+                       proto.unsqueeze(1)).pow(2).sum(dim=-1)
+
+    return logits * temp
