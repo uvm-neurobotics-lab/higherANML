@@ -4,7 +4,7 @@ by Yinbo Chen. It was copied on 2021-12-17. The license for this file can be fou
 """
 import torch.nn as nn
 
-from .models import register
+from models.registry import register
 
 
 def conv_block(in_channels, out_channels):
@@ -16,7 +16,7 @@ def conv_block(in_channels, out_channels):
     )
 
 
-@register('convnet4')
+@register("convnet4")
 class ConvNet4(nn.Module):
 
     def __init__(self, x_dim=3, hid_dim=64, z_dim=64):

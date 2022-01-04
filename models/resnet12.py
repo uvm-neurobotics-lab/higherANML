@@ -4,7 +4,7 @@ by Yinbo Chen. It was copied on 2021-12-17. The license for this file can be fou
 """
 import torch.nn as nn
 
-from .models import register
+from models.registry import register
 
 
 def conv3x3(in_planes, out_planes):

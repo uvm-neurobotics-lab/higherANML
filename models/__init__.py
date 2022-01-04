@@ -3,7 +3,7 @@ Models
 """
 
 from .legacy import ANML as LegacyANML
-from .models import get_model_arg_names, make, make_from_config, load
+from .registry import get_model_arg_names, make, make_from_config, load
 from . import anml
 from . import classifier
 from . import convnet4

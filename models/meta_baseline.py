@@ -6,19 +6,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import models
 import utils
-from .models import register
+from models.registry import make, register
 
 
-@register('meta-baseline')
+@register("meta-baseline")
 class MetaBaseline(nn.Module):
 
-    def __init__(self, encoder, encoder_args={}, method='cos',
+    def __init__(self, encoder, encoder_args={}, method="cos",
                  temp=10., temp_learnable=True):
         super().__init__()
-        self.encoder = models.make(encoder, **encoder_args)
+        self.encoder, _ = make(encoder, **encoder_args)
         self.method = method
+        # TODO: something seems not right about the code that converts method to metric.
+        if method not in ("cos", "sqr"):
+            raise RuntimeError(f'Invalid similarity method: "{method}"')
 
         if temp_learnable:
             self.temp = nn.Parameter(torch.tensor(temp))
@@ -37,16 +39,14 @@ class MetaBaseline(nn.Module):
         x_shot = x_shot.view(*shot_shape, -1)
         x_query = x_query.view(*query_shape, -1)
 
-        if self.method == 'cos':
+        if self.method == "cos":
             x_shot = x_shot.mean(dim=-2)
             x_shot = F.normalize(x_shot, dim=-1)
             x_query = F.normalize(x_query, dim=-1)
-            metric = 'dot'
-        elif self.method == 'sqr':
+            metric = "dot"
+        elif self.method == "sqr":
             x_shot = x_shot.mean(dim=-2)
-            metric = 'sqr'
+            metric = "sqr"
 
-        logits = utils.compute_logits(
-                x_query, x_shot, metric=metric, temp=self.temp)
+        logits = utils.compute_logits(x_query, x_shot, metric=metric, temp=self.temp)
         return logits
-

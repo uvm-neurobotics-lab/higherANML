@@ -5,7 +5,7 @@ A Neuromodulated Meta-Learner (ANML)
 import torch
 import torch.nn as nn
 
-from .models import register
+from models.registry import register
 
 
 def _linear_layer(in_dims, out_dims):

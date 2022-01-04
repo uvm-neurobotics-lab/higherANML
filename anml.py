@@ -106,7 +106,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     logging.info(f"Model shape:\n{model}")
 
     # Set up progress/checkpoint logger. Name according to the supported input size, just for convenience.
-    name = config.get("model", "ANML")
+    name = config.get("model", "ANML") + "-"
     name += "-".join(map(str, input_shape))
     print_freq = 1 if verbose > 1 else 10  # if double-verbose, print every iteration
     verbose_freq = print_freq if verbose > 0 else 0  # if verbose, then print verbose info at the same frequency

@@ -8,7 +8,7 @@ https://github.com/khurramjaved96/mrcl/blob/1714cb56aa5b6001e3fd43f90d4c41df1b58
 import torch
 import torch.nn as nn
 
-from .models import register
+from models.registry import register
 
 
 # TODO: Clean this up and unify with ANML code.
