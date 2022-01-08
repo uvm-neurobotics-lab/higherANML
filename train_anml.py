@@ -60,16 +60,14 @@ if __name__ == "__main__":
         config = yaml.full_load(f)
 
     # Command line args optionally override config.
+    user_supplied_args = parser.get_user_specified_args()
     overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "batch_size", "num_batches",
                          "train_cycles", "val_size", "remember_size", "remember_only", "inner_lr", "outer_lr",
                          "save_freq", "epochs", "seed", "full_test"]
     for arg in overrideable_args:
-        # Only replace if value is different from default (meaning it was explicitly specified by the user), or if the
-        # value doesn't already exist in config.
-        dflt = parser.get_default(arg)
-        value = getattr(args, arg, dflt)
-        if arg not in config or value != dflt:
-            config[arg] = value
+        # Only replace if value was explicitly specified by the user, or if the value doesn't already exist in config.
+        if arg not in config or arg in user_supplied_args:
+            config[arg] = getattr(args, arg)
 
     # Conduct a quick test.
     if args.smoke_test:

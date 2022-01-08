@@ -66,6 +66,42 @@ class HelpFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefau
     pass
 
 
+class ActionWrapper(argparse.Action):
+    """
+    A wrapper class which is used to detect which arguments were explicitly supplied by the user.
+    """
+    def __init__(self, action):
+        super().__init__(**dict(action._get_kwargs()))
+        self.action = action
+        self.user_invoked = False
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        self.user_invoked = True
+        self.action(parser, namespace, values, option_string)
+
+    def format_usage(self):
+        return self.action.format_usage()
+
+
+class ArgParser(argparse.ArgumentParser):
+    """
+    An ArgumentParser which provides one extra piece of functionality: it can tell whether the user explicitly supplied
+    an argument on the command-line. It can tell the difference between when the default value is used and when the user
+    explicitly supplies the default.
+    """
+    def _add_action(self, action):
+        action = ActionWrapper(action)
+        return super()._add_action(action)
+
+    def get_user_specified_args(self):
+        return [a.dest for a in self._actions if a.user_invoked]
+
+    def reset_user_specified_args(self):
+        """If you wish to use the parser multiple times, you must call this function before each usage."""
+        for a in self._actions:
+            a.user_invoked = False
+
+
 def create_parser(desc, allow_abbrev=True):
     """
     A base parser with sensible default formatting.
@@ -76,7 +112,7 @@ def create_parser(desc, allow_abbrev=True):
     Returns:
         ArgumentParser: A new parser.
     """
-    return argparse.ArgumentParser(description=desc, formatter_class=HelpFormatter, allow_abbrev=allow_abbrev)
+    return ArgParser(description=desc, formatter_class=HelpFormatter, allow_abbrev=allow_abbrev)
 
 
 def add_verbose_arg(parser):
