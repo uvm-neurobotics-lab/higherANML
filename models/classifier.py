@@ -20,6 +20,7 @@ class Classifier(nn.Module):
         self.encoder, _ = make(encoder, **encoder_args)
         classifier_args["in_dim"] = self.encoder.out_dim
         self.classifier, _ = make(classifier, **classifier_args)
+        self.outlayer = self.classifier.outlayer
 
     def forward(self, x):
         x = self.encoder(x)
@@ -33,6 +34,7 @@ class LinearClassifier(nn.Module):
     def __init__(self, in_dim, n_classes):
         super().__init__()
         self.linear = nn.Linear(in_dim, n_classes)
+        self.outlayer = self.linear
 
     def forward(self, x):
         return self.linear(x)
@@ -52,6 +54,7 @@ class NNClassifier(nn.Module):
                 temp = 1.0
         self.metric = metric
         self.temp = temp
+        self.outlayer = None
 
     def forward(self, x):
         return utils.compute_logits(x, self.proto, self.metric, self.temp)

@@ -1,0 +1,33 @@
+#
+# Current best known config for training an ANML-like model on Mini-ImageNet.
+#
+
+# Dataset
+dataset: miniimagenet
+train_size: 500
+
+# Training Configuration
+batch_size: 1
+num_batches: 20
+train_cycles: 1
+val_size: 200
+remember_size: 100
+remember_only: false
+inner_lr: 0.001
+outer_lr: 0.001
+
+epochs: 200000
+seed: 1
+
+# Model Architecture
+model: classifier
+model_args:
+    encoder: resnet12
+    encoder_args: {}
+    classifier: linear-classifier
+    classifier_args: {n_classes: 64}
+
+# Optimization Configuration
+inner_params: [classifier]
+outer_params: all  # special keyword for "all parameters"
+output_layer: outlayer
