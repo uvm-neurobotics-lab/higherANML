@@ -44,8 +44,8 @@ def load_model(model_path, sampler_input_shape, device=None):
 
     logging.debug(f"Model shape:\n{model}")
 
-    # Check if the images we are testing on match the dimensions of the images this model was built for.
-    if tuple(model.input_shape) != tuple(sampler_input_shape):
+    # If possible, check if the images we are testing on match the dimensions of the images this model was built for.
+    if hasattr(model, "input_shape") and tuple(model.input_shape) != tuple(sampler_input_shape):
         raise RuntimeError("The specified dataset image sizes do not match the size this model was trained for.\n"
                            f"Data size:  {sampler_input_shape}\n"
                            f"Model size: {model.input_shape}")
@@ -206,9 +206,27 @@ def test_train(
     model = load_model(model_path, sampler_input_shape, device)
     model = model.to(device)
 
-    torch.nn.init.kaiming_normal_(model.fc.weight)
-    model.nm.requires_grad_(False)
-    model.rln.requires_grad_(False)
+    # TODO: Hack for now, so this script can work for different models without a config file.
+    if type(model).__name__ == "ANML":
+        torch.nn.init.kaiming_normal_(model.fc.weight)
+        model.nm.requires_grad_(False)
+        model.rln.requires_grad_(False)
+    elif type(model).__name__ == "OML":
+        ONE_LAYER_ONLY = False
+        if ONE_LAYER_ONLY:
+            torch.nn.init.kaiming_normal_(model.output_layer.weight)
+            model.pn[0].requires_grad_(False)
+        else:
+            # For now, only re-init the last layer, but finetune both layers. This seems to result in the best
+            # performance on Mini-ImageNet.
+            # torch.nn.init.kaiming_normal_(model.pn[0].weight)
+            torch.nn.init.kaiming_normal_(model.pn[-1].weight)
+        model.rln.requires_grad_(False)
+    elif type(model).__name__ == "Classifier":
+        torch.nn.init.kaiming_normal_(model.outlayer.weight)
+        model.encoder.requires_grad_(False)
+    else:
+        raise RuntimeError(f"Unrecognized model type: {type(model)}")
 
     train_classes, test_classes = sampler.sample_test(num_classes, num_train_examples, num_test_examples, device)
 

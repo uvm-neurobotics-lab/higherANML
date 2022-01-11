@@ -27,6 +27,8 @@ class ConvNet4(nn.Module):
             conv_block(hid_dim, hid_dim),
             conv_block(hid_dim, z_dim),
         )
+        # TODO: Add proper initialization.
+        # TODO: Make out_dim auto-detecting (based on input shape)?
         self.out_dim = 1600
 
     def forward(self, x):

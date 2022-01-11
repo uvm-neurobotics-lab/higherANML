@@ -34,6 +34,7 @@ class OML(nn.Module):
 
     def __init__(self, input_shape, num_classes=1000):
         super().__init__()
+        self.input_shape = input_shape
         self.rln = nn.Sequential(
             _conv_block(input_shape[0], 256, (2, 2)),
             _conv_block(256, 256, (1, 1)),
