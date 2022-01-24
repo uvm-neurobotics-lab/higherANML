@@ -8,6 +8,30 @@ import torch.nn as nn
 from models.registry import register
 
 
+def calculate_output_size(module, input_shape):
+    """
+    Determines the output size of the given module when fed with batches of the given input shape. This is useful when
+    you have an arbitrary feature extractor and you want to know the size of the resulting feature vector (how many
+    neuronal activations will be at the end of the feature extractor).
+
+    NOTE: This assumes the output is flattened at the end of the module, so that the result is a vector (or batch of
+    vectors).
+
+    Args:
+        module: The feature extractor module.
+        input_shape: The shape of inputs that will be fed to this extractor.
+
+    Returns:
+        int: The number of dimensions in the resulting feature representation.
+    """
+    # Simulate a batch by adding an extra dim at the beginning.
+    batch_shape = (2,) + tuple(input_shape)
+    output_shape = module(torch.zeros(batch_shape)).shape
+    assert len(output_shape) == 2, "Module output should only be two dims."
+    feature_size = output_shape[-1]
+    return feature_size
+
+
 def _linear_layer(in_dims, out_dims):
     # Sanity check: we can increase this limit if desired.
     MAX_LAYER_SIZE = int(1e8)
@@ -65,6 +89,16 @@ def _construct_uniform_convnet(in_channels, hidden_channels, num_blocks, pool_at
     return _construct_convnet(in_channels, block_descriptions)
 
 
+def init_model_weights(model):
+    # Don't use PyTorch default initialization.
+    # https://adityassrana.github.io/blog/theory/2020/08/26/Weight-Init.html#Solution
+    for m in model.modules():
+        # TODO: Should we include linear layers here? Seems to be most important for the conv, though.
+        if isinstance(m, nn.Conv2d):
+            # TODO: If bias is present, we may want to re-init that; not sure.
+            nn.init.kaiming_normal_(m.weight)
+
+
 class RLN(nn.Module):
     def __init__(self, in_channels, hidden_channels, num_conv_blocks=3, pool_at_end=False):
         super(RLN, self).__init__()
@@ -80,10 +114,8 @@ class NM(nn.Module):
         super(NM, self).__init__()
         self.encoder = _construct_uniform_convnet(input_shape[0], hidden_channels, num_conv_blocks, pool_at_end)
         # To create the correct size of linear layer, we need to first know the size of the conv output.
-        batch_shape = (2,) + tuple(input_shape)
-        shape_after_conv = self.forward_conv(torch.zeros(batch_shape)).shape
-        assert len(shape_after_conv) == 2, "Conv output should only be two dims."
-        self.fc = _linear_layer(shape_after_conv[-1], mask_size)
+        feature_size = calculate_output_size(self.forward_conv, input_shape)
+        self.fc = _linear_layer(feature_size, mask_size)
         self.sigmoid = nn.Sigmoid()
 
     def forward_conv(self, x):
@@ -102,26 +134,17 @@ class NM(nn.Module):
 
 
 class ANML(nn.Module):
+    """
+    A Neuromodulated Meta-Learner (ANML)
+    """
     def __init__(self, input_shape, rln_chs, nm_chs, num_classes=1000, num_conv_blocks=3, pool_rln_output=False):
         super(ANML, self).__init__()
         self.input_shape = input_shape
         self.rln = RLN(input_shape[0], rln_chs, num_conv_blocks, pool_rln_output)
-        # Automatically determine what the size of the final layer needs to be.
-        # Simulate a batch by adding an extra dim at the beginning.
-        batch_shape = (2,) + tuple(input_shape)
-        shape_after_rln = self.rln(torch.zeros(batch_shape)).shape
-        assert len(shape_after_rln) == 2, "RLN output should only be two dims."
-        feature_size = shape_after_rln[-1]
+        feature_size = calculate_output_size(self.rln, input_shape)
         self.nm = NM(input_shape, nm_chs, feature_size, num_conv_blocks)
         self.fc = _linear_layer(feature_size, num_classes)
-
-        # Don't use PyTorch default initialization.
-        # https://adityassrana.github.io/blog/theory/2020/08/26/Weight-Init.html#Solution
-        for m in self.modules():
-            # TODO: Should we include linear layers here? Seems to be most important for the conv, though.
-            if isinstance(m, nn.Conv2d):
-                # TODO: If bias is present, we may want to re-init that; not sure.
-                nn.init.kaiming_normal_(m.weight)
+        init_model_weights(self)
 
     def forward(self, x):
         features = self.rln(x)
@@ -134,8 +157,48 @@ class ANML(nn.Module):
         return out
 
 
-@register("anml")
-def create_anml(input_shape, **kwargs):
+class SANML(nn.Module):
+    """
+    ANML, without the neuromodulation (the entire NM module is removed).
+    """
+    def __init__(self, input_shape, rln_chs, num_classes=1000, num_conv_blocks=3, pool_rln_output=False):
+        super(SANML, self).__init__()
+        self.input_shape = input_shape
+        self.rln = RLN(input_shape[0], rln_chs, num_conv_blocks, pool_rln_output)
+        feature_size = calculate_output_size(self.rln, input_shape)
+        self.fc = _linear_layer(feature_size, num_classes)
+        init_model_weights(self)
+
+    def forward(self, x):
+        features = self.rln(x)
+        return self.fc(features)
+
+
+class NONML(nn.Module):
+    """
+    Non-modulated version of ANML.
+    Instead of using an elementwise softmax masking the features from the NM path are concatenated.
+    """
+    def __init__(self, input_shape, rln_chs, nm_chs, num_classes=1000, num_conv_blocks=3, pool_rln_output=False):
+        super(NONML, self).__init__()
+        self.input_shape = input_shape
+        self.rln = RLN(input_shape[0], rln_chs, num_conv_blocks, pool_rln_output)
+        feature_size = calculate_output_size(self.rln, input_shape)
+        self.nm = NM(input_shape, nm_chs, feature_size, num_conv_blocks)
+        self.fc = _linear_layer(feature_size, num_classes)
+        init_model_weights(self)
+
+    def forward(self, x):
+        features = self.rln(x)
+        conditioning = self.nm(x)
+
+        features = torch.cat([features, conditioning], dim=1)
+        out = self.pln(features)
+
+        return out
+
+
+def create_anml_variant(ModelClass, input_shape, **kwargs):
     model_args = dict(kwargs)
     model_args["input_shape"] = input_shape
 
@@ -151,5 +214,20 @@ def create_anml(input_shape, **kwargs):
         model_args["pool_rln_output"] = input_shape[-1] > 30
 
     # Finally, create the model.
-    anml = ANML(**model_args)
+    anml = ModelClass(**model_args)
     return anml, model_args
+
+
+@register("anml")
+def create_anml(input_shape, **kwargs):
+    create_anml_variant(ANML, input_shape, **kwargs)
+
+
+@register("sanml")
+def create_sanml(input_shape, **kwargs):
+    create_anml_variant(SANML, input_shape, **kwargs)
+
+
+@register("nonml")
+def create_nonml(input_shape, **kwargs):
+    create_anml_variant(NONML, input_shape, **kwargs)
