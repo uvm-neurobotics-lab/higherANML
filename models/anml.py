@@ -220,14 +220,14 @@ def create_anml_variant(ModelClass, input_shape, **kwargs):
 
 @register("anml")
 def create_anml(input_shape, **kwargs):
-    create_anml_variant(ANML, input_shape, **kwargs)
+    return create_anml_variant(ANML, input_shape, **kwargs)
 
 
 @register("sanml")
 def create_sanml(input_shape, **kwargs):
-    create_anml_variant(SANML, input_shape, **kwargs)
+    return create_anml_variant(SANML, input_shape, **kwargs)
 
 
 @register("nonml")
 def create_nonml(input_shape, **kwargs):
-    create_anml_variant(NONML, input_shape, **kwargs)
+    return create_anml_variant(NONML, input_shape, **kwargs)
