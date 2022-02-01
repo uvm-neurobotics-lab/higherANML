@@ -205,11 +205,15 @@ def test_train(
 ):
     model = load_model(model_path, sampler_input_shape, device)
     model = model.to(device)
+    model.eval()
 
     # TODO: Hack for now, so this script can work for different models without a config file.
     if type(model).__name__ == "ANML":
         torch.nn.init.kaiming_normal_(model.fc.weight)
         model.nm.requires_grad_(False)
+        model.rln.requires_grad_(False)
+    elif type(model).__name__ == "SANML":
+        torch.nn.init.kaiming_normal_(model.fc.weight)
         model.rln.requires_grad_(False)
     elif type(model).__name__ == "OML":
         ONE_LAYER_ONLY = False
@@ -226,7 +230,7 @@ def test_train(
         torch.nn.init.kaiming_normal_(model.outlayer.weight)
         model.encoder.requires_grad_(False)
     else:
-        raise RuntimeError(f"Unrecognized model type: {type(model)}")
+        raise RuntimeError(f"Unrecognized model type: {type(model)} with name: {type(model).__name__}.")
 
     train_classes, test_classes = sampler.sample_test(num_classes, num_train_examples, num_test_examples, device)
 
