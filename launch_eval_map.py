@@ -27,6 +27,7 @@ import os
 import re
 import subprocess
 import sys
+import uuid
 from itertools import product
 from pathlib import Path
 
@@ -62,46 +63,36 @@ def get_input_output_dirs(args, parser):
     return inpath, outpath
 
 
-def build_commands(args, inpath, outpath, launcher_args):
+def as_strings(arglist):
+    return [str(v) for v in arglist]
+
+
+def build_command_args(args, outpath):
     # Build up the full product of all possible input choices.
     repeated_args = (args.model, args.dataset, args.classes, args.train_examples, args.test_examples, args.lr)
     repeated_args = [frozenset(v) for v in repeated_args]  # ensure no duplicates
     combos = product(*repeated_args)
 
-    # Build the commands.
-    commands = []
+    # Convert each unique combo into a set of command line args.
+    arglines = []
     existing_output_files = []
     for c in combos:
         # Determine output path based on arg settings.
-        unique_filename = "-".join([str(v) for v in c]).replace("/", "-").strip("-") + ".pkl"
+        unique_filename = "-".join(as_strings(c)).replace("/", "-").strip("-") + ".pkl"
         outfile = outpath / unique_filename
         if outfile.exists():
             existing_output_files.append(outfile)
-        # Build up inner command args.
-        cmd = [
-            "eval_map.py",
+        arglines.append([
             "--model", c[0],
             "--dataset", c[1],
-            "--data-path", inpath,
-            "--no-download",
             "--classes", c[2],
             "--train-examples", c[3],
             "--test-examples", c[4],
             "--lr", c[5],
-            "--seed", args.seed,
-            "--runs", args.runs,
             "--output", outfile,
-        ]
-        if not args.only_final_performance:
-            cmd.append("--record-learning-curve")
-        if args.device:
-            cmd.extend(["--device", args.device])
-        if args.verbose:
-            cmd.append("-" + ("v" * args.verbose))
-        # Add launcher wrapper.
-        cmd = ["launcher", "dggpu", "-f", "-d", outpath] + launcher_args + cmd
-        commands.append([str(v) for v in cmd])
+        ])
 
+    # Handle already-existing files.
     if existing_output_files and not args.force:
         msg = "Refusing to launch because the following files already exist:\n"
         for f in existing_output_files:
@@ -109,43 +100,79 @@ def build_commands(args, inpath, outpath, launcher_args):
         msg += "Use -f/--force to proceed anyway and overwrite the files."
         raise RuntimeError(msg)
 
-    return commands
+    # Convert each line to a string before returning.
+    return [" ".join(as_strings(a)) for a in arglines]
 
 
-def launch_jobs(commands, verbose=False, dry_run=False):
+def build_commands(args, inpath, outpath, launcher_args):
+    # Get one line of arguments for each unique command.
+    arglines = build_command_args(args, outpath)
+
+    # Write the argfile. It should be stored permanently in the destination directory so the running job can refer to
+    # it. Use a UUID to avoid name collisions with jobs outputting to the same folder.
+    argfile_path = outpath / ("args-" + uuid.uuid4().hex + ".txt")
+    if not args.dry_run:
+        with argfile_path.open("w") as argfile:
+            for line in arglines:
+                argfile.write(line + "\n")
+    else:
+        print(f"Argfile that would be created: {argfile_path}")
+        for line in arglines:
+            print("    " + line)
+
+    # Build the command.
+    cmd = [
+        "eval_map.py",
+        "--data-path", inpath,
+        "--no-download",
+        "--seed", args.seed,
+        "--runs", args.runs,
+    ]
+    if not args.only_final_performance:
+        cmd.append("--record-learning-curve")
+    if args.device:
+        cmd.extend(["--device", args.device])
+    if args.verbose:
+        cmd.append("-" + ("v" * args.verbose))
+    # Add launcher wrapper.
+    cmd = ["launcher", "dggpu", "-f", "-d", outpath, "--argfile", argfile_path] + launcher_args + cmd
+    cmd = as_strings(cmd)
+
+    return cmd
+
+
+def launch_jobs(cmd, verbose=False, dry_run=False):
     if dry_run:
-        print("Commands that would be run:")
-        for cmd in commands:
-            print("    " + " ".join(cmd))
+        print("Command that would be run:")
+        print("    " + " ".join(cmd))
         return os.EX_OK
 
-    for cmd in commands:
-        try:
-            print("Running command: " + " ".join(cmd))
-            if verbose:
-                # If verbose, just let the launcher output directly to console.
-                stderr = None
-                stdout = None
+    try:
+        print("Running command: " + " ".join(cmd))
+        if verbose:
+            # If verbose, just let the launcher output directly to console.
+            stderr = None
+            stdout = None
+        else:
+            # Normally, redirect stderr -> stdout and capture them both into stdout.
+            stderr = subprocess.STDOUT
+            stdout = subprocess.PIPE
+        res = subprocess.run(cmd, text=True, check=True, stdout=stdout, stderr=stderr)
+        # Find the Slurm job ID in the output and print it, if we captured the output.
+        if not verbose:
+            match = re.search(r"Submitted batch job (\d+)", res.stdout)
+            if not match:
+                print("    WARNING: Could not find Slurm job ID in launcher output. This should not happen.")
             else:
-                # Normally, redirect stderr -> stdout and capture them both into stdout.
-                stderr = subprocess.STDOUT
-                stdout = subprocess.PIPE
-            res = subprocess.run(cmd, text=True, check=True, stdout=stdout, stderr=stderr)
-            # Find the Slurm job ID in the output and print it, if we captured the output.
-            if not verbose:
-                match = re.search("Submitted batch job (\d+)", res.stdout)
-                if not match:
-                    print("    WARNING: Could not find Slurm job ID in launcher output. This should not happen.")
-                else:
-                    print("    " + match.group(0))
-        except subprocess.CalledProcessError as e:
-            # Print the output if we captured it, to allow for debugging.
-            if not verbose:
-                print("LAUNCH FAILED. Launcher output:")
-                print("-" * 80)
-                print(e.stdout)
-                print("-" * 80)
-            raise
+                print("    " + match.group(0))
+    except subprocess.CalledProcessError as e:
+        # Print the output if we captured it, to allow for debugging.
+        if not verbose:
+            print("LAUNCH FAILED. Launcher output:")
+            print("-" * 80)
+            print(e.stdout)
+            print("-" * 80)
+        raise
 
 
 def check_path(path):
@@ -219,11 +246,11 @@ def main(args=None):
     # Get destination path.
     inpath, outpath = get_input_output_dirs(args, parser)
 
-    # Get all argument lists.
-    commands = build_commands(args, inpath, outpath, launcher_args)
+    # Get command and corresponding list of arguments.
+    command = build_commands(args, inpath, outpath, launcher_args)
 
     # Launch the jobs.
-    return launch_jobs(commands, args.launch_verbose, args.dry_run)
+    return launch_jobs(command, args.launch_verbose, args.dry_run)
 
 
 if __name__ == "__main__":
