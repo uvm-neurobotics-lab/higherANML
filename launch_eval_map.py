@@ -162,9 +162,10 @@ def launch_jobs(cmd, verbose=False, dry_run=False):
         if not verbose:
             match = re.search(r"Submitted batch job (\d+)", res.stdout)
             if not match:
-                print("    WARNING: Could not find Slurm job ID in launcher output. This should not happen.")
+                print("WARNING: Could not find Slurm job ID in launcher output. Output of launcher:")
+                print(res.stdout)
             else:
-                print("    " + match.group(0))
+                print(match.group(0))
     except subprocess.CalledProcessError as e:
         # Print the output if we captured it, to allow for debugging.
         if not verbose:
