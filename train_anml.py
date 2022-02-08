@@ -38,6 +38,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=30000, help="Number of epochs to train.")
     argutils.add_device_arg(parser)
     argutils.add_seed_arg(parser, default_seed=1)
+    argutils.add_wandb_args(parser)
     argutils.add_verbose_arg(parser)
     parser.add_argument("--no-full-test", dest="full_test", action="store_false",
                         help="Do not test the full train/test sets before saving each model. These tests take a long"
@@ -63,7 +64,7 @@ if __name__ == "__main__":
     user_supplied_args = parser.get_user_specified_args()
     overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "batch_size", "num_batches",
                          "train_cycles", "val_size", "remember_size", "remember_only", "inner_lr", "outer_lr",
-                         "save_freq", "epochs", "seed", "full_test"]
+                         "save_freq", "epochs", "seed", "id", "project", "entity", "full_test"]
     for arg in overrideable_args:
         # Only replace if value was explicitly specified by the user, or if the value doesn't already exist in config.
         if arg not in config or arg in user_supplied_args:
@@ -82,6 +83,9 @@ if __name__ == "__main__":
 
     device = argutils.get_device(parser, args)
     argutils.set_seed(config["seed"])
+
+    argutils.prepare_wandb(config)
+
     sampler, input_shape = argutils.get_OML_dataset_sampler(config)
 
     logging.info("Commencing training.")

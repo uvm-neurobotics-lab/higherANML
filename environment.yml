@@ -12,6 +12,7 @@ dependencies:
   - pandas
   - scikit-learn
   - pyyaml
+  - wandb
   - pip:
     - higher
     - gdown

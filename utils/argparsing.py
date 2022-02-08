@@ -3,7 +3,12 @@ Utilities for frequently used command-line arguments and other main-script thing
 """
 
 import argparse
+import json
 import logging
+import os
+import pwd
+import sys
+from datetime import datetime
 from pathlib import Path
 
 
@@ -275,6 +280,84 @@ def add_wandb_args(parser):
         - project
         - entity
     """
-    parser.add_argument("--project", help="Project to use for W&B logging.")
-    parser.add_argument("--entity", help="Entity to use for W&B logging.")
+    parser.add_argument("--id", help="ID to use for W&B logging. If this project already exists, it will be resumed.")
+    parser.add_argument("--project", default="higherANML",
+                        help="Project to use for W&B logging. Ignored if --id is used.")
+    parser.add_argument("--entity", help="Entity to use for W&B logging. Ignored if --id is used.")
     return parser
+
+
+def get_user():
+    return pwd.getpwuid(os.getuid())[0]
+
+
+def get_hostname():
+    return os.uname().nodename
+
+
+def get_folder():
+    return os.path.realpath(os.path.dirname(sys.argv[0]))
+
+
+def get_path():
+    return os.path.realpath(sys.argv[0])
+
+
+def get_location():
+    user = get_user()
+    host = get_hostname()
+    path = get_path()
+    loc = f"{user}@{host}:{path}"
+    return loc
+
+
+def prepare_wandb(parsed_args, save_path="experiments", save_args=True):
+    """
+    Calls `wandb.init()` and sets up the result folder, based on the arguments from `add_wandb_args()`.
+
+    If the --id argument was supplied, we assume we are already in the target folder. Otherwise we create and move to
+    the target folder.
+
+    Args:
+        parsed_args (argparse.Namespace or dict): Arguments from command line.
+        save_path (str): The root path in which to create result folders. Not used if `args.id` is present.
+        save_args (bool): Whether to also save the arguments locally in the result folder. They will be saved on W&B
+            regardless.
+
+    Returns:
+        wandb.run: The run object created by `wandb.init()`.
+    """
+    import wandb
+
+    # Turn namespace into dict.
+    if isinstance(parsed_args, argparse.Namespace):
+        # Grab all args because we will store them later if `save_args` is enabled.
+        parsed_args = vars(parsed_args)
+    else:
+        # Do not modify the config that was passed in.
+        parsed_args = parsed_args.copy()
+
+    parsed_args["location"] = get_location()
+    parsed_args["date"] = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+
+    kwargs = {"config": parsed_args, "resume": "allow"}
+    if parsed_args["id"]:
+        kwargs["id"] = parsed_args["id"]
+    else:
+        kwargs["entity"] = parsed_args["entity"]
+        kwargs["project"] = parsed_args["project"]
+    run = wandb.init(**kwargs)
+
+    if not parsed_args["id"]:
+        # Only create a new folder if the ID wasn't pre-existing.
+        folder = (Path(save_path) / run.project / run.name).resolve()
+        folder.mkdir(parents=True, exist_ok=True)
+        os.chdir(folder)
+
+    if save_args:
+        # We are now in the output folder, so we can save directly there.
+        args_file = Path("train-run.json")
+        with open(args_file, "w") as f:
+            json.dump(dict(run.config), f, indent=2)
+
+    return run

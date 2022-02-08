@@ -10,6 +10,7 @@ from time import time, strftime, gmtime
 import numpy as np
 import scipy
 import torch
+import wandb
 import yaml
 from torch.nn.functional import cross_entropy
 
@@ -193,6 +194,7 @@ class Log:
 
     @torch.no_grad()
     def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, sampler, device, full_test, verbose):
+        metrics = {}
         time_to_print = (it % self.print_freq == 0)
         time_to_verbose_print = (self.verbose_freq > 0) and (it % self.verbose_freq == 0)
         if time_to_print or time_to_verbose_print:
@@ -208,6 +210,12 @@ class Log:
                 train_acc = accuracy(ada_train_out, episode.train_labels)
                 rem_acc = accuracy(ada_rem_out, episode.rem_labels)
                 val_acc = accuracy(ada_val_out, episode.val_labels)
+                metrics["meta_loss"] = loss.item()
+                metrics["adapted_acc"] = acc
+                metrics["adapted_train_acc"] = train_acc
+                metrics["adapted_remember_acc"] = rem_acc
+                metrics["adapted_valid_acc"] = val_acc
+                metrics["runtime"] = elapsed
                 self.info(f"  Final Meta-Loss = {loss.item():.3f} | Meta-Acc = {acc:.1%} | Train Acc = {train_acc:.1%}"
                           f" | Remember Acc = {rem_acc:.1%} | Test Acc = {val_acc:.1%}"
                           f" ({strftime('%H:%M:%S', gmtime(elapsed))})")
@@ -231,9 +239,14 @@ class Log:
             if full_test:
                 meta_train_acc = overall_accuracy(meta_model, sampler.full_train_data(device), self.debug)
                 meta_test_acc = overall_accuracy(meta_model, sampler.full_val_data(device), self.debug)
+                metrics["meta_train_acc"] = meta_train_acc
+                metrics["meta_test_acc"] = meta_test_acc
                 self.info(f"Meta-Model Performance:"
                           f" Train Acc = {meta_train_acc:.1%} | Full Test Acc = {meta_test_acc:.1%}")
             save(meta_model, self.save_path / f"{self.name}-{it}.net", **self.model_args)
+
+        if metrics:
+            wandb.log(metrics)
 
     def close(self, it, model):
         save(model, self.save_path / f"{self.name}-{it}.net", **self.model_args)

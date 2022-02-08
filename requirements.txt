@@ -5,3 +5,4 @@ pyyaml
 scikit-learn
 torchvision
 tqdm
+wandb

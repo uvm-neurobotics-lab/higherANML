@@ -19,6 +19,9 @@ trained_anmls/train-config.yml
 # Experiments folder
 experiments/
 
+# Weights & Biases folder
+wandb/
+
 # Distribution / packaging
 .Python
 build/
