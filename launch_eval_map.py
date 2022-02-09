@@ -35,9 +35,13 @@ from utils import as_strings
 from utils.slurm import call_sbatch
 
 
+# Get the resolved path of this script, before we switch directories.
+SCRIPT_DIR = Path(__file__).parent.resolve()
+
+
 def place_eval_notebook(outpath, args):
     # Find the notebook relative to this script.
-    nbfile = Path(__file__).parent / "notebooks" / "anml-meta-test-eval.ipynb"
+    nbfile = SCRIPT_DIR / "notebooks" / "anml-meta-test-eval.ipynb"
     assert nbfile.exists(), f"Script file ({nbfile}) not found."
     assert nbfile.is_file(), f"Script file ({nbfile}) is not a file."
     dest = outpath / nbfile.name
@@ -80,7 +84,7 @@ def get_input_output_dirs(args, parser):
         inpath = args.data_path
     else:
         # By default, expect data to be in this repository, at `experiments/data/`.
-        inpath = Path(__file__).parent / "experiments" / "data"
+        inpath = SCRIPT_DIR / "experiments" / "data"
 
     return inpath, outpath
 

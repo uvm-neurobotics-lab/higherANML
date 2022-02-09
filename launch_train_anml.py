@@ -13,9 +13,13 @@ from utils import as_strings
 from utils.slurm import call_sbatch
 
 
+# Get the resolved path of this script, before we switch directories.
+SCRIPT_DIR = Path(__file__).parent.resolve()
+
+
 def build_command(args, launcher_args):
     # Find the script to run next to this file.
-    target_script = Path(__file__).parent / "train_anml_batch_job.py"
+    target_script = SCRIPT_DIR / "train_anml_batch_job.py"
     assert target_script.exists(), f"Script file ({target_script}) not found."
     assert target_script.is_file(), f"Script file ({target_script}) is not a file."
 
