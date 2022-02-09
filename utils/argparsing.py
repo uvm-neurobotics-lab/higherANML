@@ -12,6 +12,21 @@ from datetime import datetime
 from pathlib import Path
 
 
+def resolved_path(str_path):
+    """
+    This function can be used as an argument type to fully resolve a user-supplied path:
+        parser.add_argument(..., type=argutils.resolved_path, ...)
+    The path may not exist, but if it is a relative path it will become fully resolved.
+
+    Args:
+        str_path: The user-supplied path.
+
+    Returns:
+        pathlib.Path: The fully-resolved path object.
+    """
+    return Path(str_path).resolve()
+
+
 def existing_path(str_path):
     """
     This function can be used as an argument type to fully resolve a user-supplied path and ensure it exists:
@@ -149,15 +164,15 @@ def add_verbose_arg(parser):
     return parser
 
 
-def add_dataset_arg(parser, dflt_data_dir="../../data", add_resize_arg=True, add_train_size_arg=False):
+def add_dataset_arg(parser, dflt_data_dir="experiments/data", add_resize_arg=True, add_train_size_arg=False):
     """
     Add an argument for the user to specify a dataset.
     """
     parser.add_argument("--dataset", choices=["omni", "miniimagenet"], type=str.lower, default="omni",
                         help="The dataset to use.")
-    parser.add_argument("--data-path", "--data-dir", metavar="PATH", type=Path, default=dflt_data_dir,
+    parser.add_argument("--data-path", "--data-dir", metavar="PATH", type=resolved_path, default=dflt_data_dir,
                         help="The root path in which to look for the dataset (or store a new one if it isn't already"
-                             " present). IMPORTANT: This is relative to the output directory for the program.")
+                             " present).")
     parser.add_argument("--no-download", dest="download", action="store_false",
                         help="Do not download the dataset automatically if it doesn't already exist; raise an error.")
     if add_resize_arg:
