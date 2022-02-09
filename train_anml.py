@@ -9,6 +9,7 @@ import yaml
 
 import utils.argparsing as argutils
 from anml import train
+from utils import make_pretty
 
 
 def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
@@ -93,6 +94,7 @@ def prep_config(parser, args):
         config["save_freq"] = 1
         config["full_test"] = False
 
+    config = make_pretty(config)
     return config
 
 

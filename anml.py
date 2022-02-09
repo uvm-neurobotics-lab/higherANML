@@ -12,7 +12,6 @@ from torch.optim import SGD, Adam
 import models
 import utils.storage as storage
 from models import LegacyANML
-from utils import make_pretty
 from utils.logging import forward_pass, Log
 
 
@@ -98,7 +97,6 @@ def lobotomize(layer, class_num):
 
 def train(sampler, input_shape, config, device="cuda", verbose=0):
     # Output config for reference. Do it before checking config to assist debugging.
-    config = make_pretty(config)
     logging.info("\n---- Train Config ----\n" + yaml.dump(config) + "----------------------")
     check_config(config)
 
