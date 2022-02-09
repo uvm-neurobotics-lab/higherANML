@@ -24,14 +24,14 @@ drop the `DEBUG=1` flag.
 
 import argparse
 import os
-import re
-import subprocess
 import sys
 import uuid
 from itertools import product
 from pathlib import Path
 
 import utils.argparsing as argutils
+from utils import as_strings
+from utils.slurm import call_sbatch
 
 
 def get_input_output_dirs(args, parser):
@@ -39,7 +39,8 @@ def get_input_output_dirs(args, parser):
     if args.output:
         outpath = Path(args.output).resolve()
     elif len(args.model) == 1:
-        # Assuming the model is inside a "trained_anmls/" folder, this places an "eval/" folder right next to it.
+        # Assuming the model is inside a "trained_anmls/" folder, this places an "eval/" folder right next to
+        # "trained_anmls/".
         outpath = args.model[0].parent.parent / "eval"
     else:
         parser.error("You must supply an output destination (-o/--output) when evaluating more than one model.")
@@ -57,14 +58,11 @@ def get_input_output_dirs(args, parser):
     if args.data_path:
         inpath = args.data_path
     else:
-        # By default, expect data two levels above the output folder.
-        inpath = outpath.parent.parent / "data"
+        # By default, expect data three levels above the output folder (outpath is `experiments/project/exp-name/eval/`
+        # and we want the data to be at `experiments/data/`).
+        inpath = outpath.parent.parent.parent / "data"
 
     return inpath, outpath
-
-
-def as_strings(arglist):
-    return [str(v) for v in arglist]
 
 
 def build_command_args(args, outpath):
@@ -139,41 +137,6 @@ def build_commands(args, inpath, outpath, launcher_args):
     cmd = as_strings(cmd)
 
     return cmd
-
-
-def launch_jobs(cmd, verbose=False, dry_run=False):
-    if dry_run:
-        print("Command that would be run:")
-        print("    " + " ".join(cmd))
-        return os.EX_OK
-
-    try:
-        print("Running command: " + " ".join(cmd))
-        if verbose:
-            # If verbose, just let the launcher output directly to console.
-            stderr = None
-            stdout = None
-        else:
-            # Normally, redirect stderr -> stdout and capture them both into stdout.
-            stderr = subprocess.STDOUT
-            stdout = subprocess.PIPE
-        res = subprocess.run(cmd, text=True, check=True, stdout=stdout, stderr=stderr)
-        # Find the Slurm job ID in the output and print it, if we captured the output.
-        if not verbose:
-            match = re.search(r"Submitted batch job (\d+)", res.stdout)
-            if not match:
-                print("WARNING: Could not find Slurm job ID in launcher output. Output of launcher:")
-                print(res.stdout)
-            else:
-                print(match.group(0))
-    except subprocess.CalledProcessError as e:
-        # Print the output if we captured it, to allow for debugging.
-        if not verbose:
-            print("LAUNCH FAILED. Launcher output:")
-            print("-" * 80)
-            print(e.stdout)
-            print("-" * 80)
-        raise
 
 
 def check_path(path):
@@ -251,7 +214,7 @@ def main(args=None):
     command = build_commands(args, inpath, outpath, launcher_args)
 
     # Launch the jobs.
-    return launch_jobs(command, args.launch_verbose, args.dry_run)
+    return call_sbatch(command, args.launch_verbose, args.dry_run)
 
 
 if __name__ == "__main__":

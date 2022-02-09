@@ -146,10 +146,9 @@ def overall_accuracy(model, all_batches, print_fn):
 
 
 class Log:
-    def __init__(self, name, config, model_args, print_freq=10, verbose_freq=None, save_freq=1000):
+    def __init__(self, name, model_args, print_freq=10, verbose_freq=None, save_freq=1000):
         self.start = -1
         self.name = name
-        self.config = config
         self.model_args = model_args
         self.print_freq = print_freq
         self.verbose_freq = verbose_freq
@@ -157,8 +156,6 @@ class Log:
         self.logger = logging.getLogger(name)
         self.save_path = Path("./trained_anmls")
         self.save_path.mkdir(exist_ok=True)
-        with open(self.save_path / "train-config.yml", "w") as f:
-            yaml.dump(config, f)
 
     def info(self, msg):
         self.logger.info(msg)

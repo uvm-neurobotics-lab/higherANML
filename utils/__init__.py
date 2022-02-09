@@ -7,6 +7,11 @@ from pathlib import Path
 from typing import Dict, Iterable
 
 
+def as_strings(l):
+    """ Convert all items in a list into their string representation. """
+    return [str(v) for v in l]
+
+
 def unzip(l):
     """ Transpose a list of lists. """
     return list(zip(*l))

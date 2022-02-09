@@ -31,6 +31,23 @@ def existing_path(str_path):
         raise argparse.ArgumentTypeError(f"{str_path} ({path}) is not a valid path")
 
 
+def args_as_dict(parsed_args):
+    """
+    Returns a copy of the given object as a dictionary.
+    Args:
+        parsed_args (argparse.Namespace or dict): The args to copy.
+    Returns:
+        dict: The arguments as a dictionary.
+    """
+    # Turn namespace into dict.
+    if isinstance(parsed_args, argparse.Namespace):
+        # Grab all args because we will store them later if `save_args` is enabled.
+        return vars(parsed_args)
+    else:
+        # Do not modify the config that was passed in.
+        return parsed_args.copy()
+
+
 def configure_logging(parsed_args=None, **kwargs):
     """
     You are advised to call in your main script, after parsing the args. Then use `logging.info()` throughout the
@@ -132,15 +149,15 @@ def add_verbose_arg(parser):
     return parser
 
 
-def add_dataset_arg(parser, add_resize_arg=True, add_train_size_arg=False):
+def add_dataset_arg(parser, dflt_data_dir="../../data", add_resize_arg=True, add_train_size_arg=False):
     """
     Add an argument for the user to specify a dataset.
     """
     parser.add_argument("--dataset", choices=["omni", "miniimagenet"], type=str.lower, default="omni",
                         help="The dataset to use.")
-    parser.add_argument("--data-path", "--data-dir", metavar="PATH", type=Path, default="../data",
+    parser.add_argument("--data-path", "--data-dir", metavar="PATH", type=Path, default=dflt_data_dir,
                         help="The root path in which to look for the dataset (or store a new one if it isn't already"
-                             " present).")
+                             " present). IMPORTANT: This is relative to the output directory for the program.")
     parser.add_argument("--no-download", dest="download", action="store_false",
                         help="Do not download the dataset automatically if it doesn't already exist; raise an error.")
     if add_resize_arg:
@@ -210,19 +227,21 @@ def get_device(parser, parsed_args):
     Get the PyTorch device from args, for use with `add_device_arg()`.
     Args:
         parser (ArgumentParser): The parser which parsed the args.
-        parsed_args (argparse.Namespace): Arguments from command line.
+        parsed_args (argparse.Namespace or dict): Arguments from command line or config.
     """
     # Import in this scope so clients can still use the other utilities in this module without Numpy/Torch.
     import torch
 
-    if parsed_args.device is None:
+    parsed_args = args_as_dict(parsed_args)
+
+    if parsed_args.get("device") is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
-    elif parsed_args.device == "cuda" and not torch.cuda.is_available():
+    elif parsed_args.get("device") == "cuda" and not torch.cuda.is_available():
         error_msg = "Torch says CUDA is not available. Remove it from your command to proceed on CPU."
         parser.error(error_msg)  # Exits.
         device = "invalid"  # Unreachable, but silences a warning.
     else:
-        device = parsed_args.device
+        device = parsed_args.get("device")
 
     logging.info(f"Using device: {device}")
     return device
@@ -274,16 +293,18 @@ def set_seed_from_args(parsed_args):
     set_seed(parsed_args.seed)
 
 
-def add_wandb_args(parser):
+def add_wandb_args(parser, allow_id=False):
     """
     Adds arguments which would be needed by any program that uses Weights & Biases:
         - project
         - entity
+        - [optional] id
     """
-    parser.add_argument("--id", help="ID to use for W&B logging. If this project already exists, it will be resumed.")
-    parser.add_argument("--project", default="higherANML",
-                        help="Project to use for W&B logging. Ignored if --id is used.")
-    parser.add_argument("--entity", help="Entity to use for W&B logging. Ignored if --id is used.")
+    id_text = " Ignored if --id is used." if allow_id else ""
+    parser.add_argument("--project", default="higherANML", help="Project to use for W&B logging." + id_text)
+    parser.add_argument("--entity", help="Entity to use for W&B logging." + id_text)
+    if allow_id:
+        parser.add_argument("--id", help="ID to use for W&B logging. If this project already exists, it will be resumed.")
     return parser
 
 
@@ -311,7 +332,7 @@ def get_location():
     return loc
 
 
-def prepare_wandb(parsed_args, save_path="experiments", save_args=True):
+def prepare_wandb(parsed_args, save_path="experiments", save_args=True, dry_run=False):
     """
     Calls `wandb.init()` and sets up the result folder, based on the arguments from `add_wandb_args()`.
 
@@ -323,41 +344,52 @@ def prepare_wandb(parsed_args, save_path="experiments", save_args=True):
         save_path (str): The root path in which to create result folders. Not used if `args.id` is present.
         save_args (bool): Whether to also save the arguments locally in the result folder. They will be saved on W&B
             regardless.
+        dry_run (bool): If true, don't actually take actions, just print what actions would be taken.
 
     Returns:
         wandb.run: The run object created by `wandb.init()`.
     """
     import wandb
 
-    # Turn namespace into dict.
-    if isinstance(parsed_args, argparse.Namespace):
-        # Grab all args because we will store them later if `save_args` is enabled.
-        parsed_args = vars(parsed_args)
-    else:
-        # Do not modify the config that was passed in.
-        parsed_args = parsed_args.copy()
+    parsed_args = args_as_dict(parsed_args)
 
     parsed_args["location"] = get_location()
     parsed_args["date"] = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 
-    kwargs = {"config": parsed_args, "resume": "allow"}
-    if parsed_args["id"]:
-        kwargs["id"] = parsed_args["id"]
+    if not dry_run:
+        kwargs = {"config": parsed_args, "resume": "allow"}
+        if parsed_args.get("id", None):
+            kwargs["id"] = parsed_args["id"]
+        else:
+            kwargs["entity"] = parsed_args["entity"]
+            kwargs["project"] = parsed_args["project"]
+        run = wandb.init(**kwargs)
     else:
-        kwargs["entity"] = parsed_args["entity"]
-        kwargs["project"] = parsed_args["project"]
-    run = wandb.init(**kwargs)
+        from collections import namedtuple
+        Run = namedtuple("Run", ["id", "config", "project", "name"])
+        run = Run("abcd1234", {"foo": "bar"}, parsed_args.get("project", get_user()), "fake-name-8")
+        if parsed_args.get("id", None):
+            print(f"Would resume an existing W&B run with ID={parsed_args['id']}.")
+        else:
+            print(f"Would launch a new W&B run.")
 
-    if not parsed_args["id"]:
+    if not parsed_args.get("id", None):
         # Only create a new folder if the ID wasn't pre-existing.
         folder = (Path(save_path) / run.project / run.name).resolve()
-        folder.mkdir(parents=True, exist_ok=True)
-        os.chdir(folder)
+        if not dry_run:
+            folder.mkdir(parents=True, exist_ok=True)
+            os.chdir(folder)
+        else:
+            print(f"Would create output folder: {folder}. Subsequent actions would be relative to this folder instead"
+                  f" of {os.getcwd()}.")
 
     if save_args:
         # We are now in the output folder, so we can save directly there.
         args_file = Path("train-run.json")
-        with open(args_file, "w") as f:
-            json.dump(dict(run.config), f, indent=2)
+        if not dry_run:
+            with open(args_file, "w") as f:
+                json.dump(dict(run.config), f, indent=2)
+        else:
+            print(f"Would save config to file: {args_file}")
 
     return run
