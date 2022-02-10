@@ -374,7 +374,7 @@ def prepare_wandb(parsed_args, save_path="experiments", save_args=True, dry_run=
     parsed_args["date"] = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 
     if not dry_run:
-        kwargs = {"config": parsed_args, "resume": "allow"}
+        kwargs = {"config": parsed_args}
         if parsed_args.get("id", None):
             kwargs["id"] = parsed_args["id"]
         else:
@@ -386,7 +386,7 @@ def prepare_wandb(parsed_args, save_path="experiments", save_args=True, dry_run=
         Run = namedtuple("Run", ["id", "config", "project", "name"])
         run = Run("abcd1234", {"foo": "bar"}, parsed_args.get("project", get_user()), "fake-name-8")
         if parsed_args.get("id", None):
-            print(f"Would resume an existing W&B run with ID={parsed_args['id']}.")
+            print(f"Would overwrite an existing W&B run with ID={parsed_args['id']}.")
         else:
             print(f"Would launch a new W&B run.")
 
