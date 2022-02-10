@@ -212,6 +212,8 @@ def get_OML_dataset_sampler(args, greyscale=None):
     # These args are allowed to be missing.
     for arg in ("im_size", "train_size", "seed"):
         args.setdefault(arg)
+    # Ensure we have a Path type here.
+    args["data_path"] = Path(args["data_path"])
 
     if args["dataset"] == "omni":
         if greyscale is False:
