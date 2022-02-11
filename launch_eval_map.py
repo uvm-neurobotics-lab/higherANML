@@ -152,6 +152,8 @@ def build_commands(args, inpath, outpath, launcher_args):
     ]
     if not args.only_final_performance:
         cmd.append("--record-learning-curve")
+    if args.im_size:
+        cmd.extend(["--im-size", args.im_size])
     if args.device:
         cmd.extend(["--device", args.device])
     if args.verbose:
@@ -202,6 +204,8 @@ def main(args=None):
                                        " relative to the output directory: <output>/../../data. IMPORTANT: The datasets"
                                        " will not be downloaded automatically, so make sure they exist before"
                                        " launching.")
+    non_repeat_group.add_argument("--im-size", metavar="PX", type=int, default=None,
+                                  help="Resize all input images to the given size (in pixels).")
     non_repeat_group.add_argument("--only-final-performance", action="store_true",
                                   help="Do not record train/test performance throughout the whole training procedure;"
                                        " only record final performance. This saves a lot of time and space, but"
