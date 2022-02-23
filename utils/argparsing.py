@@ -320,6 +320,7 @@ def add_wandb_args(parser, allow_id=False):
     id_text = " Ignored if --id is used." if allow_id else ""
     parser.add_argument("--project", default="higherANML", help="Project to use for W&B logging." + id_text)
     parser.add_argument("--entity", help="Entity to use for W&B logging." + id_text)
+    parser.add_argument("--group", help="Name under which to group this run in W&B.")
     if allow_id:
         parser.add_argument("--id", help="ID to use for W&B logging. If this project already exists, it will be resumed.")
     return parser
@@ -349,18 +350,23 @@ def get_location():
     return loc
 
 
-def prepare_wandb(parsed_args, save_path="experiments", save_args=True, dry_run=False):
+def prepare_wandb(parsed_args, job_type=None, create_folder=True, root_path="experiments", save_args=False,
+                  allow_reinit=None, dry_run=False):
     """
-    Calls `wandb.init()` and sets up the result folder, based on the arguments from `add_wandb_args()`.
+    Calls `wandb.init()` and (optionally) sets up the result folder, based on the arguments from `add_wandb_args()`.
 
-    If the --id argument was supplied, we assume we are already in the target folder. Otherwise we create and move to
-    the target folder.
+    If the `--id` argument was supplied, we assume we are already in the target folder. Otherwise we create and move to
+    the target folder, if `create_folder` is `True`.
 
     Args:
         parsed_args (argparse.Namespace or dict): Arguments from command line.
-        save_path (str): The root path in which to create result folders. Not used if `args.id` is present.
+        job_type (str): The type of program creating this run, such as "train" or "eval".
+        create_folder (bool): Whether to create a folder for this run.
+        root_path (str): The root path in which to create result folders. Not used if `args.id` is present.
         save_args (bool): Whether to also save the arguments locally in the result folder. They will be saved on W&B
             regardless.
+        allow_reinit (bool): If true, you may call this function multiple times; see the `reinit` argument to
+            `wandb.init()`.
         dry_run (bool): If true, don't actually take actions, just print what actions would be taken.
 
     Returns:
@@ -370,12 +376,18 @@ def prepare_wandb(parsed_args, save_path="experiments", save_args=True, dry_run=
 
     parsed_args = args_as_dict(parsed_args)
 
+    parsed_args["job_type"] = job_type
     parsed_args["location"] = get_location()
     parsed_args["date"] = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 
     if not dry_run:
-        kwargs = {"config": parsed_args}
-        if parsed_args.get("id", None):
+        kwargs = {
+            "config": parsed_args,
+            "group": parsed_args.get("group"),
+            "job_type": job_type,
+            "reinit": allow_reinit,
+        }
+        if parsed_args.get("id"):
             kwargs["id"] = parsed_args["id"]
         else:
             kwargs["entity"] = parsed_args["entity"]
@@ -390,9 +402,9 @@ def prepare_wandb(parsed_args, save_path="experiments", save_args=True, dry_run=
         else:
             print(f"Would launch a new W&B run.")
 
-    if not parsed_args.get("id", None):
+    if create_folder and not parsed_args.get("id", None):
         # Only create a new folder if the ID wasn't pre-existing.
-        folder = (Path(save_path) / run.project / run.name).resolve()
+        folder = (Path(root_path) / run.project / run.name).resolve()
         if not dry_run:
             folder.mkdir(parents=True, exist_ok=True)
             os.chdir(folder)
@@ -402,7 +414,7 @@ def prepare_wandb(parsed_args, save_path="experiments", save_args=True, dry_run=
 
     if save_args:
         # We are now in the output folder, so we can save directly there.
-        args_file = Path("train-run.json")
+        args_file = Path("wandb-run.json")
         if not dry_run:
             with open(args_file, "w") as f:
                 json.dump(dict(run.config), f, indent=2)

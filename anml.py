@@ -176,7 +176,7 @@ def evaluate(model, classes):
         classes (list): A list of tensor pairs (inputs, targets), where each tensor is a batch from a single class.
 
     Returns:
-        list: A list of accuracy per class.
+        numpy.ndarray: Array of accuracy per class.
     """
     # NOTE: It would be great to do this operation in one large batch over all classes, but unfortunately that may be
     # too large to fit onto the GPU, for some datasets. For now, for simplicity, we'll assume one batch per class is an
@@ -190,6 +190,38 @@ def evaluate(model, classes):
     return acc_per_class
 
 
+def evaluate_and_log(model, classes, should_log=False, num_seen=None):
+    """
+    Meta-test-test
+
+    Given a meta-test-trained model, evaluate accuracy on the given data. Assumes the classes are ordered in the order
+    in which they are trained on. Also logs the result to Weights & Biases.
+
+    Args:
+        model (callable): The model to evaluate.
+        classes (list): A list of tensor pairs (inputs, targets), where each tensor is a batch from a single class.
+        should_log (bool): Whether to log the results to W&B.
+        num_seen (int): The number of classes trained on so far (so we can report performance on "seen" vs. "unseen"
+            classes). If `None`, assumes all classes have been seen.
+
+    Returns:
+        numpy.ndarray: Array of accuracy per class.
+    """
+    import wandb
+
+    acc_per_class = evaluate(model, classes)
+
+    if should_log:
+        if num_seen is None:
+            num_seen = len(classes)
+        wandb.log({
+            "overall_acc": acc_per_class.mean(),
+            "seen_class_acc": acc_per_class[:num_seen].mean(),
+        }, step=num_seen)
+
+    return acc_per_class
+
+
 def test_train(
         model_path,
         sampler,
@@ -200,6 +232,7 @@ def test_train(
         lr=0.01,
         evaluate_complete_trajectory=False,
         device="cuda",
+        log_to_wandb=False,
 ):
     model = load_model(model_path, sampler_input_shape, device)
     model = model.to(device)
@@ -238,7 +271,7 @@ def test_train(
     test_perf_trajectory = []
 
     # meta-test-TRAIN
-    for train_data in train_classes:
+    for idx, train_data in enumerate(train_classes):
         # One full episode: Go through samples one-at-a-time and learn on each one.
         for x, y in zip(*train_data):
             # Create a "batch" of one.
@@ -256,18 +289,18 @@ def test_train(
         if evaluate_complete_trajectory:
             # Evaluation on all classes.
             # NOTE: We often only care about performance on classes seen so far. We can extract this after-the-fact,
-            # by slicing into the results: `acc_per_class[:i + 1]`.
+            # by slicing into the results: `acc_per_class[:idx + 1]`.
             # If we wanted to only run inference on classes already seen, we would take a slice of the data:
             #     evaluate(model, train_classes[:idx + 1])
             # where `idx` is keeping track of the current training class index.
-            train_perf_trajectory.append(evaluate(model, train_classes))
+            train_perf_trajectory.append(evaluate_and_log(model, train_classes, log_to_wandb, idx + 1))
             # NOTE: Assumes that test tasks are in the same ordering as train tasks.
-            test_perf_trajectory.append(evaluate(model, test_classes))
+            test_perf_trajectory.append(evaluate_and_log(model, test_classes, log_to_wandb, idx + 1))
 
     # meta-test-TEST
     # We only need to do this if we didn't already do it in the last iteration of the loop.
     if not evaluate_complete_trajectory:
-        train_perf_trajectory.append(evaluate(model, train_classes))
-        test_perf_trajectory.append(evaluate(model, test_classes))
+        train_perf_trajectory.append(evaluate_and_log(model, train_classes, log_to_wandb))
+        test_perf_trajectory.append(evaluate_and_log(model, test_classes, log_to_wandb))
 
     return train_perf_trajectory, test_perf_trajectory

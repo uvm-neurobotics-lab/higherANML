@@ -21,30 +21,32 @@ def check_path(path):
         raise argparse.ArgumentTypeError(f"model: {path} is not a valid path")
 
 
-def repeats(runs, **kwargs):
+def repeats(num_runs, wandb_init, **kwargs):
     num_classes = kwargs["num_classes"]
+    kwargs["log_to_wandb"] = True
     nanfill = [float("nan")]
     results = []
 
-    # Run the tests `runs` times.
-    for r in trange(runs):
-        # RUN THE TEST
-        train_traj, test_traj = test_train(**kwargs)
-        # Train and test should be evaluated the same number of times.
-        assert len(train_traj) == len(test_traj)
-        # At the end of training, train and test should both have the full number of classes.
-        assert len(train_traj[-1]) == len(test_traj[-1]) == num_classes
-        # Accumulate the results.
-        for epoch, tr, te in zip(count(), train_traj, test_traj):
-            # Extend each result to make sure it has the full number of classes.
-            tr = list(tr) + nanfill * (num_classes - len(tr))
-            te = list(te) + nanfill * (num_classes - len(te))
-            # NOTE: This assumes that 1 epoch == 1 class.
-            # Capped b/c we might have one more eval at the end after the last epoch, but still the same number of
-            # classes were trained.
-            classes_trained = min(epoch + 1, num_classes)
-            index = [r, epoch, classes_trained]
-            results.append((index, tr, te))
+    # Run the tests `num_runs` times.
+    for r in trange(num_runs):
+        with wandb_init():
+            # RUN THE TEST
+            train_traj, test_traj = test_train(**kwargs)
+            # Train and test should be evaluated the same number of times.
+            assert len(train_traj) == len(test_traj)
+            # At the end of training, train and test should both have the full number of classes.
+            assert len(train_traj[-1]) == len(test_traj[-1]) == num_classes
+            # Accumulate the results.
+            for epoch, tr, te in zip(count(), train_traj, test_traj):
+                # Extend each result to make sure it has the full number of classes.
+                tr = list(tr) + nanfill * (num_classes - len(tr))
+                te = list(te) + nanfill * (num_classes - len(te))
+                # NOTE: This assumes that 1 epoch == 1 class.
+                # Capped b/c we might have one more eval at the end after the last epoch, but still the same number of
+                # classes were trained.
+                classes_trained = min(epoch + 1, num_classes)
+                index = [r, epoch, classes_trained]
+                results.append((index, tr, te))
 
     return results
 
@@ -93,6 +95,7 @@ def main(args=None):
     parser.add_argument("-o", "--output", metavar="PATH", required=True, help="The location to save to.")
     argutils.add_device_arg(parser)
     argutils.add_seed_arg(parser)
+    argutils.add_wandb_args(parser)
     argutils.add_verbose_arg(parser)
 
     args = parser.parse_args(args)
@@ -108,8 +111,13 @@ def main(args=None):
     else:
         outpath.parent.mkdir(parents=True, exist_ok=True)
 
+    def wandb_init():
+        return argutils.prepare_wandb(args, job_type="eval", create_folder=False, allow_reinit=True)
+
     # The name of these keyword arguments needs to match the ones in `test_train()`, as we will pass them on.
     results = repeats(
+        num_runs=args.runs,
+        wandb_init=wandb_init,
         model_path=args.model,
         sampler=sampler,
         sampler_input_shape=input_shape,
@@ -118,7 +126,6 @@ def main(args=None):
         num_test_examples=args.test_examples,
         lr=args.lr,
         evaluate_complete_trajectory=args.record_learning_curve,
-        runs=args.runs,
         device=device,
     )
 

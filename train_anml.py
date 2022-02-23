@@ -77,7 +77,7 @@ def prep_config(parser, args):
     user_supplied_args = parser.get_user_specified_args()
     overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "batch_size", "num_batches",
                          "train_cycles", "val_size", "remember_size", "remember_only", "inner_lr", "outer_lr",
-                         "save_freq", "epochs", "device", "seed", "id", "project", "entity", "full_test"]
+                         "save_freq", "epochs", "device", "seed", "id", "project", "entity", "group", "full_test"]
     for arg in overrideable_args:
         # Only replace if value was explicitly specified by the user, or if the value doesn't already exist in config.
         if arg not in config or arg in user_supplied_args:
@@ -105,7 +105,7 @@ def setup_and_train(parser, config, verbose):
 
     # Keep this before we load the dataset b/c we want to use a dataset location that's relative to the run directory.
     # The prepare_wandb function will change our run directory.
-    argutils.prepare_wandb(config)
+    argutils.prepare_wandb(config, job_type="train")
 
     sampler, input_shape = argutils.get_OML_dataset_sampler(config)
 
@@ -120,7 +120,7 @@ def main(argv=None):
 
     config = prep_config(parser, args)
 
-    setup_and_train(parser, args, config)
+    setup_and_train(parser, config, args.verbose)
 
 
 if __name__ == "__main__":
