@@ -55,10 +55,10 @@ def main(argv=None):
     # Create the full config using all the command line arguments.
     config = prep_config(parser, args)
 
-    # Set up, and jump into, the destination path. Setting the ID in the config will cause the batch job to use the
-    # same W&B run which we've already created. We do this so that we can create the output folder ahead of time and
-    # store the Slurm log into the same folder.
+    # Set up, and jump into, the destination path.
     run = argutils.prepare_wandb(config, dry_run=args.dry_run)
+    # Setting the ID in the config will cause the batch job to use the same W&B run which we've already created. We do
+    # this so that we can create the output folder ahead of time and store the Slurm log into the same folder.
     config["id"] = run.id
 
     # Write config into the destination folder (which is now our current directory), so that the batch job has its own
