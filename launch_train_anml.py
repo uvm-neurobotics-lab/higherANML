@@ -60,6 +60,9 @@ def main(argv=None):
     # Setting the ID in the config will cause the batch job to use the same W&B run which we've already created. We do
     # this so that we can create the output folder ahead of time and store the Slurm log into the same folder.
     config["id"] = run.id
+    # We we reuse the name that W&B generated for our run as the group name, if the user didn't already provide one.
+    # Both train and eval jobs will be put under this group in the UI.
+    config.setdefault("group", run.name)
 
     # Write config into the destination folder (which is now our current directory), so that the batch job has its own
     # local copy of the config and doesn't conflict with other jobs.

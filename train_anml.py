@@ -112,12 +112,7 @@ def setup_and_train(parser, config, verbose):
 
     # Keep this before we load the dataset b/c we want to use a dataset location that's relative to the run directory.
     # The prepare_wandb function will change our run directory.
-    run = argutils.prepare_wandb(config, job_type="train")
-    # If we don't already have a group set, then reuse the name that W&B generated for our run as the group name.
-    # This way, any eval jobs we launch will be grouped with this train job.
-    if not run.group:
-        run.group = run.name
-        config["group"] = run.name
+    argutils.prepare_wandb(config, job_type="train")
 
     sampler, input_shape = argutils.get_OML_dataset_sampler(config)
 
