@@ -29,7 +29,7 @@ def repeats(num_runs, wandb_init, **kwargs):
 
     # Run the tests `num_runs` times.
     for r in trange(num_runs):
-        with wandb_init():
+        with wandb_init("eval"):
             # RUN THE TEST
             train_traj, test_traj = test_train(**kwargs)
             # Train and test should be evaluated the same number of times.
@@ -73,6 +73,23 @@ def save_results(results, output_path, num_classes, **kwargs):
     result_matrix.set_index(colnames[:-2], inplace=True)
     result_matrix.to_pickle(output_path)
     print(f"Saved result matrix of size {result_matrix.shape} to: {output_path}")
+    return result_matrix
+
+
+def report_summary(result_matrix):
+    # Average over all classes to get overall performance numbers, by grouping by columns other than class.
+    non_class_columns = list(filter(lambda x: x != "class_id", result_matrix.index.names))
+    avg_over_classes = result_matrix.groupby(non_class_columns).mean()
+    # Get just the final test accuracy of each run (when we've trained on all classes).
+    classes_trained = avg_over_classes.index.get_level_values("classes_trained")
+    num_classes = classes_trained.max()
+    train_acc = avg_over_classes.loc[classes_trained == num_classes, "train_acc"]
+    test_acc = avg_over_classes.loc[classes_trained == num_classes, "test_acc"]
+    # NOTE: Right now we're just printing to console, but it may be useful in the future to report this back to the
+    # original training job as a summary metric? Example here: https://docs.wandb.ai/guides/track/log#summary-metrics
+    print(f"Final accuracy on {num_classes} classes:")
+    print(f"Train {train_acc.mean():.1%} (std: {train_acc.std():.1%}) | "
+          f"Test {test_acc.mean():.1%} (std: {test_acc.std():.1%})")
 
 
 def main(args=None):
@@ -111,8 +128,8 @@ def main(args=None):
     else:
         outpath.parent.mkdir(parents=True, exist_ok=True)
 
-    def wandb_init():
-        return argutils.prepare_wandb(args, job_type="eval", create_folder=False, allow_reinit=True)
+    def wandb_init(job_type):
+        return argutils.prepare_wandb(args, job_type=job_type, create_folder=False, allow_reinit=True)
 
     # The name of these keyword arguments needs to match the ones in `test_train()`, as we will pass them on.
     results = repeats(
@@ -131,7 +148,7 @@ def main(args=None):
 
     # Assemble and save the result matrix.
     model_abspath = str(Path(args.model).resolve())
-    save_results(
+    result_matrix = save_results(
         results,
         outpath,
         args.classes,
@@ -141,6 +158,9 @@ def main(args=None):
         num_test_examples=args.test_examples,
         lr=args.lr,
     )
+
+    # Print summary to console.
+    report_summary(result_matrix)
 
 
 if __name__ == "__main__":
