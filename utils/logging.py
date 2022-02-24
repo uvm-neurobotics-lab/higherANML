@@ -278,7 +278,7 @@ class Log:
 
         # Launch full evaluation of the model as a separate job.
         if should_eval:
-            args = ["--model", model_path]
+            args = ["--mem=64G", "--model", model_path]
             from_cfg_to_cmd(["dataset", "project", "entity", "group"], self.config, args)
             from_cfg_to_cmd(["classes", "train_examples", "test_examples", "lr"], self.eval_config, args)
             retcode = launch_eval_map.main(as_strings(args))
