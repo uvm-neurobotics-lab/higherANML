@@ -11,9 +11,10 @@ import numpy as np
 import scipy
 import torch
 import wandb
-import yaml
 from torch.nn.functional import cross_entropy
 
+import launch_eval_map
+from utils import as_strings
 from utils.storage import save
 
 
@@ -145,17 +146,37 @@ def overall_accuracy(model, all_batches, print_fn):
         return np.ma.average(accs, weights=weights)
 
 
+def from_cfg_to_cmd(to_copy, from_config, dest_args):
+    for arg in to_copy:
+        val = from_config.get(arg)
+        if val:
+            dest_args.append("--" + arg.replace("_", "-"))
+            if isinstance(val, (list, tuple)):
+                dest_args.extend(val)
+            else:
+                dest_args.append(val)
+
+
 class Log:
-    def __init__(self, name, model_args, print_freq=10, verbose_freq=None, save_freq=1000):
+    def __init__(self, name, model_args, print_freq=10, verbose_freq=None, save_freq=1000, full_test=True, config=None):
         self.start = -1
         self.name = name
         self.model_args = model_args
         self.print_freq = print_freq
         self.verbose_freq = verbose_freq
         self.save_freq = save_freq
+        self.full_test = full_test
+        self.eval_steps = config.get("eval_steps")
+        self.config = config
+        if self.eval_steps and "eval" not in config:
+            raise RuntimeError("You must supply an evaluation config, or else disable eval_steps.")
+        self.eval_config = config.get("eval")
         self.logger = logging.getLogger(name)
         self.save_path = Path("./trained_anmls")
         self.save_path.mkdir(exist_ok=True)
+
+    def warning(self, msg):
+        self.logger.warning(msg)
 
     def info(self, msg):
         self.logger.info(msg)
@@ -190,7 +211,7 @@ class Log:
                                        lambda msg: self.debug("    " + msg))
 
     @torch.no_grad()
-    def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, sampler, device, full_test, verbose):
+    def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, sampler, device, verbose):
         metrics = {}
         time_to_print = (it % self.print_freq == 0)
         time_to_verbose_print = (self.verbose_freq > 0) and (it % self.verbose_freq == 0)
@@ -232,18 +253,38 @@ class Log:
                 print_validation_stats(episode, meta_train_out, meta_rem_out, meta_val_out, verbose,
                                        lambda msg: self.debug("    " + msg))
 
-        if it % self.save_freq == 0:
-            if full_test:
-                meta_train_acc = overall_accuracy(meta_model, sampler.full_train_data(device), self.debug)
-                meta_test_acc = overall_accuracy(meta_model, sampler.full_val_data(device), self.debug)
-                metrics["meta_train_acc"] = meta_train_acc
-                metrics["meta_test_acc"] = meta_test_acc
-                self.info(f"Meta-Model Performance:"
-                          f" Train Acc = {meta_train_acc:.1%} | Full Test Acc = {meta_test_acc:.1%}")
-            save(meta_model, self.save_path / f"{self.name}-{it}.net", **self.model_args)
+        wandb.log(metrics, step=it)
 
-        if metrics:
-            wandb.log(metrics)
+        should_save = (it % self.save_freq == 0)
+        should_eval = (it in self.eval_steps)
+        if should_save or should_eval:
+            self.save_and_eval(it, meta_model, sampler, device, should_eval)
 
-    def close(self, it, model):
-        save(model, self.save_path / f"{self.name}-{it}.net", **self.model_args)
+    def save_and_eval(self, it, model, sampler, device, should_eval):
+        # Run full test on training data.
+        if self.full_test:
+            meta_train_acc = overall_accuracy(model, sampler.full_train_data(device), self.debug)
+            meta_test_acc = overall_accuracy(model, sampler.full_val_data(device), self.debug)
+            self.info(f"Meta-Model Performance:"
+                      f" Train Acc = {meta_train_acc:.1%} | Full Test Acc = {meta_test_acc:.1%}")
+            wandb.log({
+                "meta_train_acc": meta_train_acc,
+                "meta_test_acc": meta_test_acc,
+            }, step=it)
+
+        # Save the model.
+        model_path = self.save_path / f"{self.name}-{it}.net"
+        save(model, model_path, **self.model_args)
+
+        # Launch full evaluation of the model as a separate job.
+        if should_eval:
+            args = ["--model", model_path]
+            from_cfg_to_cmd(["dataset", "project", "entity", "group"], self.config, args)
+            from_cfg_to_cmd(["classes", "train_examples", "test_examples", "lr"], self.eval_config, args)
+            retcode = launch_eval_map.main(as_strings(args))
+            if retcode != 0:
+                self.warning(f"Eval job may not have launched. Launcher exited with code {retcode}. See above for"
+                             " possible errors.")
+
+    def close(self, it, model, sampler, device):
+        self.save_and_eval(it, model, sampler, device, True)

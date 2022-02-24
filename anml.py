@@ -109,7 +109,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     name += "-".join(map(str, input_shape))
     print_freq = 1 if verbose > 1 else 10  # if double-verbose, print every iteration
     verbose_freq = print_freq if verbose > 0 else 0  # if verbose, then print verbose info at the same frequency
-    log = Log(name, model_args, print_freq, verbose_freq, config["save_freq"])
+    log = Log(name, model_args, print_freq, verbose_freq, config["save_freq"], config["full_test"], config)
 
     # inner optimizer used during the learning phase
     inner_params = collect_opt_params(model, config["inner_params"])
@@ -159,9 +159,9 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
         outer_opt.step()
         outer_opt.zero_grad()
 
-        log.outer_end(it, m_loss, m_acc, episode, fnet, model, sampler, device, config["full_test"], verbose)
+        log.outer_end(it, m_loss, m_acc, episode, fnet, model, sampler, device, verbose)
 
-    log.close(it, model)
+    log.close(it, model, sampler, device)
 
 
 def evaluate(model, classes):

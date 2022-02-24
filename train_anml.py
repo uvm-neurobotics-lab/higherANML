@@ -46,7 +46,7 @@ def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
     parser.add_argument("--inner-lr", metavar="RATE", type=float, default=1e-1, help="Inner learning rate.")
     parser.add_argument("--outer-lr", metavar="RATE", type=float, default=1e-3, help="Outer learning rate.")
     parser.add_argument("--save-freq", type=int, default=1000, help="Number of epochs between each saved model.")
-    parser.add_argument("--epochs", type=int, default=30000, help="Number of epochs to train.")
+    parser.add_argument("--epochs", type=int, default=25000, help="Number of epochs to train.")
     argutils.add_device_arg(parser)
     argutils.add_seed_arg(parser, default_seed=1)
     argutils.add_wandb_args(parser, allow_id=allow_id)
@@ -55,6 +55,11 @@ def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
                         help="Do not test the full train/test sets before saving each model. These tests take a long"
                              " time so this is useful when saving models frequently or running quick tests. This"
                              " setting is implied if --smoke-test is enabled.")
+    parser.add_argument("--eval-steps", metavar="INT", nargs="*", type=int,
+                        help="Points in the training at which the model should be fully evaluated. At each of these"
+                             " steps, the model will be saved and a full evaluation will be run (in a separate Slurm"
+                             " job). The result of the evaluation will be recorded in the same W&B group. To report the"
+                             " final trained model, enter any number larger than --epochs.")
     parser.add_argument("--st", "--smoke-test", dest="smoke_test", action="store_true",
                         help="Conduct a quick, full test of the training pipeline. If enabled, then a number of"
                              " arguments will be overridden to make the training run as short as possible and print in"
@@ -77,7 +82,8 @@ def prep_config(parser, args):
     user_supplied_args = parser.get_user_specified_args()
     overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "batch_size", "num_batches",
                          "train_cycles", "val_size", "remember_size", "remember_only", "inner_lr", "outer_lr",
-                         "save_freq", "epochs", "device", "seed", "id", "project", "entity", "group", "full_test"]
+                         "save_freq", "epochs", "device", "seed", "id", "project", "entity", "group", "full_test",
+                         "eval_steps"]
     for arg in overrideable_args:
         # Only replace if value was explicitly specified by the user, or if the value doesn't already exist in config.
         if arg not in config or arg in user_supplied_args:
@@ -93,6 +99,7 @@ def prep_config(parser, args):
         config["epochs"] = 2
         config["save_freq"] = 1
         config["full_test"] = False
+        config["eval_steps"] = []
 
     config = make_pretty(config)
     return config

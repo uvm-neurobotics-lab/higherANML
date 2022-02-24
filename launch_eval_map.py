@@ -144,7 +144,7 @@ def build_commands(args, inpath, outpath, launcher_args):
 
     # Build the command.
     cmd = [
-        "eval_map.py",
+        SCRIPT_DIR / "eval_map.py",
         "--data-path", inpath,
         "--no-download",
         "--seed", args.seed,
@@ -217,6 +217,7 @@ def main(args=None):
                                   help='Random seed. The same seed will be used for all jobs, but each "run" within'
                                        ' each "job" will have a different random sampling of data.')
     argutils.add_device_arg(non_repeat_group)
+    argutils.add_wandb_args(non_repeat_group)
     argutils.add_verbose_arg(non_repeat_group)
 
     # Other/Launcher Arguments
