@@ -159,7 +159,7 @@ def build_commands(args, inpath, outpath, launcher_args):
     if args.verbose:
         cmd.append("-" + ("v" * args.verbose))
     # Add launcher wrapper.
-    cmd = ["launcher", "dggpu", "-f", "-d", outpath, "--argfile", argfile_path] + launcher_args + cmd
+    cmd = ["launcher", args.cluster, "-f", "-d", outpath, "--argfile", argfile_path] + launcher_args + cmd
     cmd = as_strings(cmd)
 
     return cmd
@@ -224,6 +224,9 @@ def main(args=None):
     parser.add_argument("-o", "--output", metavar="PATH",
                         help="The folder to save all results. This folder should NOT already contain any .pkl files,"
                              " because we will assume that ALL .pkl files are the result of this job.")
+    parser.add_argument("--cluster", metavar="NAME", default="dggpu",
+                        help="The cluster to launch on. This must correspond to one of the resources in your"
+                             " Neuromanager config.")
     parser.add_argument("-f", "--force", action="store_true",
                         help="Launch a new job even if one of the intended outputs already exists and will be"
                              " overwritten.")

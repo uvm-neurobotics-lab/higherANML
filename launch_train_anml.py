@@ -17,19 +17,19 @@ from utils.slurm import call_sbatch
 SCRIPT_DIR = Path(__file__).parent.resolve()
 
 
-def build_command(args, launcher_args):
+def build_command(cluster, config_path, verbosity, launcher_args):
     # Find the script to run next to this file.
     target_script = SCRIPT_DIR / "train_anml_batch_job.py"
     assert target_script.exists(), f"Script file ({target_script}) not found."
     assert target_script.is_file(), f"Script file ({target_script}) is not a file."
 
     # train_anml_batch_job.py gets almost all its arguments from the config.
-    train_cmd = [target_script, "--config", args.config]
-    if args.verbose:
-        train_cmd.append("-" + ("v" * args.verbose))
+    train_cmd = [target_script, "--config", config_path]
+    if verbosity:
+        train_cmd.append("-" + ("v" * verbosity))
 
     # Add launcher wrapper.
-    launch_cmd = ["launcher", "dggpu"] + launcher_args + train_cmd
+    launch_cmd = ["launcher", cluster] + launcher_args + train_cmd
     launch_cmd = as_strings(launch_cmd)
 
     return launch_cmd
@@ -72,10 +72,9 @@ def main(argv=None):
             yaml.dump(config, f)
     else:
         print(f"Would write training config to file: {config_dest}")
-    args.config = config_dest.resolve()
 
     # Get the launch command.
-    command = build_command(args, launcher_args)
+    command = build_command(config["cluster"], config_dest.resolve(), args.verbose, launcher_args)
 
     # Launch the job.
     return call_sbatch(command, args.launch_verbose, args.dry_run)

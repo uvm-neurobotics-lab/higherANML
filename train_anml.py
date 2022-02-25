@@ -60,6 +60,9 @@ def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
                              " steps, the model will be saved and a full evaluation will be run (in a separate Slurm"
                              " job). The result of the evaluation will be recorded in the same W&B group. To report the"
                              " final trained model, enter any number larger than --epochs.")
+    parser.add_argument("--cluster", metavar="NAME", default="dggpu",
+                        help="The cluster on which to launch eval jobs. This must correspond to one of the resources in"
+                             " your Neuromanager config.")
     parser.add_argument("--st", "--smoke-test", dest="smoke_test", action="store_true",
                         help="Conduct a quick, full test of the training pipeline. If enabled, then a number of"
                              " arguments will be overridden to make the training run as short as possible and print in"
@@ -83,7 +86,7 @@ def prep_config(parser, args):
     overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "batch_size", "num_batches",
                          "train_cycles", "val_size", "remember_size", "remember_only", "inner_lr", "outer_lr",
                          "save_freq", "epochs", "device", "seed", "id", "project", "entity", "group", "full_test",
-                         "eval_steps"]
+                         "eval_steps", "cluster"]
     for arg in overrideable_args:
         # Only replace if value was explicitly specified by the user, or if the value doesn't already exist in config.
         if arg not in config or arg in user_supplied_args:
