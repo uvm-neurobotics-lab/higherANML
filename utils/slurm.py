@@ -8,6 +8,17 @@ import re
 import subprocess
 
 
+def from_cfg_to_cmd(to_copy, from_config, dest_args):
+    for arg in to_copy:
+        val = from_config.get(arg)
+        if val:
+            dest_args.append("--" + arg.replace("_", "-"))
+            if isinstance(val, (list, tuple)):
+                dest_args.extend(val)
+            else:
+                dest_args.append(val)
+
+
 def call_sbatch(cmd, verbose=False, dry_run=False):
     """
     Run the given command, which is assumed to be a call to `sbatch` or similar. We will expect that the console output

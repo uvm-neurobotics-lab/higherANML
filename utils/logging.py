@@ -15,6 +15,7 @@ from torch.nn.functional import cross_entropy
 
 import launch_eval_map
 from utils import as_strings
+from utils.slurm import from_cfg_to_cmd
 from utils.storage import save
 
 
@@ -144,17 +145,6 @@ def overall_accuracy(model, all_batches, print_fn):
         return np.nan
     else:
         return np.ma.average(accs, weights=weights)
-
-
-def from_cfg_to_cmd(to_copy, from_config, dest_args):
-    for arg in to_copy:
-        val = from_config.get(arg)
-        if val:
-            dest_args.append("--" + arg.replace("_", "-"))
-            if isinstance(val, (list, tuple)):
-                dest_args.extend(val)
-            else:
-                dest_args.append(val)
 
 
 class Log:

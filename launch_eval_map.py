@@ -32,7 +32,7 @@ from pathlib import Path
 
 import utils.argparsing as argutils
 from utils import as_strings
-from utils.slurm import call_sbatch
+from utils.slurm import call_sbatch, from_cfg_to_cmd
 
 
 # Get the resolved path of this script, before we switch directories.
@@ -147,15 +147,10 @@ def build_commands(args, inpath, outpath, launcher_args):
         SCRIPT_DIR / "eval_map.py",
         "--data-path", inpath,
         "--no-download",
-        "--seed", args.seed,
-        "--runs", args.runs,
     ]
+    from_cfg_to_cmd(["runs", "im_size", "seed", "device", "project", "entity", "group"], vars(args), cmd)
     if not args.only_final_performance:
         cmd.append("--record-learning-curve")
-    if args.im_size:
-        cmd.extend(["--im-size", args.im_size])
-    if args.device:
-        cmd.extend(["--device", args.device])
     if args.verbose:
         cmd.append("-" + ("v" * args.verbose))
     # Add launcher wrapper.
