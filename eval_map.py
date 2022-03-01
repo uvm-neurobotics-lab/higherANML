@@ -57,7 +57,7 @@ def repeats(num_runs, wandb_init, **kwargs):
     return results
 
 
-def save_results(results, output_path, num_classes, config):
+def save_results(results, output_path, config):
     # These params describing the evaluation should be prepended to each row in the table.
     eval_param_names = ["model", "dataset", "train_examples", "test_examples", "reinit_params", "opt_params", "classes",
                         "lr"]
@@ -68,7 +68,7 @@ def save_results(results, output_path, num_classes, config):
     for idx, train_acc, test_acc in results:
         # All params which apply to all results in this epoch.
         prefix = eval_params + idx
-        for c in range(num_classes):
+        for c in range(config["classes"]):
             # A pair of (train, test) results per class.
             full_data.append(prefix + [c, train_acc[c], test_acc[c]])
 
@@ -156,7 +156,7 @@ def main(args=None):
     )
 
     # Assemble and save the result matrix.
-    result_matrix = save_results(results, outpath, args.classes, config)
+    result_matrix = save_results(results, outpath, config)
 
     # Print summary to console.
     report_summary(result_matrix)
