@@ -17,7 +17,7 @@ remember_only: false
 inner_lr: 0.03
 outer_lr: 0.0001
 
-epochs: 30000
+epochs: 25000
 seed: 1
 
 # Model Architecture
