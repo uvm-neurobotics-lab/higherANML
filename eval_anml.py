@@ -1,6 +1,11 @@
 """
 Script for evaluation of ANML using OML-style continual learning trajectories.
 """
+# NOTE: Use the following command to test the functionality of this script:
+#   python eval_anml.py -c configs/eval-omni-anml.yml --model trained_anmls/256_112_2304_ANML-29999.pth --classes 10 --lr 0.0015
+# You should get a final accuracy somewhere around:
+#   Train 96.8% (std: 3.4%) | Test 92.6% (std: 6.2%)
+# Other learning rates will result in lower performance.
 
 import warnings
 import sys

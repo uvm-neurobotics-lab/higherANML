@@ -113,6 +113,10 @@ class ActionWrapper(argparse.Action):
         super().__init__(**dict(action._get_kwargs()))
         self.action = action
         self.user_invoked = False
+        # Copy over all the attributes from the action as well, so we present the same interface. There may be a more
+        # robust way to do this but hopefully this is good enough for all purposes.
+        for k, v in vars(self.action).items():
+            setattr(self, k, v)
 
     def __call__(self, parser, namespace, values, option_string=None):
         self.user_invoked = True

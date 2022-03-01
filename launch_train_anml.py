@@ -1,6 +1,11 @@
 """
 A script to launch train_anml_batch_job.py on Slurm.
 """
+# NOTE: Use one of the following commands to test the functionality of this script:
+#   WANDB_MODE=disabled DEBUG=y python launch_train_anml.py -c configs/train-omni-anml.yml --val-size 64 --epochs 10 --no-full-test -vv --mem=64G
+#   WANDB_MODE=disabled DEBUG=y python launch_train_anml.py -c configs/train-omni-anml.yml --st --mem=64G
+# Remove the `DEBUG=y` to actually test launching on the cluster.
+# Remove the `WANDB_MODE=disabled` to actually test reporting to W&B.
 
 import sys
 from pathlib import Path

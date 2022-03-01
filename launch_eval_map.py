@@ -2,7 +2,9 @@
 A script to launch a full sweep of eval_map.py jobs.
 
 Launches the full combination of all options provided. You can provide multiple
-possible learning rates, datasets, models, etc.
+possible learning rates, datasets, models, etc. Each parameter can be supplied
+either through the yaml config OR via the command line. Command line arguments
+override the config values.
 
 Furthermore, any settings accepted by `sbatch` OR `launcher` may be supplied on
 the command line. These will override the options provided by the launch config,
@@ -17,13 +19,15 @@ equals sign; "--name value" will NOT parse correctly. For any other options
 (including script flags) you may use either format.
 
 Note: To debug the Slurm-launching behavior of this script, you may run as:
-    > DEBUG=1 python launch_eval_map.py [...] --launch-verbose
+    > DEBUG=y python launch_eval_map.py [...] --launch-verbose
 The above will not launch any jobs. To launch jobs, but still see the full output,
-drop the `DEBUG=1` flag.
+drop the `DEBUG=y` flag.
 """
+# NOTE: Use the following command to test the functionality of this script:
+#   WANDB_MODE=disabled DEBUG=y python launch_eval_map.py -c configs/eval-sweep-inet-oml.yml --model trained_anmls/ANML-1-28-28-29999.net --mem=21G --group mygroup -f
+# You can also use the -n/--dry-run argument. Drop the `DEBUG` flag to actually test launching of cluster jobs.
 
 import argparse
-import os
 import shutil
 import sys
 import uuid

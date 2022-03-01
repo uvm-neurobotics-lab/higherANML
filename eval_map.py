@@ -1,6 +1,11 @@
 """
 The "map" portion of a map-reduce job for evaluating ANML and related models.
 """
+# NOTE: Use the following command to test the functionality of this script:
+#   WANDB_MODE=disabled python eval_map.py -c configs/eval-omni-anml.yml --model trained_anmls/anml-1-28-28-29999.net --output test.pkl --classes 10 --lr 0.0015 --record-learning-curve --group mygroup
+# You should get a final accuracy somewhere around:
+#   Train 96.8% (std: 3.4%) | Test 92.6% (std: 6.2%)
+# Other learning rates will result in lower performance.
 
 import argparse
 import sys
@@ -23,7 +28,7 @@ def check_path(path):
 
 
 def repeats(num_runs, wandb_init, **kwargs):
-    num_classes = kwargs["classes"]
+    num_classes = kwargs["config"]["classes"]
     kwargs["log_to_wandb"] = True
     nanfill = [float("nan")]
     results = []

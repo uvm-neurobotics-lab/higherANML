@@ -1,6 +1,13 @@
 """
 ANML Training Script
 """
+# NOTE: Use one of the following commands to test the functionality of this script:
+#   time python train_anml.py -c configs/train-omni-anml.yml --st
+#   time WANDB_MODE=disabled DEBUG=Y python train_anml.py -c configs/train-omni-anml.yml --val-size 64 --epochs 10 --no-full-test --eval-steps -vv --group mygroup
+#   time WANDB_MODE=disabled DEBUG=Y python train_anml.py -c configs/train-omni-anml.yml --val-size 64 --epochs 1 --no-full-test -vv --group mygroup
+#   time python train_anml.py -c configs/train-omni-anml.yml
+# Which you use depends on how much of the pipeline you actually want to test. You can further remove the `DEBUG` and
+# `WANDB_MODE` flags to actually test launching eval jobs and reporting results to W&B.
 
 import logging
 import sys
