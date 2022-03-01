@@ -25,4 +25,4 @@ model: oml
 # Optimization Configuration
 inner_params: [pn]
 outer_params: all  # special keyword for "all parameters"
-output_layer: output_layer
+output_layer: outlayer

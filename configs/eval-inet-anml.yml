@@ -1,0 +1,15 @@
+#
+# Config for continual meta-test of ANML-like models on Mini-ImageNet. Just re-learns the final layer.
+# This actually works on any model whose final layer is named as 'fc'.
+#
+
+# Dataset
+dataset: miniimagenet
+train_examples: 10
+test_examples: 200
+
+# Test Method
+reinit_params: fc
+opt_params: fc
+classes: 20
+lr: 0.002

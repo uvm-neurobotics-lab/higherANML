@@ -16,3 +16,4 @@ dependencies:
   - pip:
     - higher
     - gdown
+    - pyyaml-include

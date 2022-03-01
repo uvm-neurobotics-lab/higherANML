@@ -5,11 +5,8 @@ ANML Training Script
 import logging
 import sys
 
-import yaml
-
 import utils.argparsing as argutils
 from anml import train
-from utils import make_pretty
 
 
 def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
@@ -78,19 +75,11 @@ def prep_config(parser, args):
 
     argutils.configure_logging(args, level=logging.INFO)
 
-    with open(args.config, 'r') as f:
-        config = yaml.full_load(f)
-
-    # Command line args optionally override config.
-    user_supplied_args = parser.get_user_specified_args()
     overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "batch_size", "num_batches",
                          "train_cycles", "val_size", "remember_size", "remember_only", "inner_lr", "outer_lr",
                          "save_freq", "epochs", "device", "seed", "id", "project", "entity", "group", "full_test",
                          "eval_steps", "cluster"]
-    for arg in overrideable_args:
-        # Only replace if value was explicitly specified by the user, or if the value doesn't already exist in config.
-        if arg not in config or arg in user_supplied_args:
-            config[arg] = getattr(args, arg, None)
+    config = argutils.load_config_from_args(parser, args, overrideable_args)
 
     # Conduct a quick test.
     if args.smoke_test:
@@ -104,7 +93,6 @@ def prep_config(parser, args):
         config["full_test"] = False
         config["eval_steps"] = []
 
-    config = make_pretty(config)
     return config
 
 

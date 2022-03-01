@@ -12,6 +12,7 @@ from torch.optim import SGD, Adam
 import models
 import utils.storage as storage
 from models import LegacyANML
+from utils import ensure_config_param
 from utils.logging import forward_pass, Log
 
 
@@ -51,15 +52,7 @@ def load_model(model_path, sampler_input_shape, device=None):
     return model
 
 
-def ensure_config_param(config, key, condition=None):
-    if key not in config:
-        raise RuntimeError(f'Required key "{key}" not found in config.')
-    value = config[key]
-    if condition and not condition(value):
-        raise RuntimeError(f'Config parameter "{key}" has an invalid value: {value}')
-
-
-def check_config(config):
+def check_train_config(config):
     def gt_zero(x):
         return x > 0
 
@@ -79,16 +72,35 @@ def check_config(config):
     config.setdefault("full_test", True)
 
 
-def collect_opt_params(model, module_list):
-    # Special keyword for "all parameters".
-    if module_list == "all" or module_list[0] == "all":
-        return list(model.parameters())
+def collect_matching_named_params(model, param_list):
+    # Allow just a single name as well as a list.
+    if isinstance(param_list, str):
+        param_list = [param_list]
 
+    # Special keyword for "all parameters".
+    if "all" in param_list:
+        return list(model.named_parameters())
+
+    # Otherwise, add anything that is in param_list OR a child of something in param_list (name startswith).
     params = []
-    for name in module_list:
-        module = getattr(model, name)
-        params.extend(list(module.parameters()))
+    used_names = set()
+    for name, p in model.named_parameters():
+        for to_opt in param_list:
+            if name.startswith(to_opt):
+                params.append((name, p))
+                used_names.add(to_opt)
+
+    # Check if any of the requested names were not found in the model.
+    unused_names = set(param_list) - used_names
+    if len(unused_names) > 0:
+        raise RuntimeError("Some of the requested parameters were not found in the model.\n"
+                           f"Missing params: {unused_names}\n"
+                           f"Model structure:\n{model}")
     return params
+
+
+def collect_matching_params(model, param_list):
+    return [p for _, p in collect_matching_named_params(model, param_list)]
 
 
 def lobotomize(layer, class_num):
@@ -98,7 +110,7 @@ def lobotomize(layer, class_num):
 def train(sampler, input_shape, config, device="cuda", verbose=0):
     # Output config for reference. Do it before checking config to assist debugging.
     logging.info("\n---- Train Config ----\n" + yaml.dump(config) + "----------------------")
-    check_config(config)
+    check_train_config(config)
 
     # Create model.
     model, model_args = models.make_from_config(config, input_shape, device)
@@ -112,11 +124,11 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     log = Log(name, model_args, print_freq, verbose_freq, config["save_freq"], config["full_test"], config)
 
     # inner optimizer used during the learning phase
-    inner_params = collect_opt_params(model, config["inner_params"])
+    inner_params = collect_matching_params(model, config["inner_params"])
     inner_opt = SGD(inner_params, lr=config["inner_lr"])
     # outer optimizer used during the remembering phase; the learning is propagated through the inner loop
     # optimizations, computing second order gradients.
-    outer_params = collect_opt_params(model, config["outer_params"])
+    outer_params = collect_matching_params(model, config["outer_params"])
     outer_opt = Adam(outer_params, lr=config["outer_lr"])
 
     for it in range(config["epochs"]):
@@ -222,51 +234,49 @@ def evaluate_and_log(model, classes, should_log=False, num_seen=None):
     return acc_per_class
 
 
-def test_train(
-        model_path,
-        sampler,
-        sampler_input_shape,
-        num_classes=10,
-        num_train_examples=15,
-        num_test_examples=5,
-        lr=0.01,
-        evaluate_complete_trajectory=False,
-        device="cuda",
-        log_to_wandb=False,
-):
-    model = load_model(model_path, sampler_input_shape, device)
+def check_test_config(config):
+    def gt_zero(x):
+        return x > 0
+
+    ensure_config_param(config, "model")
+    ensure_config_param(config, "reinit_params")
+    ensure_config_param(config, "opt_params")
+    ensure_config_param(config, "classes", gt_zero)
+    ensure_config_param(config, "train_examples", gt_zero)
+    ensure_config_param(config, "test_examples", gt_zero)
+    ensure_config_param(config, "lr", gt_zero)
+    config.setdefault("record_learning_curve", False)
+
+
+def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb=False):
+    check_test_config(config)
+
+    model = load_model(config["model"], sampler_input_shape, device)
     model = model.to(device)
     model.eval()
 
-    # TODO: Hack for now, so this script can work for different models without a config file.
-    if type(model).__name__ == "ANML":
-        torch.nn.init.kaiming_normal_(model.fc.weight)
-        model.nm.requires_grad_(False)
-        model.rln.requires_grad_(False)
-    elif type(model).__name__ == "SANML":
-        torch.nn.init.kaiming_normal_(model.fc.weight)
-        model.rln.requires_grad_(False)
-    elif type(model).__name__ == "OML":
-        ONE_LAYER_ONLY = False
-        if ONE_LAYER_ONLY:
-            torch.nn.init.kaiming_normal_(model.output_layer.weight)
-            model.pn[0].requires_grad_(False)
+    # Set up which parameters we will be fine-tuning and/or learning from scratch.
+    # First, reinitialize layers that we want to learn from scratch.
+    for n, p in collect_matching_named_params(model, config["reinit_params"]):
+        # HACK: Here we will use the parameter naming to tell us how the params should be initialized. This may not be
+        # appropriate for all types of layers! We are typically only expecting fully-connected Linear layers here.
+        if n.endswith("weight"):
+            torch.nn.init.kaiming_normal_(p)
+        elif n.endswith("bias"):
+            torch.nn.init.constant_(p, 0)
         else:
-            # For now, only re-init the last layer, but finetune both layers. This seems to result in the best
-            # performance on Mini-ImageNet.
-            # torch.nn.init.kaiming_normal_(model.pn[0].weight)
-            torch.nn.init.kaiming_normal_(model.pn[-1].weight)
-        model.rln.requires_grad_(False)
-    elif type(model).__name__ == "Classifier":
-        torch.nn.init.kaiming_normal_(model.outlayer.weight)
-        model.encoder.requires_grad_(False)
-    else:
-        raise RuntimeError(f"Unrecognized model type: {type(model)} with name: {type(model).__name__}.")
+            raise RuntimeError(f"Cannot reinitialize this unknown parameter type: {n}")
 
-    train_classes, test_classes = sampler.sample_test(num_classes, num_train_examples, num_test_examples, device)
+    # Now, select which layers will recieve updates during optimization, by setting the requires_grad property.
+    for p in model.parameters():  # disable all learning by default.
+        p.requires_grad_(False)
+    for p in collect_matching_params(model, config["opt_params"]):  # re-enable just for these params.
+        p.requires_grad_(True)
+    opt = torch.optim.Adam(model.parameters(), lr=config["lr"])
 
-    opt = torch.optim.Adam(model.parameters(), lr=lr)
-
+    # Sample the learning trajectory.
+    train_classes, test_classes = sampler.sample_test(config["classes"], config["train_examples"],
+                                                      config["test_examples"], device)
     train_perf_trajectory = []
     test_perf_trajectory = []
 
@@ -286,7 +296,7 @@ def test_train(
             opt.step()
 
         # Evaluation, once per class.
-        if evaluate_complete_trajectory:
+        if config["record_learning_curve"]:
             # Evaluation on all classes.
             # NOTE: We often only care about performance on classes seen so far. We can extract this after-the-fact,
             # by slicing into the results: `acc_per_class[:idx + 1]`.
@@ -299,7 +309,7 @@ def test_train(
 
     # meta-test-TEST
     # We only need to do this if we didn't already do it in the last iteration of the loop.
-    if not evaluate_complete_trajectory:
+    if not config["record_learning_curve"]:
         train_perf_trajectory.append(evaluate_and_log(model, train_classes, log_to_wandb))
         test_perf_trajectory.append(evaluate_and_log(model, test_classes, log_to_wandb))
 

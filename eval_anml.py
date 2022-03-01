@@ -3,8 +3,10 @@ Script for evaluation of ANML using OML-style continual learning trajectories.
 """
 
 import warnings
+import sys
 
 import numpy as np
+import yaml
 from tqdm import trange
 
 import utils.argparsing as argutils
@@ -13,44 +15,33 @@ from anml import test_train
 warnings.filterwarnings("ignore")
 
 
-def repeats(runs, sampler, sampler_input_shape, path, classes, train_examples, test_examples, lr, device):
-
-    def run():
-        train_traj, test_traj = test_train(
-            path,
-            sampler=sampler,
-            sampler_input_shape=sampler_input_shape,
-            num_classes=classes,
-            num_train_examples=train_examples,
-            num_test_examples=test_examples,
-            lr=lr,
-            device=device,
-        )
-        # For now, we are just reporting the final result, so just pluck off the last set of accuracies.
-        return train_traj[-1], test_traj[-1]
-
+def repeats(sampler, sampler_input_shape, config, device):
     train_results = []
     test_results = []
-    for _ in trange(runs):
+    for _ in trange(config["runs"]):
+        train_traj, test_traj = test_train(sampler, sampler_input_shape, config, device)
+        # For now, we are just reporting the final result, so just pluck off the last set of accuracies. This is a list
+        # of accuracies per class, so taking the mean gives us overall accuracy.
         # NOTE: This averaging method assumes we have the same number of examples per each class.
-        train_acc_per_class, test_acc_per_class = run()
-        train_results.append(train_acc_per_class.mean())
-        test_results.append(test_acc_per_class.mean())
+        train_results.append(train_traj[-1].mean())
+        test_results.append(test_traj[-1].mean())
 
-    print(f"Classes: {classes} | Train Accuracy: {np.mean(train_results):.1%} (std {np.std(train_results):.1%})"
+    print(f"Classes: {config['classes']}"
+          f" | Train Accuracy: {np.mean(train_results):.1%} (std {np.std(train_results):.1%})"
           f" | Test Accuracy: {np.mean(test_results):.1%} (std {np.std(test_results):.1%})")
 
 
-if __name__ == "__main__":
+def main(args=None):
     # Evaluation setting
     parser = argutils.create_parser(__doc__)
 
+    parser.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
+                        help="Evaluation config file.")
     argutils.add_dataset_arg(parser)
-    parser.add_argument("-m", "--model", type=argutils.existing_path, required=True,
-                        help="Path to the model to evaluate.")
-    parser.add_argument("-l", "--lr", type=float, required=True,
+    parser.add_argument("-m", "--model", type=argutils.existing_path, help="Path to the model to evaluate.")
+    parser.add_argument("-l", "--lr", metavar="RATE", type=float,
                         help="Learning rate to use (check README for suggestions).")
-    parser.add_argument("-c", "--classes", type=int, required=True, help="Number of classes to test.")
+    parser.add_argument("--classes", type=int, help="Number of classes to test.")
     parser.add_argument("--train-examples", type=int, default=15, help="Number of examples per class, for training.")
     parser.add_argument("--test-examples", type=int, default=5, help="Number of examples per class, for testing.")
     parser.add_argument("-r", "--runs", type=int, default=10, help="Number of repetitions to run.")
@@ -58,20 +49,21 @@ if __name__ == "__main__":
     argutils.add_seed_arg(parser)
     argutils.add_verbose_arg(parser)
 
-    args = parser.parse_args()
+    args = parser.parse_args(args)
     argutils.configure_logging(args)
-    device = argutils.get_device(parser, args)
-    argutils.set_seed_from_args(args)
-    sampler, input_shape = argutils.get_OML_dataset_sampler(args)
+    overrideable_args = ["dataset", "data_path", "download", "im_size", "model", "classes", "train_examples",
+                         "test_examples", "lr", "record_learning_curve", "runs", "device", "seed", "project", "entity",
+                         "group"]
+    config = argutils.load_config_from_args(parser, args, overrideable_args)
+    if args.verbose:
+        print("\n---- Test Config ----\n" + yaml.dump(config) + "----------------------")
 
-    repeats(
-        runs=args.runs,
-        sampler=sampler,
-        sampler_input_shape=input_shape,
-        path=args.model,
-        classes=args.classes,
-        train_examples=args.train_examples,
-        test_examples=args.test_examples,
-        lr=args.lr,
-        device=device,
-    )
+    device = argutils.get_device(parser, config)
+    argutils.set_seed(config["seed"])
+    sampler, input_shape = argutils.get_OML_dataset_sampler(config)
+
+    repeats(sampler, input_shape, config, device)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

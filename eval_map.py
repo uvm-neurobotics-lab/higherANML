@@ -8,6 +8,7 @@ from itertools import count
 from pathlib import Path
 
 import pandas as pd
+import yaml
 from tqdm import trange
 
 import utils.argparsing as argutils
@@ -22,7 +23,7 @@ def check_path(path):
 
 
 def repeats(num_runs, wandb_init, **kwargs):
-    num_classes = kwargs["num_classes"]
+    num_classes = kwargs["classes"]
     kwargs["log_to_wandb"] = True
     nanfill = [float("nan")]
     results = []
@@ -51,10 +52,11 @@ def repeats(num_runs, wandb_init, **kwargs):
     return results
 
 
-def save_results(results, output_path, num_classes, **kwargs):
+def save_results(results, output_path, num_classes, config):
     # These params describing the evaluation should be prepended to each row in the table.
-    eval_param_names = sorted(list(kwargs.keys()))
-    eval_params = [kwargs[k] for k in eval_param_names]
+    eval_param_names = ["model", "dataset", "train_examples", "test_examples", "reinit_params", "opt_params", "classes",
+                        "lr"]
+    eval_params = [config[k] for k in eval_param_names]
 
     # Unflatten the data into one row per class, per epoch.
     full_data = []
@@ -95,12 +97,13 @@ def report_summary(result_matrix):
 def main(args=None):
     parser = argutils.create_parser(__doc__)
 
+    parser.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
+                        help="Evaluation config file.")
     argutils.add_dataset_arg(parser)
-    parser.add_argument("-m", "--model", metavar="PATH", type=check_path, required=True,
-                        help="Path to the model to evaluate.")
-    parser.add_argument("-l", "--lr", metavar="RATE", type=float, required=True,
+    parser.add_argument("-m", "--model", metavar="PATH", type=check_path, help="Path to the model to evaluate.")
+    parser.add_argument("-l", "--lr", metavar="RATE", type=float,
                         help="Learning rate to use (check README for suggestions).")
-    parser.add_argument("-c", "--classes", metavar="INT", type=int, required=True, help="Number of classes to test.")
+    parser.add_argument("--classes", metavar="INT", type=int, help="Number of classes to test.")
     parser.add_argument("--train-examples", metavar="INT", type=int, default=15,
                         help="Number of examples per class, for training.")
     parser.add_argument("--test-examples", metavar="INT", type=int, default=5,
@@ -109,7 +112,7 @@ def main(args=None):
                         help="Whether to record train/test performance throughout the whole training procedure, as"
                              " opposed to just recording final performance. This is very expensive.")
     parser.add_argument("-r", "--runs", metavar="INT", type=int, default=10, help="Number of repetitions to run.")
-    parser.add_argument("-o", "--output", metavar="PATH", required=True, help="The location to save to.")
+    parser.add_argument("-o", "--output", metavar="PATH", help="The location to save to.")
     argutils.add_device_arg(parser)
     argutils.add_seed_arg(parser)
     argutils.add_wandb_args(parser)
@@ -117,47 +120,38 @@ def main(args=None):
 
     args = parser.parse_args(args)
     argutils.configure_logging(args)
-    device = argutils.get_device(parser, args)
-    argutils.set_seed_from_args(args)
-    sampler, input_shape = argutils.get_OML_dataset_sampler(args)
+    overrideable_args = ["dataset", "data_path", "download", "im_size", "model", "classes", "train_examples",
+                         "test_examples", "lr", "record_learning_curve", "runs", "output", "device", "seed", "project",
+                         "entity", "group"]
+    config = argutils.load_config_from_args(parser, args, overrideable_args)
+    print("\n---- Test Config ----\n" + yaml.dump(config) + "----------------------")
+
+    device = argutils.get_device(parser, config)
+    argutils.set_seed(config["seed"])
+    sampler, input_shape = argutils.get_OML_dataset_sampler(config)
 
     # Ensure the destination can be written.
-    outpath = Path(args.output).resolve()
+    outpath = Path(config["output"]).resolve()
     if outpath.exists():
         print(f"WARNING: Will overwrite existing file: {outpath}", file=sys.stderr)
     else:
         outpath.parent.mkdir(parents=True, exist_ok=True)
 
     def wandb_init(job_type):
-        return argutils.prepare_wandb(args, job_type=job_type, create_folder=False, allow_reinit=True)
+        return argutils.prepare_wandb(config, job_type=job_type, create_folder=False, allow_reinit=True)
 
     # The name of these keyword arguments needs to match the ones in `test_train()`, as we will pass them on.
     results = repeats(
-        num_runs=args.runs,
+        num_runs=config["runs"],
         wandb_init=wandb_init,
-        model_path=args.model,
         sampler=sampler,
         sampler_input_shape=input_shape,
-        num_classes=args.classes,
-        num_train_examples=args.train_examples,
-        num_test_examples=args.test_examples,
-        lr=args.lr,
-        evaluate_complete_trajectory=args.record_learning_curve,
+        config=config,
         device=device,
     )
 
     # Assemble and save the result matrix.
-    model_abspath = str(Path(args.model).resolve())
-    result_matrix = save_results(
-        results,
-        outpath,
-        args.classes,
-        model=model_abspath,
-        dataset=args.dataset,
-        num_train_examples=args.train_examples,
-        num_test_examples=args.test_examples,
-        lr=args.lr,
-    )
+    result_matrix = save_results(results, outpath, args.classes, config)
 
     # Print summary to console.
     report_summary(result_matrix)

@@ -54,7 +54,7 @@ class OML(nn.Module):
             _linear_layer(1024, num_classes),
         )
         # Given a special name so we can identify this layer separately.
-        self.output_layer = self.pn[-1]
+        self.outlayer = self.pn[-1]
 
         # Don't use PyTorch default initialization.
         # https://adityassrana.github.io/blog/theory/2020/08/26/Weight-Init.html#Solution

@@ -11,6 +11,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from utils import load_yaml, make_pretty
+
 
 def resolved_path(str_path):
     """
@@ -130,6 +132,20 @@ class ArgParser(argparse.ArgumentParser):
         action = ActionWrapper(action)
         return super()._add_action(action)
 
+    def add_argument_group(self, *args, **kwargs):
+        # HACK: We are monkey-patching the group here so we can inject our action wrappers.
+        group = super().add_argument_group(*args, **kwargs)
+        group._add_action_orig = group._add_action
+        group._add_action = lambda action: group._add_action_orig(ActionWrapper(action))
+        return group
+
+    def add_mutually_exclusive_group(self, **kwargs):
+        # HACK: We are monkey-patching the group here so we can inject our action wrappers.
+        group = super().add_mutually_exclusive_group(**kwargs)
+        group._add_action_orig = group._add_action
+        group._add_action = lambda action: group._add_action_orig(ActionWrapper(action))
+        return group
+
     def get_user_specified_args(self):
         return [a.dest for a in self._actions if a.user_invoked]
 
@@ -150,6 +166,34 @@ def create_parser(desc, allow_abbrev=True):
         ArgumentParser: A new parser.
     """
     return ArgParser(description=desc, formatter_class=HelpFormatter, allow_abbrev=allow_abbrev)
+
+
+def load_config_from_args(parser, parsed_args, overrideable_args):
+    """
+    Load a config from the `--config` argument, and then overwrite config values with any values that the user supplied
+    on the command line. The list of keys that should be taken from the command line is given by `overrideable_args`. If
+    the key isn't already present in the config, it will be taken from the args. Otherwise, it will only be taken from
+    the args **if the user chose a non-default value**.
+
+    Args:
+        parser (ArgParser): This must be the local ArgParser type; not just any argparse.ArgumentParser.
+        parsed_args (argparse.Namespace): The arguments from the command line.
+        overrideable_args (list[str]): A list of keys that can be optionally overwritten with command-line values.
+
+    Returns:
+        dict: The parsed config object.
+    """
+    config = load_yaml(parsed_args.config)
+
+    # Command line args optionally override config.
+    user_supplied_args = parser.get_user_specified_args()
+    for arg in overrideable_args:
+        # Only replace if value was explicitly specified by the user, or if the value doesn't already exist in config.
+        if arg not in config or arg in user_supplied_args:
+            config[arg] = getattr(parsed_args, arg, None)
+
+    config = make_pretty(config)
+    return config
 
 
 def add_verbose_arg(parser):

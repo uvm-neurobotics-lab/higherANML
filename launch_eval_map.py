@@ -30,58 +30,65 @@ import uuid
 from itertools import product
 from pathlib import Path
 
+import yaml
+
 import utils.argparsing as argutils
-from utils import as_strings
-from utils.slurm import call_sbatch, from_cfg_to_cmd
+from utils import as_strings, ensure_config_param
+from utils.slurm import call_sbatch
 
 
 # Get the resolved path of this script, before we switch directories.
 SCRIPT_DIR = Path(__file__).parent.resolve()
 
 
-def place_eval_notebook(outpath, args):
-    # Find the notebook relative to this script.
-    nbfile = SCRIPT_DIR / "notebooks" / "anml-meta-test-eval.ipynb"
-    assert nbfile.exists(), f"Script file ({nbfile}) not found."
-    assert nbfile.is_file(), f"Script file ({nbfile}) is not a file."
-    dest = outpath / nbfile.name
-    if dest.exists() and not args.force:
-        raise RuntimeError(f"Destination notebook already exists: {dest}. Use -f/--force to overwrite.")
-    elif not args.dry_run:
-        shutil.copy(nbfile, outpath)
-    else:
-        print(f"Would place eval notebook into the output folder: {nbfile.name}")
+def prep_config(parser, args):
+    overrideable_args = ["dataset", "data_path", "im_size", "model", "classes", "train_examples", "test_examples", "lr",
+                         "record_learning_curve", "runs", "device", "seed", "project", "entity", "group"]
+    config = argutils.load_config_from_args(parser, args, overrideable_args)
+    ensure_config_param(config, "dataset")
+    ensure_config_param(config, "model")
+    ensure_config_param(config, "classes")
+    ensure_config_param(config, "train_examples")
+    ensure_config_param(config, "test_examples")
+    ensure_config_param(config, "lr")
+    ensure_config_param(config, "runs")
+    ensure_config_param(config, "reinit_params")
+    ensure_config_param(config, "opt_params")
+    return config
 
 
-def get_input_output_dirs(args, parser):
+def get_input_output_dirs(config, output, dry_run):
     # Output Directory
-    if args.output:
-        outpath = Path(args.output).resolve()
-    elif len(args.model) == 1:
-        # Assuming the model is inside a "trained_anmls/" folder, this places an "eval/" folder right next to
-        # "trained_anmls/". Assuming the model name is "NAME-<some-details>-EPOCH.net", this names the folder as
-        # "eval-NAME-EPOCH/".
-        model_file = args.model[0]
-        model_spec = model_file.stem.split("-")
-        outpath = model_file.parent.parent / f"eval-{model_spec[0]}-{model_spec[-1]}"
+    if output:
+        outpath = Path(output).resolve()
     else:
-        parser.error("You must supply an output destination (-o/--output) when evaluating more than one model.")
-        sys.exit(os.EX_USAGE)  # unreachable, but avoids a warning about outpath being potentially undefined.
+        single_model = None
+        if not isinstance(config["model"], (list, tuple)):
+            single_model = config["model"]
+        elif len(config["model"]) == 1:
+            single_model = config["model"][0]
+
+        if single_model:
+            # Assuming the model is inside a "trained_anmls/" folder, this places an "eval/" folder right next to
+            # "trained_anmls/". Assuming the model name is "NAME-<some-details>-EPOCH.net", this names the folder as
+            # "eval-NAME-EPOCH/".
+            model_file = Path(single_model).resolve()
+            model_spec = model_file.stem.split("-")
+            outpath = model_file.parent.parent / f"eval-{model_spec[0]}-{model_spec[-1]}"
+        else:
+            raise RuntimeError("You must supply an output destination (-o/--output) when evaluating more than one model.")
 
     # Ensure the destination can be written.
     if outpath.is_file():
-        parser.error(f"Output already exists as a file, not a directory: {outpath}")
-    elif args.dry_run:
+        raise RuntimeError(f"Output already exists as a file, not a directory: {outpath}")
+    elif dry_run:
         print(f"Output directory that would be created: {outpath}")
     else:
         outpath.mkdir(parents=True, exist_ok=True)
 
-    # Copy eval notebook into the destination.
-    place_eval_notebook(outpath, args)
-
     # Input Directory
-    if args.data_path:
-        inpath = args.data_path
+    if config.get("data_path"):
+        inpath = config["data_path"]
     else:
         # By default, expect data to be in this repository, at `experiments/data/`.
         inpath = SCRIPT_DIR / "experiments" / "data"
@@ -89,11 +96,38 @@ def get_input_output_dirs(args, parser):
     return inpath, outpath
 
 
-def build_command_args(args, outpath):
-    # Build up the full product of all possible input choices.
-    repeated_args = (args.model, args.dataset, args.classes, args.train_examples, args.test_examples, args.lr)
-    repeated_args = [frozenset(v) for v in repeated_args]  # ensure no duplicates
-    combos = product(*repeated_args)
+def build_command_args(config, outpath, force):
+    # Figure out which config arguments have multiple choices. Extract them from the config.
+    fixed_values = []
+    variable_args = []
+    variable_values = []
+    for k in ("model", "dataset", "classes", "train_examples", "test_examples", "lr"):
+        v = config[k]
+        if isinstance(v, (list, tuple)):
+            # Ensure no duplicates.
+            v = set(v)
+            if len(v) == 0:
+                # Just remove the empty list from the config, it shouldn't be there.
+                del config[k]
+            elif len(v) == 1:
+                # Just unwrap the single item and place in the config as-is.
+                v = v.pop()
+                fixed_values.append(v)
+                config[k] = v
+            else:
+                # Remove the item from the config, and use it in the command lines instead.
+                variable_args.append(k)
+                variable_values.append(v)
+                del config[k]
+        else:
+            fixed_values.append(v)
+
+    # We want to use all args to name the output files. So prepend the fixed arguments onto the variable ones.
+    variable_values = [{v} for v in fixed_values] + variable_values
+
+    # Build up the full product of all possible input choices. Even if all values are fixed, this will result in at
+    # least one unique combination of arguments.
+    combos = product(*variable_values)
 
     # Convert each unique combo into a set of command line args.
     arglines = []
@@ -104,60 +138,121 @@ def build_command_args(args, outpath):
         outfile = outpath / unique_filename
         if outfile.exists():
             existing_output_files.append(outfile)
-        arglines.append([
-            "--model", c[0],
-            "--dataset", c[1],
-            "--classes", c[2],
-            "--train-examples", c[3],
-            "--test-examples", c[4],
-            "--lr", c[5],
-            "--output", outfile,
-        ])
+        # The first `len(fixed_values)` args are the fixed args, which are already specified by the config, so don't
+        # put them on the command line.
+        line = ["--output", outfile]
+        for k, v in zip(variable_args, c[len(fixed_values):]):
+            line.append("--" + k.replace("_", "-"))
+            line.append(v)
+        arglines.append(as_strings(line))
 
     # Handle already-existing files.
-    if existing_output_files and not args.force:
+    if existing_output_files and not force:
         msg = "Refusing to launch because the following files already exist:\n"
         for f in existing_output_files:
             msg += str(f) + "\n"
         msg += "Use -f/--force to proceed anyway and overwrite the files."
         raise RuntimeError(msg)
 
-    # Convert each line to a string before returning.
-    return [" ".join(as_strings(a)) for a in arglines]
+    return arglines
 
 
-def build_commands(args, inpath, outpath, launcher_args):
-    # Get one line of arguments for each unique command.
-    arglines = build_command_args(args, outpath)
+def write_config(config, outpath, fid, dry_run):
+    config_path = outpath / ("eval-config-" + fid + ".yml")
+    if not dry_run:
+        with open(config_path, "w") as f:
+            yaml.dump(config, f)
+    else:
+        print(f"Config file that would be created: {config_path}")
+        print("-" * 36 + " Config " + "-" * 36)
+        print(yaml.dump(config))
+        print("-" * 80)
+    return config_path
 
-    # Write the argfile. It should be stored permanently in the destination directory so the running job can refer to
-    # it. Use a UUID to avoid name collisions with jobs outputting to the same folder.
-    argfile_path = outpath / ("args-" + uuid.uuid4().hex + ".txt")
-    if not args.dry_run:
+
+def write_argfile(arglines, outpath, fid, dry_run):
+    arglines = [" ".join(a) for a in arglines]
+    argfile_path = outpath / ("args-" + fid + ".txt")
+    if not dry_run:
         with argfile_path.open("w") as argfile:
             for line in arglines:
                 argfile.write(line + "\n")
     else:
         print(f"Argfile that would be created: {argfile_path}")
+        print("-" * 36 + " Argfile " + "-" * 35)
         for line in arglines:
             print("    " + line)
+        print("-" * 80)
+    return argfile_path
+
+
+def place_eval_notebook(outpath, force, dry_run):
+    # Find the notebook relative to this script.
+    nbfile = SCRIPT_DIR / "notebooks" / "anml-meta-test-eval.ipynb"
+    assert nbfile.exists(), f"Script file ({nbfile}) not found."
+    assert nbfile.is_file(), f"Script file ({nbfile}) is not a file."
+    dest = outpath / nbfile.name
+    if dest.exists() and not force:
+        raise RuntimeError(f"Destination notebook already exists: {dest}. Use -f/--force to overwrite.")
+    elif not dry_run:
+        shutil.copy(nbfile, outpath)
+    else:
+        print(f"Would place eval notebook into the output folder: {nbfile.name}")
+
+
+def build_commands(config, inpath, outpath, cluster, verbose, force, dry_run, launcher_args):
+    # Get one line of arguments for each unique command.
+    # NOTE: This needs to be done before the config is written to disk.
+    arglines = build_command_args(config, outpath, force)
+
+    # For files we write to the destination folder, use a UUID to avoid name collisions with other jobs outputting to
+    # the same folder.
+    fid = uuid.uuid4().hex
+
+    # Write the config into the destination.
+    config_path = write_config(config, outpath, fid, dry_run)
+
+    # Copy eval notebook into the destination.
+    place_eval_notebook(outpath, force, dry_run)
 
     # Build the command.
-    cmd = [
+    job_cmd = [
         SCRIPT_DIR / "eval_map.py",
+        "--config", config_path,
         "--data-path", inpath,
         "--no-download",
     ]
-    from_cfg_to_cmd(["runs", "im_size", "seed", "device", "project", "entity", "group"], vars(args), cmd)
-    if not args.only_final_performance:
-        cmd.append("--record-learning-curve")
-    if args.verbose:
-        cmd.append("-" + ("v" * args.verbose))
+    if verbose:
+        job_cmd.append("-" + ("v" * verbose))
+
     # Add launcher wrapper.
-    cmd = ["launcher", args.cluster, "-f", "-d", outpath, "--argfile", argfile_path] + launcher_args + cmd
+    cmd = ["launcher", cluster, "-f", "-d", outpath]
+    if len(arglines) == 1:
+        # There's only one arg combination, so we can just append it directly to the job command.
+        job_cmd += arglines[0]
+    else:
+        # There are multiple jobs to be launched, so they need to be written into an argfile.
+        argfile_path = write_argfile(arglines, outpath, fid, dry_run)
+        cmd += ["--argfile", argfile_path]
+    if launcher_args:
+        cmd += launcher_args
+    cmd += job_cmd
     cmd = as_strings(cmd)
 
     return cmd
+
+
+def launch(config, output=None, cluster="dggpu", verbose=0, force=False, dry_run=False, launch_verbose=False,
+           launcher_args=None):
+
+    # Get destination path.
+    inpath, outpath = get_input_output_dirs(config, output, dry_run)
+
+    # Get command and corresponding list of arguments.
+    command = build_commands(config, inpath, outpath, cluster, verbose, force, dry_run, launcher_args)
+
+    # Launch the jobs.
+    return call_sbatch(command, launch_verbose, dry_run)
 
 
 def check_path(path):
@@ -180,10 +275,9 @@ def main(args=None):
                                              "possible combinations of the arguments will be launched.")
     repeat_group.add_argument("--dataset", nargs="+", choices=["omni", "miniimagenet"], type=str.lower,
                               default=["omni"], help="The dataset to use.")
-    repeat_group.add_argument("-m", "--model", metavar="PATH", nargs="+", type=check_path, required=True,
+    repeat_group.add_argument("-m", "--model", metavar="PATH", nargs="+", type=check_path,
                               help="Path to the model to evaluate.")
-    repeat_group.add_argument("-c", "--classes", metavar="INT", nargs="+", type=int, required=True,
-                              help="Number of classes to test.")
+    repeat_group.add_argument("--classes", metavar="INT", nargs="+", type=int, help="Number of classes to test.")
     repeat_group.add_argument("--train-examples", metavar="INT", nargs="+", type=int, default=[15],
                               help="Number of examples per class, for training.")
     repeat_group.add_argument("--test-examples", metavar="INT", nargs="+", type=int, default=[5],
@@ -194,6 +288,8 @@ def main(args=None):
     # Non-Repeating Arguments
     non_repeat_group = parser.add_argument_group("Non-Repeating Evaluation Arguments",
                                                  "Arguments that will be the same across all eval_map.py jobs.")
+    non_repeat_group.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
+                                  help="Evaluation config file.")
     non_repeat_group.add_argument("--data-path", "--data-dir", metavar="PATH", type=check_path,
                                   help="The root path in which to look for the dataset(s). Default location will be"
                                        " relative to the output directory: <output>/../../data. IMPORTANT: The datasets"
@@ -201,7 +297,7 @@ def main(args=None):
                                        " launching.")
     non_repeat_group.add_argument("--im-size", metavar="PX", type=int, default=None,
                                   help="Resize all input images to the given size (in pixels).")
-    non_repeat_group.add_argument("--only-final-performance", action="store_true",
+    non_repeat_group.add_argument("--only-final-performance", action="store_false", dest="record_learning_curve",
                                   help="Do not record train/test performance throughout the whole training procedure;"
                                        " only record final performance. This saves a lot of time and space, but"
                                        " obviously also limits the analysis that can be done.")
@@ -234,14 +330,12 @@ def main(args=None):
     # Parse
     args, launcher_args = parser.parse_known_args(args)
 
-    # Get destination path.
-    inpath, outpath = get_input_output_dirs(args, parser)
+    # Create the full config using all the command line arguments.
+    config = prep_config(parser, args)
 
-    # Get command and corresponding list of arguments.
-    command = build_commands(args, inpath, outpath, launcher_args)
-
-    # Launch the jobs.
-    return call_sbatch(command, args.launch_verbose, args.dry_run)
+    # Run the bulk of the program.
+    return launch(config, args.output, args.cluster, args.verbose, args.force, args.dry_run, args.launch_verbose,
+                  launcher_args)
 
 
 if __name__ == "__main__":

@@ -14,8 +14,7 @@ import wandb
 from torch.nn.functional import cross_entropy
 
 import launch_eval_map
-from utils import as_strings
-from utils.slurm import from_cfg_to_cmd
+from utils import as_strings, update_with_keys
 from utils.storage import save
 
 
@@ -268,13 +267,15 @@ class Log:
 
         # Launch full evaluation of the model as a separate job.
         if should_eval:
-            args = ["--mem=64G", "--model", model_path]
-            from_cfg_to_cmd(["cluster", "project", "entity", "group", "dataset"], self.config, args)
-            from_cfg_to_cmd(["classes", "train_examples", "test_examples", "lr"], self.eval_config, args)
-            retcode = launch_eval_map.main(as_strings(args))
+            eval_config = self.eval_config.copy()
+            eval_config["model"] = str(model_path.resolve())
+            update_with_keys(self.config, eval_config, ["project", "entity", "group"])
+            retcode = launch_eval_map.launch(eval_config, cluster=self.config["cluster"], launcher_args=["--mem=64G"])
             if retcode != 0:
                 self.warning(f"Eval job may not have launched. Launcher exited with code {retcode}. See above for"
                              " possible errors.")
 
     def close(self, it, model, sampler, device):
-        self.save_and_eval(it, model, sampler, device, True)
+        # Eval if there is is at least one desired eval at or beyond this point in training.
+        should_eval = any([s >= it for s in self.eval_steps])
+        self.save_and_eval(it, model, sampler, device, should_eval)

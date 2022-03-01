@@ -29,6 +29,35 @@ def divide_chunks(l, n):
         yield l[i: i + n]
 
 
+def update_with_keys(src, dest, keys):
+    """ Works like dict.update, but only copies the values from the given keys. """
+    for k in keys:
+        if k in src:
+            dest[k] = src[k]
+
+
+def load_yaml(yfile):
+    """
+    Read a YAML file. This is different from the default YAML loader because it can load YAML files that contain
+    !include tags, which can recursively include other YAML files.
+
+    Args:
+        yfile (path-like): The path to the YAML file.
+
+    Returns:
+        dict: The loaded YAML object.
+    """
+    # Import locally so folks aren't mandated to depend on yaml unless they're using this function.
+    import yaml
+    from yamlinclude import YamlIncludeConstructor
+
+    yfile = Path(yfile)
+    YamlIncludeConstructor.add_to_loader_class(loader_class=yaml.FullLoader, base_dir=yfile.parent)
+
+    with open(yfile, 'r') as f:
+        return yaml.load(f, Loader=yaml.FullLoader)
+
+
 def make_pretty(config):
     """
     Clean up the given YAML config object to make it nicer for printing and writing to file.
@@ -191,3 +220,11 @@ def compute_logits(feat, proto, metric="dot", temp=1.0):
                        proto.unsqueeze(1)).pow(2).sum(dim=-1)
 
     return logits * temp
+
+
+def ensure_config_param(config, key, condition=None):
+    if key not in config:
+        raise RuntimeError(f'Required key "{key}" not found in config.')
+    value = config[key]
+    if condition and not condition(value):
+        raise RuntimeError(f'Config parameter "{key}" has an invalid value: {value}')

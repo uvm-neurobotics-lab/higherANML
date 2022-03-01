@@ -1,0 +1,30 @@
+#
+# Config for continual meta-test of Classifier-Basline models on Omniglot. Fine-tunes just the classifier.
+#
+
+# Dataset
+dataset: omni
+train_examples: 15
+test_examples: 5
+
+# Test Method
+reinit_params: outlayer
+opt_params: classifier
+classes: 600
+lr:
+  - 0.1
+  - 0.05
+  - 0.01
+  - 0.005
+  - 0.001
+  - 0.0009
+  - 0.0008
+  - 0.0007
+  - 0.0006
+  - 0.0005
+  - 0.0004
+  - 0.0003
+  - 0.0002
+  - 0.0001
+  - 0.00005
+  - 0.00001

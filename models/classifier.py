@@ -14,10 +14,13 @@ from models.registry import make, register
 @register("classifier")
 class Classifier(nn.Module):
     
-    def __init__(self, encoder, encoder_args,
-                 classifier, classifier_args):
+    def __init__(self, encoder, classifier, encoder_args=None, classifier_args=None):
         super().__init__()
+        if encoder_args is None:
+            encoder_args = {}
         self.encoder, _ = make(encoder, **encoder_args)
+        if classifier_args is None:
+            classifier_args = {}
         classifier_args["in_dim"] = self.encoder.out_dim
         self.classifier, _ = make(classifier, **classifier_args)
         self.outlayer = self.classifier.outlayer

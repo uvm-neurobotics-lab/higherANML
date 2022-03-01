@@ -5,10 +5,9 @@ ANML Training Batch Job
 import logging
 import sys
 
-import yaml
-
 import utils.argparsing as argutils
 from train_anml import setup_and_train
+from utils import load_yaml
 
 
 def main(argv=None):
@@ -18,12 +17,8 @@ def main(argv=None):
     argutils.add_verbose_arg(parser)
 
     args = parser.parse_args(argv)
-
     argutils.configure_logging(args, level=logging.INFO)
-
-    with open(args.config, 'r') as f:
-        config = yaml.full_load(f)
-
+    config = load_yaml(args.config)
     setup_and_train(parser, config, args.verbose)
 
 
