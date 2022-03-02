@@ -19,17 +19,17 @@ def conv_block(in_channels, out_channels):
 @register("convnet4")
 class ConvNet4(nn.Module):
 
-    def __init__(self, x_dim=3, hid_dim=64, z_dim=64):
+    def __init__(self, input_shape=None, x_dim=3, hid_dim=64, z_dim=64):
         super().__init__()
+        # Input shape overrides x_dim if present.
+        if input_shape:
+            x_dim = input_shape[0]
         self.encoder = nn.Sequential(
             conv_block(x_dim, hid_dim),
             conv_block(hid_dim, hid_dim),
             conv_block(hid_dim, hid_dim),
             conv_block(hid_dim, z_dim),
         )
-        # TODO: Add proper initialization.
-        # TODO: Make out_dim auto-detecting (based on input shape)?
-        self.out_dim = 1600
 
     def forward(self, x):
         x = self.encoder(x)

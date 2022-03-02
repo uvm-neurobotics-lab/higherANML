@@ -8,7 +8,7 @@ https://github.com/khurramjaved96/mrcl/blob/1714cb56aa5b6001e3fd43f90d4c41df1b58
 import torch.nn as nn
 
 from models.registry import register
-from utils import calculate_output_size
+from utils import calculate_output_size_for_fc_layer
 
 
 def _conv_block(in_channels, out_channels, stride=(1, 1)):
@@ -56,7 +56,7 @@ class OML(nn.Module):
         self.rln = RLN(input_shape, planes)
 
         # To create the correct size of linear layer, we need to first know the size of the conv output.
-        feature_size = calculate_output_size(self.rln, input_shape)
+        feature_size = calculate_output_size_for_fc_layer(self.rln, input_shape)
         self.pn = nn.Sequential(
             nn.Linear(feature_size, fc_layer_size),
             nn.ReLU(),

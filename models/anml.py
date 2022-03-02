@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 
 from models.registry import register
-from utils import calculate_output_size
+from utils import calculate_output_size_for_fc_layer
 
 
 def _conv_block(in_channels, out_channels, pooling=True):
@@ -82,7 +82,7 @@ class NM(nn.Module):
         super(NM, self).__init__()
         self.encoder = _construct_uniform_convnet(input_shape[0], hidden_channels, num_conv_blocks, pool_at_end)
         # To create the correct size of linear layer, we need to first know the size of the conv output.
-        feature_size = calculate_output_size(self.forward_conv, input_shape)
+        feature_size = calculate_output_size_for_fc_layer(self.forward_conv, input_shape)
         self.fc = nn.Linear(feature_size, mask_size)
         self.sigmoid = nn.Sigmoid()
 
@@ -109,7 +109,7 @@ class ANML(nn.Module):
         super(ANML, self).__init__()
         self.input_shape = input_shape
         self.rln = RLN(input_shape[0], rln_chs, num_conv_blocks, pool_rln_output)
-        feature_size = calculate_output_size(self.rln, input_shape)
+        feature_size = calculate_output_size_for_fc_layer(self.rln, input_shape)
         self.nm = NM(input_shape, nm_chs, feature_size, num_conv_blocks)
         self.fc = nn.Linear(feature_size, num_classes)
         init_model_weights(self)
@@ -133,7 +133,7 @@ class SANML(nn.Module):
         super(SANML, self).__init__()
         self.input_shape = input_shape
         self.rln = RLN(input_shape[0], rln_chs, num_conv_blocks, pool_rln_output)
-        feature_size = calculate_output_size(self.rln, input_shape)
+        feature_size = calculate_output_size_for_fc_layer(self.rln, input_shape)
         self.fc = nn.Linear(feature_size, num_classes)
         init_model_weights(self)
 
@@ -151,7 +151,7 @@ class NONML(nn.Module):
         super(NONML, self).__init__()
         self.input_shape = input_shape
         self.rln = RLN(input_shape[0], rln_chs, num_conv_blocks, pool_rln_output)
-        feature_size = calculate_output_size(self.rln, input_shape)
+        feature_size = calculate_output_size_for_fc_layer(self.rln, input_shape)
         self.nm = NM(input_shape, nm_chs, feature_size, num_conv_blocks)
         self.fc = nn.Linear(feature_size, num_classes)
         init_model_weights(self)

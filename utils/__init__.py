@@ -97,7 +97,27 @@ def ensure_config_param(config, key, condition=None):
         raise RuntimeError(f'Config parameter "{key}" has an invalid value: {value}')
 
 
-def calculate_output_size(module, input_shape, max_size=int(1e4)):
+def calculate_output_shape(module, input_shape):
+    """
+    Determines the output shape of the given module when fed with batches of the given input shape. This is useful when
+    chaining modules together in a way that can adapt to different input shapes.
+
+    Args:
+        module: The feature extractor module.
+        input_shape: The shape of inputs that will be fed to this extractor.
+
+    Returns:
+        tuple or torch.Size: The resulting output shape.
+    """
+    # Import torch locally so people can still use other util functions without having torch installed.
+    import torch
+
+    # Simulate a batch by adding an extra dim at the beginning.
+    batch_shape = (2,) + tuple(input_shape)
+    return module(torch.zeros(batch_shape)).shape
+
+
+def calculate_output_size_for_fc_layer(module, input_shape, max_size=int(1e4)):
     """
     Determines the output size of the given module when fed with batches of the given input shape. This is useful when
     you have an arbitrary feature extractor and you want to know the size of the resulting feature vector (how many
@@ -115,12 +135,7 @@ def calculate_output_size(module, input_shape, max_size=int(1e4)):
     Returns:
         int: The number of dimensions in the resulting feature representation.
     """
-    # Import torch locally so people can still use other util functions without having torch installed.
-    import torch
-
-    # Simulate a batch by adding an extra dim at the beginning.
-    batch_shape = (2,) + tuple(input_shape)
-    output_shape = module(torch.zeros(batch_shape)).shape
+    output_shape = calculate_output_shape(module, input_shape)
     if len(output_shape) != 2:
         raise RuntimeError(f"Module output should only be two dims, but got shape = {output_shape}.")
     feature_size = output_shape[-1]

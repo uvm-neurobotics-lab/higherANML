@@ -21,8 +21,8 @@ class Classifier(nn.Module):
         self.encoder, _ = make(encoder, input_shape, **encoder_args)
         if classifier_args is None:
             classifier_args = {}
-        classifier_args["in_dim"] = self.encoder.out_dim
-        self.classifier, _ = make(classifier, input_shape, **classifier_args)
+        output_shape = utils.calculate_output_shape(self.encoder, input_shape)
+        self.classifier, _ = make(classifier, output_shape, **classifier_args)
 
     def forward(self, x):
         x = self.encoder(x)
@@ -33,9 +33,11 @@ class Classifier(nn.Module):
 @register("linear-classifier")
 class LinearClassifier(nn.Module):
 
-    def __init__(self, in_dim, num_classes):
+    def __init__(self, input_shape, num_classes):
         super().__init__()
-        self.linear = nn.Linear(in_dim, num_classes)
+        if len(input_shape) != 1:
+            raise RuntimeError(f"Cannot stack {type(self).__name__} on top of output of shape: {input_shape}.")
+        self.linear = nn.Linear(input_shape[0], num_classes)
 
     def forward(self, x):
         return self.linear(x)
@@ -44,9 +46,12 @@ class LinearClassifier(nn.Module):
 @register("mlp-classifier")
 class MLPClassifier(nn.Module):
 
-    def __init__(self, in_dim, num_classes, hidden_layers=None):
+    def __init__(self, input_shape, num_classes, hidden_layers=None):
         super().__init__()
-        layers = [in_dim] + (hidden_layers if hidden_layers else []) + [num_classes]
+        if len(input_shape) != 1:
+            raise RuntimeError(f"Cannot stack {type(self).__name__} on top of output of shape: {input_shape}.")
+
+        layers = [input_shape[0]] + (hidden_layers if hidden_layers else []) + [num_classes]
         ops = []
         for inn, out in zip(layers, layers[1:]):
             ops.append(nn.Linear(inn, out))
@@ -65,9 +70,12 @@ class MLPClassifier(nn.Module):
 @register("metric-classifier")
 class MetricClassifier(nn.Module):
 
-    def __init__(self, in_dim, num_classes, metric="cos", temp=None):
+    def __init__(self, input_shape, num_classes, metric="cos", temp=None):
         super().__init__()
-        self.proto = nn.Parameter(torch.empty(num_classes, in_dim))
+        if len(input_shape) != 1:
+            raise RuntimeError(f"Cannot stack {type(self).__name__} on top of output of shape: {input_shape}.")
+
+        self.proto = nn.Parameter(torch.empty(num_classes, input_shape[0]))
         nn.init.kaiming_uniform_(self.proto, a=math.sqrt(5))
         if temp is None:
             if metric == "cos":
