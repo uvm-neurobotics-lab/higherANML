@@ -22,12 +22,12 @@ seed: 1
 # Model Architecture
 model: classifier
 model_args:
-    encoder: resnet12
-    encoder_args: {}
-    classifier: linear-classifier
-    classifier_args: {n_classes: 64}
+  encoder: resnet12
+  encoder_args: {}
+  classifier: linear-classifier
+  classifier_args: {num_classes: 64}
 
 # Optimization Configuration
-inner_params: [classifier]
-outer_params: all  # special keyword for "all parameters"
-output_layer: outlayer
+inner_params: classifier
+outer_params: all
+output_layer: classifier.linear

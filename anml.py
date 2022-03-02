@@ -56,6 +56,11 @@ def check_train_config(config):
     def gt_zero(x):
         return x > 0
 
+    def of_type(types):
+        def test_fn(val):
+            return isinstance(val, types)
+        return test_fn
+
     ensure_config_param(config, "batch_size", gt_zero)
     ensure_config_param(config, "num_batches", gt_zero)
     ensure_config_param(config, "val_size", lambda x: x >= 0)
@@ -65,11 +70,20 @@ def check_train_config(config):
     ensure_config_param(config, "outer_lr", gt_zero)
     ensure_config_param(config, "epochs", gt_zero)
     ensure_config_param(config, "save_freq", gt_zero)
-    ensure_config_param(config, "inner_params")
-    ensure_config_param(config, "outer_params")
-    ensure_config_param(config, "output_layer")
-    ensure_config_param(config, "model")
+    ensure_config_param(config, "inner_params", of_type((str, list, tuple)))
+    ensure_config_param(config, "outer_params", of_type((str, list, tuple)))
+    ensure_config_param(config, "output_layer", of_type(str))
+    ensure_config_param(config, "model", of_type(str))
     config.setdefault("full_test", True)
+
+
+def get_matching_module(model, target_name):
+    named_modules = list(model.named_modules())
+    for name, m in named_modules:
+        if name == target_name:
+            return m
+    raise RuntimeError(f"Could not find {target_name} as a submodule of {type(model).__name__}. Named submodules:\n"
+                       f"{named_modules}")
 
 
 def collect_matching_named_params(model, param_list):
@@ -148,8 +162,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
         # To facilitate the propagation of gradients through the model we prevent memorization of training examples by
         # randomizing the weights in the last fully connected layer corresponding to the task that is about to be
         # learned. The config gives us the name of this final output layer.
-        # output_layer = anml.fc
-        output_layer = getattr(model, config["output_layer"])
+        output_layer = get_matching_module(model, config["output_layer"])
         lobotomize(output_layer, episode.train_class)
 
         # higher turns a standard pytorch model into a functional version that can be used to
@@ -238,9 +251,14 @@ def check_test_config(config):
     def gt_zero(x):
         return x > 0
 
-    ensure_config_param(config, "model")
-    ensure_config_param(config, "reinit_params")
-    ensure_config_param(config, "opt_params")
+    def of_type(types):
+        def test_fn(val):
+            return isinstance(val, types)
+        return test_fn
+
+    ensure_config_param(config, "model", of_type((str, Path)))
+    ensure_config_param(config, "reinit_params", of_type((str, list, tuple)))
+    ensure_config_param(config, "opt_params", of_type((str, list, tuple)))
     ensure_config_param(config, "classes", gt_zero)
     ensure_config_param(config, "train_examples", gt_zero)
     ensure_config_param(config, "test_examples", gt_zero)

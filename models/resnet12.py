@@ -66,10 +66,10 @@ class ResNet12(nn.Module):
 
         self.inplanes = 3
 
-        self.layer1 = self._make_layer(channels[0])
-        self.layer2 = self._make_layer(channels[1])
-        self.layer3 = self._make_layer(channels[2])
-        self.layer4 = self._make_layer(channels[3])
+        self.layer1 = self._make_block(channels[0])
+        self.layer2 = self._make_block(channels[1])
+        self.layer3 = self._make_block(channels[2])
+        self.layer4 = self._make_block(channels[3])
 
         self.out_dim = channels[3]
 
@@ -81,7 +81,7 @@ class ResNet12(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def _make_layer(self, planes):
+    def _make_block(self, planes):
         downsample = nn.Sequential(
             conv1x1(self.inplanes, planes),
             norm_layer(planes),

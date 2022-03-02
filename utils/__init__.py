@@ -80,6 +80,58 @@ def make_pretty(config):
         return config
 
 
+def ensure_config_param(config, key, condition=None):
+    """
+    Function to check that a config parameter is present and satisfies a given condition.
+
+    Args:
+        config (dict): The config to check.
+        key (str): The key that should be present in the config.
+        condition (function): (Optional) A function of (obj) -> bool that returns whether the value for this key is
+            valid.
+    """
+    if key not in config:
+        raise RuntimeError(f'Required key "{key}" not found in config.')
+    value = config[key]
+    if condition and not condition(value):
+        raise RuntimeError(f'Config parameter "{key}" has an invalid value: {value}')
+
+
+def calculate_output_size(module, input_shape, max_size=int(1e4)):
+    """
+    Determines the output size of the given module when fed with batches of the given input shape. This is useful when
+    you have an arbitrary feature extractor and you want to know the size of the resulting feature vector (how many
+    neuronal activations will be at the end of the feature extractor).
+
+    NOTE: This assumes the output is flattened at the end of the module, so that the result is a vector (or batch of
+    vectors).
+
+    Args:
+        module: The feature extractor module.
+        input_shape: The shape of inputs that will be fed to this extractor.
+        max_size: (Optional) Throw an error if the result is larger than this size. This can be effectively disabled by
+            passing inf or NaN.
+
+    Returns:
+        int: The number of dimensions in the resulting feature representation.
+    """
+    # Import torch locally so people can still use other util functions without having torch installed.
+    import torch
+
+    # Simulate a batch by adding an extra dim at the beginning.
+    batch_shape = (2,) + tuple(input_shape)
+    output_shape = module(torch.zeros(batch_shape)).shape
+    if len(output_shape) != 2:
+        raise RuntimeError(f"Module output should only be two dims, but got shape = {output_shape}.")
+    feature_size = output_shape[-1]
+
+    # Sanity check.
+    if feature_size > max_size:
+        raise RuntimeError(f"The output size of the given module is {max_size}. Is this a mistake? You should add more"
+                           " pooling or longer strides to reduce the features to a manageable size.")
+    return feature_size
+
+
 def memory_constrained_batches(dataset, indices, max_gb):
     """
     A function to batch up the desired samples from the given dataset into chunks that are as large as possible without
@@ -220,11 +272,3 @@ def compute_logits(feat, proto, metric="dot", temp=1.0):
                        proto.unsqueeze(1)).pow(2).sum(dim=-1)
 
     return logits * temp
-
-
-def ensure_config_param(config, key, condition=None):
-    if key not in config:
-        raise RuntimeError(f'Required key "{key}" not found in config.')
-    value = config[key]
-    if condition and not condition(value):
-        raise RuntimeError(f'Config parameter "{key}" has an invalid value: {value}')

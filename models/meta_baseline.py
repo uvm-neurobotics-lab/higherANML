@@ -13,10 +13,11 @@ from models.registry import make, register
 @register("meta-baseline")
 class MetaBaseline(nn.Module):
 
-    def __init__(self, encoder, encoder_args={}, method="cos",
-                 temp=10., temp_learnable=True):
+    def __init__(self, input_shape, encoder, encoder_args=None, method="cos", temp=10., temp_learnable=True):
         super().__init__()
-        self.encoder, _ = make(encoder, **encoder_args)
+        if encoder_args is None:
+            encoder_args = {}
+        self.encoder, _ = make(encoder, input_shape, **encoder_args)
         self.method = method
         # TODO: something seems not right about the code that converts method to metric.
         if method not in ("cos", "sqr"):

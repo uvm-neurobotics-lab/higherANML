@@ -23,6 +23,6 @@ seed: 1
 model: oml
 
 # Optimization Configuration
-inner_params: [pn]
-outer_params: all  # special keyword for "all parameters"
-output_layer: outlayer
+inner_params: pn
+outer_params: all
+output_layer: pn.2

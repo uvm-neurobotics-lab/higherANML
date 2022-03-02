@@ -6,39 +6,7 @@ import torch
 import torch.nn as nn
 
 from models.registry import register
-
-
-def calculate_output_size(module, input_shape):
-    """
-    Determines the output size of the given module when fed with batches of the given input shape. This is useful when
-    you have an arbitrary feature extractor and you want to know the size of the resulting feature vector (how many
-    neuronal activations will be at the end of the feature extractor).
-
-    NOTE: This assumes the output is flattened at the end of the module, so that the result is a vector (or batch of
-    vectors).
-
-    Args:
-        module: The feature extractor module.
-        input_shape: The shape of inputs that will be fed to this extractor.
-
-    Returns:
-        int: The number of dimensions in the resulting feature representation.
-    """
-    # Simulate a batch by adding an extra dim at the beginning.
-    batch_shape = (2,) + tuple(input_shape)
-    output_shape = module(torch.zeros(batch_shape)).shape
-    assert len(output_shape) == 2, "Module output should only be two dims."
-    feature_size = output_shape[-1]
-    return feature_size
-
-
-def _linear_layer(in_dims, out_dims):
-    # Sanity check: we can increase this limit if desired.
-    MAX_LAYER_SIZE = int(1e8)
-    if in_dims * out_dims > MAX_LAYER_SIZE:
-        raise RuntimeError(f"You tried to create a layer with more than {MAX_LAYER_SIZE} parameters. Is this a"
-                           " mistake? You should add more pooling or longer strides.")
-    return nn.Linear(in_dims, out_dims)
+from utils import calculate_output_size
 
 
 def _conv_block(in_channels, out_channels, pooling=True):
@@ -115,7 +83,7 @@ class NM(nn.Module):
         self.encoder = _construct_uniform_convnet(input_shape[0], hidden_channels, num_conv_blocks, pool_at_end)
         # To create the correct size of linear layer, we need to first know the size of the conv output.
         feature_size = calculate_output_size(self.forward_conv, input_shape)
-        self.fc = _linear_layer(feature_size, mask_size)
+        self.fc = nn.Linear(feature_size, mask_size)
         self.sigmoid = nn.Sigmoid()
 
     def forward_conv(self, x):
@@ -143,7 +111,7 @@ class ANML(nn.Module):
         self.rln = RLN(input_shape[0], rln_chs, num_conv_blocks, pool_rln_output)
         feature_size = calculate_output_size(self.rln, input_shape)
         self.nm = NM(input_shape, nm_chs, feature_size, num_conv_blocks)
-        self.fc = _linear_layer(feature_size, num_classes)
+        self.fc = nn.Linear(feature_size, num_classes)
         init_model_weights(self)
 
     def forward(self, x):
@@ -166,7 +134,7 @@ class SANML(nn.Module):
         self.input_shape = input_shape
         self.rln = RLN(input_shape[0], rln_chs, num_conv_blocks, pool_rln_output)
         feature_size = calculate_output_size(self.rln, input_shape)
-        self.fc = _linear_layer(feature_size, num_classes)
+        self.fc = nn.Linear(feature_size, num_classes)
         init_model_weights(self)
 
     def forward(self, x):
@@ -185,7 +153,7 @@ class NONML(nn.Module):
         self.rln = RLN(input_shape[0], rln_chs, num_conv_blocks, pool_rln_output)
         feature_size = calculate_output_size(self.rln, input_shape)
         self.nm = NM(input_shape, nm_chs, feature_size, num_conv_blocks)
-        self.fc = _linear_layer(feature_size, num_classes)
+        self.fc = nn.Linear(feature_size, num_classes)
         init_model_weights(self)
 
     def forward(self, x):

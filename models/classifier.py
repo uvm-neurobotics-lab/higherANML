@@ -14,16 +14,15 @@ from models.registry import make, register
 @register("classifier")
 class Classifier(nn.Module):
     
-    def __init__(self, encoder, classifier, encoder_args=None, classifier_args=None):
+    def __init__(self, input_shape, encoder, classifier, encoder_args=None, classifier_args=None):
         super().__init__()
         if encoder_args is None:
             encoder_args = {}
-        self.encoder, _ = make(encoder, **encoder_args)
+        self.encoder, _ = make(encoder, input_shape, **encoder_args)
         if classifier_args is None:
             classifier_args = {}
         classifier_args["in_dim"] = self.encoder.out_dim
-        self.classifier, _ = make(classifier, **classifier_args)
-        self.outlayer = self.classifier.outlayer
+        self.classifier, _ = make(classifier, input_shape, **classifier_args)
 
     def forward(self, x):
         x = self.encoder(x)
@@ -34,21 +33,41 @@ class Classifier(nn.Module):
 @register("linear-classifier")
 class LinearClassifier(nn.Module):
 
-    def __init__(self, in_dim, n_classes):
+    def __init__(self, in_dim, num_classes):
         super().__init__()
-        self.linear = nn.Linear(in_dim, n_classes)
-        self.outlayer = self.linear
+        self.linear = nn.Linear(in_dim, num_classes)
 
     def forward(self, x):
         return self.linear(x)
 
 
-@register("nn-classifier")
-class NNClassifier(nn.Module):
+@register("mlp-classifier")
+class MLPClassifier(nn.Module):
 
-    def __init__(self, in_dim, n_classes, metric="cos", temp=None):
+    def __init__(self, in_dim, num_classes, hidden_layers=None):
         super().__init__()
-        self.proto = nn.Parameter(torch.empty(n_classes, in_dim))
+        layers = [in_dim] + (hidden_layers if hidden_layers else []) + [num_classes]
+        ops = []
+        for inn, out in zip(layers, layers[1:]):
+            ops.append(nn.Linear(inn, out))
+            ops.append(nn.ReLU())
+        # Remove the last ReLU. It will be passed through a softmax instead (in the CE loss, not here).
+        del ops[-1]
+        if len(ops) > 1:
+            self.mlp = nn.Sequential(*ops)
+        else:
+            self.mlp = ops[0]
+
+    def forward(self, x):
+        return self.mlp(x)
+
+
+@register("metric-classifier")
+class MetricClassifier(nn.Module):
+
+    def __init__(self, in_dim, num_classes, metric="cos", temp=None):
+        super().__init__()
+        self.proto = nn.Parameter(torch.empty(num_classes, in_dim))
         nn.init.kaiming_uniform_(self.proto, a=math.sqrt(5))
         if temp is None:
             if metric == "cos":

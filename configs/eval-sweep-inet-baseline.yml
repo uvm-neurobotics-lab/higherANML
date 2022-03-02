@@ -8,7 +8,7 @@ train_examples: [10, 20, 30]
 test_examples: 200
 
 # Test Method
-reinit_params: outlayer
+reinit_params: classifier.linear
 opt_params: classifier
 classes: 20
 lr:

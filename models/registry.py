@@ -40,17 +40,19 @@ def get_model_arg_names(model_name):
     # This will get the list of arg names for either a factory function or a class constructor.
     arg_names = inspect.getfullargspec(models[model_name])[0]
     # If the first arg is 'self', skip it.
-    if arg_names[0] == "self":
+    if arg_names and arg_names[0] == "self":
         arg_names = arg_names[1:]
     return arg_names
 
 
-def make(name, device=None, **kwargs):
+def make(name, input_shape=None, device=None, **kwargs):
     """
     Create a new instance of the specified model.
 
     Args:
         name (str): The name of the model in the global registry.
+        input_shape (tuple): The shape of a single input that would be passed to this model. Some models will use this
+            to auto-size their layers.
         device (str or device): The device to send the model to after instantiation.
         **kwargs: The constructor arguments for the specified model.
 
@@ -60,6 +62,8 @@ def make(name, device=None, **kwargs):
     """
     if not name:
         return None, kwargs
+    if "input_shape" in get_model_arg_names(name):
+        kwargs["input_shape"] = input_shape
 
     ret = models[name](**kwargs)
     if isinstance(ret, tuple):
@@ -87,10 +91,8 @@ def make_from_config(config, input_shape=None, device=None):
             These should be used to save the model using the `utils.storage` module.
     """
     model_name = config.get("model", None)
-    model_args = dict(config.get("model_args", {}))  # duplicate so as not to modify original config
-    if "input_shape" in get_model_arg_names(model_name):
-        model_args["input_shape"] = input_shape
-    return make(model_name, device, **model_args)
+    model_args = config.get("model_args", {})
+    return make(model_name, input_shape, device, **model_args)
 
 
 def load(model_sv, name=None):
