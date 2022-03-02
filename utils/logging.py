@@ -155,7 +155,7 @@ class Log:
         self.verbose_freq = verbose_freq
         self.save_freq = save_freq
         self.full_test = full_test
-        self.eval_steps = config.get("eval_steps")
+        self.eval_steps = config.get("eval_steps", [])
         self.config = config
         if self.eval_steps and "eval" not in config:
             raise RuntimeError("You must supply an evaluation config, or else disable eval_steps.")
