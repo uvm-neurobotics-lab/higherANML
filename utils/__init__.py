@@ -113,8 +113,14 @@ def calculate_output_shape(module, input_shape):
     import torch
 
     # Simulate a batch by adding an extra dim at the beginning.
-    batch_shape = (2,) + tuple(input_shape)
-    return module(torch.zeros(batch_shape)).shape
+    bsize = 3
+    batch_shape = (bsize,) + tuple(input_shape)
+    output_shape = module(torch.zeros(batch_shape)).shape
+    # Then check that the batch dimension was preserved and trim it off before returning.
+    if output_shape[0] != bsize:
+        raise RuntimeError(f"Batch dimension was not preserved by the module. This is unexpected (output shape ="
+                           f" {output_shape}).")
+    return output_shape[1:]
 
 
 def calculate_output_size_for_fc_layer(module, input_shape, max_size=int(1e4)):
@@ -136,8 +142,8 @@ def calculate_output_size_for_fc_layer(module, input_shape, max_size=int(1e4)):
         int: The number of dimensions in the resulting feature representation.
     """
     output_shape = calculate_output_shape(module, input_shape)
-    if len(output_shape) != 2:
-        raise RuntimeError(f"Module output should only be two dims, but got shape = {output_shape}.")
+    if len(output_shape) != 1:
+        raise RuntimeError(f"Module output should be a single feature vector, but got shape = {output_shape}.")
     feature_size = output_shape[-1]
 
     # Sanity check.
