@@ -11,10 +11,10 @@ batch_size: 1
 num_batches: 20
 train_cycles: 1
 val_size: 200
-remember_size: 64
+remember_size: 100
 remember_only: false
-inner_lr: 0.01
-outer_lr: 0.0001
+inner_lr: 0.001
+outer_lr: 0.001
 
 epochs: 25000
 seed: 1

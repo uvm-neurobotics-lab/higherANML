@@ -145,7 +145,10 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     outer_params = collect_matching_params(model, config["outer_params"])
     outer_opt = Adam(outer_params, lr=config["outer_lr"])
 
-    for it in range(config["epochs"]):
+    # (epochs + 1) because we want the iteration counts to be 1-based, but we still keep the 0th iteration as a sort of
+    # "test run" where we make sure we can successfully run full test metrics and save the model checkpoints. This
+    # allows the job to fail early if there are issues with any of these things.
+    for it in range(config["epochs"] + 1):
 
         log.outer_begin(it)
 

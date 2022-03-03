@@ -434,12 +434,11 @@ def prepare_wandb(parsed_args, job_type=None, create_folder=True, root_path="exp
             "group": parsed_args.get("group"),
             "job_type": job_type,
             "reinit": allow_reinit,
+            "entity": parsed_args["entity"],
+            "project": parsed_args["project"],
         }
         if parsed_args.get("id"):
             kwargs["id"] = parsed_args["id"]
-        else:
-            kwargs["entity"] = parsed_args["entity"]
-            kwargs["project"] = parsed_args["project"]
         run = wandb.init(**kwargs)
     else:
         from collections import namedtuple
