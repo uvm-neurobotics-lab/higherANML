@@ -32,7 +32,7 @@ def conv_block(in_channels, out_channels, kernel_size=(3, 3), stride=(1, 1), pad
     if norm_type:
         ops.append(("norm", norm_type(out_channels)))
     ops.append(("relu", nn.ReLU()))
-    if pool_size > 0:
+    if pool_size:
         ops.append(("pool", nn.MaxPool2d(pool_size)))
     return nn.Sequential(OrderedDict(ops))
 

@@ -148,8 +148,9 @@ def calculate_output_size_for_fc_layer(module, input_shape, max_size=int(1e4)):
 
     # Sanity check.
     if feature_size > max_size:
-        raise RuntimeError(f"The output size of the given module is {max_size}. Is this a mistake? You should add more"
-                           " pooling or longer strides to reduce the features to a manageable size.")
+        raise RuntimeError(f"The output size of the given module is {feature_size} when given input of shape"
+                           f" {input_shape}. Is this a mistake? You should add more pooling or longer strides to reduce"
+                           " the features to a manageable size.")
     return feature_size
 
 

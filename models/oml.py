@@ -7,31 +7,28 @@ https://github.com/khurramjaved96/mrcl/blob/1714cb56aa5b6001e3fd43f90d4c41df1b58
 """
 import torch.nn as nn
 
+import models.convnet4
 from models.registry import register
 from utils import calculate_output_size_for_fc_layer
 
 
-def _conv_block(in_channels, out_channels, stride=(1, 1)):
-    return nn.Sequential(
-        nn.Conv2d(in_channels, out_channels, (3, 3), stride=stride, padding=0),
-        # nn.BatchNorm2d(out_channels),
-        nn.ReLU(),
-        # nn.MaxPool2d(2)
-    )
+def _conv_block(in_channels, out_channels, kernel_size=(3, 3), stride=(1, 1), padding=0, norm_type=None,
+                pool_size=None):
+    return models.convnet4.conv_block(in_channels, out_channels, kernel_size, stride, padding, norm_type, pool_size)
 
 
 @register("oml-encoder")
 class RLN(nn.Module):
 
-    def __init__(self, input_shape, planes=256):
+    def __init__(self, input_shape, planes=256, norm_type=None):
         super().__init__()
         self.blocks = nn.Sequential(
-            _conv_block(input_shape[0], planes, (2, 2)),
-            _conv_block(planes, planes, (1, 1)),
-            _conv_block(planes, planes, (2, 2)),
-            _conv_block(planes, planes, (1, 1)),
-            _conv_block(planes, planes, (2, 2)),
-            _conv_block(planes, planes, (2, 2)),
+            _conv_block(input_shape[0], planes, stride=(2, 2), norm_type=norm_type),
+            _conv_block(planes, planes, stride=(1, 1), norm_type=norm_type),
+            _conv_block(planes, planes, stride=(2, 2), norm_type=norm_type),
+            _conv_block(planes, planes, stride=(1, 1), norm_type=norm_type),
+            _conv_block(planes, planes, stride=(2, 2), norm_type=norm_type),
+            _conv_block(planes, planes, stride=(2, 2), norm_type=norm_type),
             nn.Flatten(),
         )
         # Don't use PyTorch default initialization.
@@ -49,11 +46,11 @@ class RLN(nn.Module):
 @register("oml")
 class OML(nn.Module):
 
-    def __init__(self, input_shape, planes=256, fc_layer_size=1024, num_classes=1000):
+    def __init__(self, input_shape, planes=256, norm_type=None, fc_layer_size=1024, num_classes=1000):
         super().__init__()
         self.input_shape = input_shape
 
-        self.rln = RLN(input_shape, planes)
+        self.rln = RLN(input_shape, planes, norm_type)
 
         # To create the correct size of linear layer, we need to first know the size of the conv output.
         feature_size = calculate_output_size_for_fc_layer(self.rln, input_shape)
