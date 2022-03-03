@@ -51,7 +51,11 @@ class MLPClassifier(nn.Module):
         if len(input_shape) != 1:
             raise RuntimeError(f"Cannot stack {type(self).__name__} on top of output of shape: {input_shape}.")
 
-        layers = [input_shape[0]] + (hidden_layers if hidden_layers else []) + [num_classes]
+        if hidden_layers is None:
+            hidden_layers = []
+        elif not isinstance(hidden_layers, (list, tuple)):
+            hidden_layers = [hidden_layers]
+        layers = [input_shape[0]] + hidden_layers + [num_classes]
         ops = []
         for inn, out in zip(layers, layers[1:]):
             ops.append(nn.Linear(inn, out))
