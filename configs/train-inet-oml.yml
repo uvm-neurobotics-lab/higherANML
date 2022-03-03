@@ -16,7 +16,7 @@ remember_only: false
 inner_lr: 0.01
 outer_lr: 0.0001
 
-epochs: 200000
+epochs: 25000
 seed: 1
 
 # Model Architecture
@@ -26,3 +26,6 @@ model: oml
 inner_params: pn
 outer_params: all
 output_layer: pn.2
+
+eval_steps: [10000, 25000]
+eval: !include eval-sweep-inet-oml.yml

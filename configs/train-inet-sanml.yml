@@ -16,7 +16,7 @@ remember_only: false
 inner_lr: 0.001
 outer_lr: 0.001
 
-epochs: 200000
+epochs: 25000
 seed: 1
 
 # Model Architecture
@@ -28,3 +28,6 @@ model_args:
 inner_params: [rln, fc]
 outer_params: all  # special keyword for "all parameters"
 output_layer: fc
+
+eval_steps: [10000, 25000]
+eval: !include eval-sweep-inet-anml.yml
