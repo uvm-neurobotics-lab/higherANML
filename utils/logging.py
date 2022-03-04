@@ -271,6 +271,7 @@ class Log:
         if should_eval:
             eval_config = self.eval_config.copy()
             eval_config["model"] = str(model_path.resolve())
+            eval_config["record_learning_curve"] = True
             update_with_keys(self.config, eval_config, ["project", "entity", "group"])
             retcode = launch_eval_map.launch(eval_config, cluster=self.config["cluster"], launcher_args=["--mem=64G"])
             if retcode != 0:
