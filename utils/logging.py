@@ -273,12 +273,16 @@ class Log:
             eval_config["model"] = str(model_path.resolve())
             eval_config["record_learning_curve"] = True
             update_with_keys(self.config, eval_config, ["project", "entity", "group"])
-            retcode = launch_eval_map.launch(eval_config, cluster=self.config["cluster"], launcher_args=["--mem=64G"])
+            retcode = launch_eval_map.launch(eval_config, cluster=self.config["cluster"], launcher_args=["--mem=64G"],
+                                             force=True)
             if retcode != 0:
                 self.warning(f"Eval job may not have launched. Launcher exited with code {retcode}. See above for"
                              " possible errors.")
 
     def close(self, it, model, sampler, device):
-        # Eval if there is is at least one desired eval at or beyond this point in training.
-        should_eval = any([s >= it for s in self.eval_steps])
+        # Eval if there is is at least one desired eval beyond this point in training, but this point is not already
+        # included.
+        has_larger = any([s > it for s in self.eval_steps])
+        has_equal = any([s == it for s in self.eval_steps])
+        should_eval = has_larger and not has_equal
         self.save_and_eval(it, model, sampler, device, should_eval)
