@@ -95,7 +95,7 @@ def prep_config(parser, args):
         config["train_cycles"] = 1
         if config.get("val_size", 0) > 2:
             config["val_size"] = 2
-        config["epochs"] = 2
+        config["epochs"] = 1
         config["save_freq"] = 1
         config["full_test"] = False
         config["eval_steps"] = []

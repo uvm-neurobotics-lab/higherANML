@@ -56,6 +56,9 @@ def check_train_config(config):
     def gt_zero(x):
         return x > 0
 
+    def gte_zero(x):
+        return x >= 0
+
     def of_type(types):
         def test_fn(val):
             return isinstance(val, types)
@@ -63,12 +66,12 @@ def check_train_config(config):
 
     ensure_config_param(config, "batch_size", gt_zero)
     ensure_config_param(config, "num_batches", gt_zero)
-    ensure_config_param(config, "val_size", lambda x: x >= 0)
+    ensure_config_param(config, "val_size", gte_zero)
     ensure_config_param(config, "remember_size", gt_zero)
     ensure_config_param(config, "train_cycles", gt_zero)
     ensure_config_param(config, "inner_lr", gt_zero)
     ensure_config_param(config, "outer_lr", gt_zero)
-    ensure_config_param(config, "epochs", gt_zero)
+    ensure_config_param(config, "epochs", gte_zero)
     ensure_config_param(config, "save_freq", gt_zero)
     ensure_config_param(config, "inner_params", of_type((str, list, tuple)))
     ensure_config_param(config, "outer_params", of_type((str, list, tuple)))
