@@ -58,6 +58,28 @@ def load_yaml(yfile):
         return yaml.load(f, Loader=yaml.FullLoader)
 
 
+def load_yaml_from_string(ystr, base_dir=None):
+    """
+    Read a YAML file. This is different from the default YAML loader because it can load YAML files that contain
+    !include tags, which can recursively include other YAML files.
+
+    Args:
+        ystr (str): The YAML text to parse.
+        base_dir (path-like): If our text !includes other YAML files, the files should be relative to this directory.
+            If not provided, defaults to current working directory.
+
+    Returns:
+        dict: The loaded YAML object.
+    """
+    # Import locally so folks aren't mandated to depend on yaml unless they're using this function.
+    import yaml
+    from yamlinclude import YamlIncludeConstructor
+
+    YamlIncludeConstructor.add_to_loader_class(loader_class=yaml.FullLoader, base_dir=base_dir)
+
+    return yaml.load(ystr, Loader=yaml.FullLoader)
+
+
 def make_pretty(config):
     """
     Clean up the given YAML config object to make it nicer for printing and writing to file.

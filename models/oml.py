@@ -7,14 +7,14 @@ https://github.com/khurramjaved96/mrcl/blob/1714cb56aa5b6001e3fd43f90d4c41df1b58
 """
 import torch.nn as nn
 
-import models.convnet4
+import models.convnet
 from models.registry import register
 from utils import calculate_output_size_for_fc_layer
 
 
 def _conv_block(in_channels, out_channels, kernel_size=(3, 3), stride=(1, 1), padding=0, norm_type=None,
                 pool_size=None):
-    return models.convnet4.conv_block(in_channels, out_channels, kernel_size, stride, padding, norm_type, pool_size)
+    return models.convnet.conv_block(in_channels, out_channels, kernel_size, stride, padding, norm_type, pool_size)
 
 
 @register("oml-encoder")

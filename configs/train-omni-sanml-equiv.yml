@@ -1,0 +1,40 @@
+#
+# Config for a model which is equivalent to SANML, but built using Classifier.
+#
+
+# Dataset
+dataset: omni
+train_size: 20
+
+# Training Configuration
+batch_size: 1
+num_batches: 20
+train_cycles: 1
+val_size: 0
+remember_size: 64
+remember_only: false
+inner_lr: 0.1
+outer_lr: 0.001
+
+epochs: 25000
+seed: 1
+
+# Model Architecture
+model: classifier
+model_args:
+  encoder: convnet
+  encoder_args:
+    num_blocks: 3
+    num_filters: 256
+    padding: 0
+    pool_size: [2, 2, 0]
+  classifier: linear-classifier
+  classifier_args: {num_classes: 1000}
+
+# Optimization Configuration
+inner_params: all
+outer_params: all
+output_layer: classifier.linear
+
+eval_steps: [10000, 25000]
+eval: !include eval-sweep-omni-baseline.yml
