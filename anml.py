@@ -257,6 +257,9 @@ def check_test_config(config):
     def gt_zero(x):
         return x > 0
 
+    def gte_zero(x):
+        return x >= 0
+
     def of_type(types):
         def test_fn(val):
             return isinstance(val, types)
@@ -269,7 +272,9 @@ def check_test_config(config):
     ensure_config_param(config, "train_examples", gt_zero)
     ensure_config_param(config, "test_examples", gt_zero)
     ensure_config_param(config, "lr", gt_zero)
-    config.setdefault("record_learning_curve", False)
+    if config.get("eval_freq") is None:
+        config["eval_freq"] = 0
+    ensure_config_param(config, "eval_freq", gte_zero)
 
 
 def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb=False):
@@ -303,6 +308,8 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
                                                       config["test_examples"], device)
     train_perf_trajectory = []
     test_perf_trajectory = []
+    eval_freq = config["eval_freq"]
+    should_eval = False
 
     # meta-test-TRAIN
     for idx, train_data in enumerate(train_classes):
@@ -319,8 +326,9 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
             loss.backward()
             opt.step()
 
-        # Evaluation, once per class.
-        if config["record_learning_curve"]:
+        # Evaluation, once per X number of classes learned. Additionally, record after the first class learned.
+        should_eval = eval_freq and (idx == 0 or ((idx + 1) % eval_freq == 0))
+        if should_eval:
             # Evaluation on all classes.
             # NOTE: We often only care about performance on classes seen so far. We can extract this after-the-fact,
             # by slicing into the results: `acc_per_class[:idx + 1]`.
@@ -333,7 +341,7 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
 
     # meta-test-TEST
     # We only need to do this if we didn't already do it in the last iteration of the loop.
-    if not config["record_learning_curve"]:
+    if not should_eval:
         train_perf_trajectory.append(evaluate_and_log(model, train_classes, log_to_wandb))
         test_perf_trajectory.append(evaluate_and_log(model, test_classes, log_to_wandb))
 

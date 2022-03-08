@@ -13,8 +13,8 @@ import torch
 import wandb
 from torch.nn.functional import cross_entropy
 
-import launch_eval_map
-from utils import as_strings, update_with_keys
+import launch_eval_map as evaljob
+from utils import ensure_config_param, update_with_keys
 from utils.storage import save
 
 
@@ -146,6 +146,20 @@ def overall_accuracy(model, all_batches, print_fn):
         return np.ma.average(accs, weights=weights)
 
 
+def check_eval_config(eval_config):
+    ensure_config_param(eval_config, "dataset")
+    ensure_config_param(eval_config, "model")
+    ensure_config_param(eval_config, "classes")
+    ensure_config_param(eval_config, "train_examples")
+    ensure_config_param(eval_config, "test_examples")
+    ensure_config_param(eval_config, "lr")
+    ensure_config_param(eval_config, "reinit_params")
+    ensure_config_param(eval_config, "opt_params")
+    eval_freq = eval_config.get("eval_freq")
+    if eval_freq is None:
+        eval_config["eval_freq"] = max(1, eval_config["classes"] // 20)
+
+
 class Log:
     def __init__(self, name, model_args, print_freq=10, verbose_freq=None, save_freq=1000, full_test=True, config=None):
         self.start = -1
@@ -269,15 +283,17 @@ class Log:
 
         # Launch full evaluation of the model as a separate job.
         if should_eval:
-            eval_config = self.eval_config.copy()
-            eval_config["model"] = str(model_path.resolve())
-            eval_config["record_learning_curve"] = True
-            update_with_keys(self.config, eval_config, ["project", "entity", "group"])
-            retcode = launch_eval_map.launch(eval_config, cluster=self.config["cluster"], launcher_args=["--mem=64G"],
-                                             force=True)
-            if retcode != 0:
-                self.warning(f"Eval job may not have launched. Launcher exited with code {retcode}. See above for"
-                             " possible errors.")
+            self.launch_eval(model_path)
+
+    def launch_eval(self, model_path):
+        eval_config = self.eval_config.copy()
+        eval_config["model"] = str(model_path.resolve())
+        update_with_keys(self.config, eval_config, ["project", "entity", "group"])
+        check_eval_config(eval_config)
+        retcode = evaljob.launch(eval_config, cluster=self.config["cluster"], launcher_args=["--mem=64G"], force=True)
+        if retcode != 0:
+            self.warning(f"Eval job may not have launched. Launcher exited with code {retcode}. See above for"
+                         " possible errors.")
 
     def close(self, it, model, sampler, device):
         # Eval if there is is at least one desired eval beyond this point in training, but this point is not already

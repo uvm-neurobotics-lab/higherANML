@@ -47,7 +47,7 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 
 def prep_config(parser, args):
     overrideable_args = ["dataset", "data_path", "im_size", "model", "classes", "train_examples", "test_examples", "lr",
-                         "record_learning_curve", "runs", "device", "seed", "project", "entity", "group"]
+                         "eval_freq", "runs", "device", "seed", "project", "entity", "group"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
     ensure_config_param(config, "dataset")
     ensure_config_param(config, "model")
@@ -58,6 +58,9 @@ def prep_config(parser, args):
     ensure_config_param(config, "runs")
     ensure_config_param(config, "reinit_params")
     ensure_config_param(config, "opt_params")
+    eval_freq = config.get("eval_freq")
+    if eval_freq is None:
+        config["eval_freq"] = max(1, config["classes"] // 20)
     return config
 
 
@@ -301,10 +304,12 @@ def main(args=None):
                                        " launching.")
     non_repeat_group.add_argument("--im-size", metavar="PX", type=int, default=None,
                                   help="Resize all input images to the given size (in pixels).")
-    non_repeat_group.add_argument("--only-final-performance", action="store_false", dest="record_learning_curve",
-                                  help="Do not record train/test performance throughout the whole training procedure;"
-                                       " only record final performance. This saves a lot of time and space, but"
-                                       " obviously also limits the analysis that can be done.")
+    non_repeat_group.add_argument("--eval-freq", metavar="INT", type=int, default=1,
+                                  help="The frequency at which to evaluate performance of the model throughout the"
+                                       " learning process. This can be very expensive, if evaluating after every class"
+                                       " learned (freq = 1). To evaluate only at the end, supply 0. By default, we will"
+                                       " evaluate at a rate which is 1/20th of the number of classes, so as to have 20"
+                                       " or 21 data points in the end.")
     non_repeat_group.add_argument("-r", "--runs", metavar="INT", type=int, default=10,
                                   help="Number of repetitions to run for each unique combination of arguments.")
     # We will require a fixed seed, so all runs are more comparable.

@@ -57,8 +57,7 @@ def main(args=None):
     args = parser.parse_args(args)
     argutils.configure_logging(args)
     overrideable_args = ["dataset", "data_path", "download", "im_size", "model", "classes", "train_examples",
-                         "test_examples", "lr", "record_learning_curve", "runs", "device", "seed", "project", "entity",
-                         "group"]
+                         "test_examples", "lr", "runs", "device", "seed"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
     if args.verbose:
         print("\n---- Test Config ----\n" + yaml.dump(config) + "----------------------")

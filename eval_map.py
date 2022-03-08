@@ -2,7 +2,7 @@
 The "map" portion of a map-reduce job for evaluating ANML and related models.
 """
 # NOTE: Use the following command to test the functionality of this script:
-#   WANDB_MODE=disabled python eval_map.py -c configs/eval-omni-anml.yml --model trained_anmls/anml-1-28-28-29999.net --output test.pkl --classes 10 --lr 0.0015 --record-learning-curve --group mygroup
+#   WANDB_MODE=disabled python eval_map.py -c configs/eval-omni-anml.yml --model trained_anmls/anml-1-28-28-29999.net --output test.pkl --classes 10 --lr 0.0015 --group mygroup
 # You should get a final accuracy somewhere around:
 #   Train 96.8% (std: 3.4%) | Test 92.6% (std: 6.2%)
 # Other learning rates will result in lower performance.
@@ -113,9 +113,10 @@ def main(args=None):
                         help="Number of examples per class, for training.")
     parser.add_argument("--test-examples", metavar="INT", type=int, default=5,
                         help="Number of examples per class, for testing.")
-    parser.add_argument("--record-learning-curve", action="store_true",
-                        help="Whether to record train/test performance throughout the whole training procedure, as"
-                             " opposed to just recording final performance. This is very expensive.")
+    parser.add_argument("--eval-freq", metavar="INT", type=int,
+                        help="The frequency at which to evaluate performance of the model throughout the learning"
+                             " process. This can be very expensive, if evaluating after every class learned (freq = 1)."
+                             " By default we evaluate only at the very end.")
     parser.add_argument("-r", "--runs", metavar="INT", type=int, default=10, help="Number of repetitions to run.")
     parser.add_argument("-o", "--output", metavar="PATH", help="The location to save to.")
     argutils.add_device_arg(parser)
@@ -126,8 +127,8 @@ def main(args=None):
     args = parser.parse_args(args)
     argutils.configure_logging(args)
     overrideable_args = ["dataset", "data_path", "download", "im_size", "model", "classes", "train_examples",
-                         "test_examples", "lr", "record_learning_curve", "runs", "output", "device", "seed", "project",
-                         "entity", "group"]
+                         "test_examples", "lr", "eval_freq", "runs", "output", "device", "seed", "project", "entity",
+                         "group"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
     print("\n---- Test Config ----\n" + yaml.dump(config) + "----------------------")
 
