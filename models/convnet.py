@@ -5,6 +5,7 @@ by Yinbo Chen. It was copied on 2021-12-17. The license for this file can be fou
 import logging
 from collections import OrderedDict
 from functools import partial
+from itertools import count
 
 import torch.nn as nn
 
@@ -25,15 +26,23 @@ NORM_MAPPING["instance"] = NORM_MAPPING["in"]
 NORM_MAPPING["instancenorm"] = NORM_MAPPING["in"]
 
 
-def conv_block(in_channels, out_channels, kernel_size=(3, 3), stride=(1, 1), padding=1, norm_type="in", pool_size=2):
+def conv_block(in_channels, out_channels, num_conv=1, kernel_size=(3, 3), stride=(1, 1), padding=1, norm_type="in",
+               pool_size=2):
     if isinstance(norm_type, str):
         norm_type = NORM_MAPPING[norm_type]
-    ops = [("conv", nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding))]
-    if norm_type:
-        ops.append(("norm", norm_type(out_channels)))
-    ops.append(("relu", nn.ReLU()))
+
+    # Like a ResNet, each block consists of some number of conv + norm + relu, followed by a final pooling.
+    ops = []
+    for i in range(num_conv):
+        ops.append((f"conv{i}", nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)))
+        if norm_type:
+            ops.append((f"norm{i}", norm_type(out_channels)))
+        ops.append((f"relu{i}", nn.ReLU()))
+        in_channels = out_channels
+
     if pool_size:
         ops.append(("pool", nn.MaxPool2d(pool_size)))
+
     return nn.Sequential(OrderedDict(ops))
 
 
@@ -48,8 +57,8 @@ def init_model_weights(model):
 @register("convnet")
 class ConvNet(nn.Module):
 
-    def __init__(self, input_shape=None, x_dim=3, num_filters=64, num_blocks=4, kernel_size=(3, 3),
-                 stride=(1, 1), padding=1, norm_type="in", pool_size=2):
+    def __init__(self, input_shape=None, x_dim=3, num_filters=64, num_blocks=4, num_conv_per_block=1,
+                 kernel_size=(3, 3), stride=(1, 1), padding=1, norm_type="in", pool_size=2):
         super().__init__()
 
         if num_blocks < 1:
@@ -79,6 +88,7 @@ class ConvNet(nn.Module):
                                    f" Instead got {len(param)} values.")
 
         # Each of the following settings can be either a single value or num_blocks values.
+        num_conv_per_block = ensure_list(num_conv_per_block)
         num_filters = ensure_list(num_filters)
         kernel_size = ensure_list(kernel_size)
         stride = ensure_list(stride)
@@ -89,15 +99,14 @@ class ConvNet(nn.Module):
         in_channels = [x_dim] + num_filters[:-1]
 
         # Now use each setting to make a different block. Careful that the ordering here is correct!
-        ops = [
-            conv_block(in_channels=i, out_channels=o, kernel_size=ke, stride=st, padding=pa, norm_type=no, pool_size=po)
-            for i, o, ke, st, pa, no, po in
-            zip(in_channels, num_filters, kernel_size, stride, padding, norm_type, pool_size)
-        ]
+        ops = [(f"block{idx}", conv_block(in_channels=i, out_channels=o, num_conv=nc, kernel_size=ke, stride=st,
+                                          padding=pa, norm_type=no, pool_size=po))
+               for idx, i, o, nc, ke, st, pa, no, po in zip(count(1), in_channels, num_filters, num_conv_per_block,
+                                                            kernel_size, stride, padding, norm_type, pool_size)]
         if len(ops) > 1:
-            self.encoder = nn.Sequential(*ops)
+            self.encoder = nn.Sequential(OrderedDict(ops))
         else:
-            self.encoder = ops[0]
+            self.encoder = ops[0][1]
 
         init_model_weights(self)
 

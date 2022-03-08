@@ -12,9 +12,10 @@ from models.registry import register
 from utils import calculate_output_size_for_fc_layer
 
 
-def _conv_block(in_channels, out_channels, kernel_size=(3, 3), stride=(1, 1), padding=0, norm_type=None,
+def _conv_block(in_channels, out_channels, num_conv=1, kernel_size=(3, 3), stride=(1, 1), padding=0, norm_type=None,
                 pool_size=None):
-    return models.convnet.conv_block(in_channels, out_channels, kernel_size, stride, padding, norm_type, pool_size)
+    return models.convnet.conv_block(in_channels, out_channels, num_conv, kernel_size, stride, padding, norm_type,
+                                     pool_size)
 
 
 @register("oml-encoder")
