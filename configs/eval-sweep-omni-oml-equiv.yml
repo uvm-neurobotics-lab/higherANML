@@ -5,6 +5,7 @@
 
 # Dataset
 dataset: omni
+im_size: 84
 train_examples: 15
 test_examples: 5
 
