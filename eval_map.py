@@ -6,10 +6,11 @@ The "map" portion of a map-reduce job for evaluating ANML and related models.
 # You should get a final accuracy somewhere around:
 #   Train 96.8% (std: 3.4%) | Test 92.6% (std: 6.2%)
 # Other learning rates will result in lower performance.
+# Optionally add `--eval-freq 2` to test a full trajectory of evaluation numbers. This will take longer and will print
+# the same result, but more data will end up in the resulting dataframe.
 
 import argparse
 import sys
-from itertools import count
 from pathlib import Path
 
 import pandas as pd
@@ -41,17 +42,14 @@ def repeats(num_runs, wandb_init, **kwargs):
             # Train and test should be evaluated the same number of times.
             assert len(train_traj) == len(test_traj)
             # At the end of training, train and test should both have the full number of classes.
-            assert len(train_traj[-1]) == len(test_traj[-1]) == num_classes
+            assert len(train_traj[-1][1]) == len(test_traj[-1][1]) == num_classes
             # Accumulate the results.
-            for epoch, tr, te in zip(count(), train_traj, test_traj):
+            for ((step, classes_trained), tr), (_, te) in zip(train_traj, test_traj):
                 # Extend each result to make sure it has the full number of classes.
                 tr = list(tr) + nanfill * (num_classes - len(tr))
                 te = list(te) + nanfill * (num_classes - len(te))
-                # NOTE: This assumes that 1 epoch == 1 class.
-                # Capped b/c we might have one more eval at the end after the last epoch, but still the same number of
-                # classes were trained.
-                classes_trained = min(epoch + 1, num_classes)
-                index = [r, epoch, classes_trained]
+                # Add the current run index to create an overall index.
+                index = [r, step, classes_trained]
                 results.append((index, tr, te))
 
     return results

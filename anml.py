@@ -221,7 +221,7 @@ def evaluate(model, classes):
     return acc_per_class
 
 
-def evaluate_and_log(model, classes, should_log=False, num_seen=None):
+def evaluate_and_log(model, classes, step, num_seen=None, should_log=False):
     """
     Meta-test-test
 
@@ -231,26 +231,29 @@ def evaluate_and_log(model, classes, should_log=False, num_seen=None):
     Args:
         model (callable): The model to evaluate.
         classes (list): A list of tensor pairs (inputs, targets), where each tensor is a batch from a single class.
-        should_log (bool): Whether to log the results to W&B.
+        step (int): The current step in meta-test-training.
         num_seen (int): The number of classes trained on so far (so we can report performance on "seen" vs. "unseen"
             classes). If `None`, assumes all classes have been seen.
+        should_log (bool): Whether to log the results to W&B.
 
     Returns:
+        tuple: An index of the current training step: (step, classes seen).
         numpy.ndarray: Array of accuracy per class.
     """
     import wandb
 
     acc_per_class = evaluate(model, classes)
 
+    if num_seen is None:
+        num_seen = len(classes)
+
     if should_log:
-        if num_seen is None:
-            num_seen = len(classes)
         wandb.log({
             "overall_acc": acc_per_class.mean(),
             "seen_class_acc": acc_per_class[:num_seen].mean(),
         }, step=num_seen)
 
-    return acc_per_class
+    return (step, num_seen), acc_per_class
 
 
 def check_test_config(config):
@@ -306,6 +309,8 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
     # Sample the learning trajectory.
     train_classes, test_classes = sampler.sample_test(config["classes"], config["train_examples"],
                                                       config["test_examples"], device)
+    assert len(train_classes) > 0
+
     train_perf_trajectory = []
     test_perf_trajectory = []
     eval_freq = config["eval_freq"]
@@ -335,14 +340,14 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
             # If we wanted to only run inference on classes already seen, we would take a slice of the data:
             #     evaluate(model, train_classes[:idx + 1])
             # where `idx` is keeping track of the current training class index.
-            train_perf_trajectory.append(evaluate_and_log(model, train_classes, log_to_wandb, idx + 1))
-            # NOTE: Assumes that test tasks are in the same ordering as train tasks.
-            test_perf_trajectory.append(evaluate_and_log(model, test_classes, log_to_wandb, idx + 1))
+            train_perf_trajectory.append(evaluate_and_log(model, train_classes, idx, idx + 1, should_log=log_to_wandb))
+            # NOTE: Assumes that test classes are in the same ordering as train classes.
+            test_perf_trajectory.append(evaluate_and_log(model, test_classes, idx, idx + 1, should_log=log_to_wandb))
 
     # meta-test-TEST
     # We only need to do this if we didn't already do it in the last iteration of the loop.
     if not should_eval:
-        train_perf_trajectory.append(evaluate_and_log(model, train_classes, log_to_wandb))
-        test_perf_trajectory.append(evaluate_and_log(model, test_classes, log_to_wandb))
+        train_perf_trajectory.append(evaluate_and_log(model, train_classes, idx, should_log=log_to_wandb))
+        test_perf_trajectory.append(evaluate_and_log(model, test_classes, idx, should_log=log_to_wandb))
 
     return train_perf_trajectory, test_perf_trajectory

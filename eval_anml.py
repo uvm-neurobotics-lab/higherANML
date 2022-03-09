@@ -28,8 +28,8 @@ def repeats(sampler, sampler_input_shape, config, device):
         # For now, we are just reporting the final result, so just pluck off the last set of accuracies. This is a list
         # of accuracies per class, so taking the mean gives us overall accuracy.
         # NOTE: This averaging method assumes we have the same number of examples per each class.
-        train_results.append(train_traj[-1].mean())
-        test_results.append(test_traj[-1].mean())
+        train_results.append(train_traj[-1][1].mean())
+        test_results.append(test_traj[-1][1].mean())
 
     print(f"Classes: {config['classes']}"
           f" | Train Accuracy: {np.mean(train_results):.1%} (std {np.std(train_results):.1%})"
