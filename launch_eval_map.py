@@ -28,6 +28,7 @@ drop the `DEBUG=y` flag.
 # You can also use the -n/--dry-run argument. Drop the `DEBUG` flag to actually test launching of cluster jobs.
 
 import argparse
+import re
 import shutil
 import sys
 import uuid
@@ -271,6 +272,12 @@ def check_path(path):
         raise argparse.ArgumentTypeError(f"{path} is not a valid path")
 
 
+def no_whitespace(string):
+    if re.search(r"\s", string):
+        raise argparse.ArgumentTypeError(f'cannot have whitespace: "{string}"')
+    return string
+
+
 def main(args=None):
     # Disable abbreviations to avoid some of the "unknown" args from potentially being swallowed.
     # See the warning about prefix matching here: https://docs.python.org/3/library/argparse.html#partial-parsing
@@ -325,6 +332,10 @@ def main(args=None):
     parser.add_argument("-o", "--output", metavar="PATH",
                         help="The folder to save all results. This folder should NOT already contain any .pkl files,"
                              " because we will assume that ALL .pkl files are the result of this job.")
+    parser.add_argument("--flavor", type=no_whitespace,
+                        help="A string that describes the type of evaluation being performed. This will only be used"
+                        " if --output is not given, to help name the output folder. It will be appended as a suffix to"
+                        " the folder name.")
     parser.add_argument("--cluster", metavar="NAME", default="dggpu",
                         help="The cluster to launch on. This must correspond to one of the resources in your"
                              " Neuromanager config.")
@@ -344,8 +355,8 @@ def main(args=None):
     config = prep_config(parser, args)
 
     # Run the bulk of the program.
-    return launch(config, args.output, args.cluster, args.verbose, args.force, args.dry_run, args.launch_verbose,
-                  launcher_args)
+    return launch(config, args.output, args.flavor, args.cluster, args.verbose, args.force, args.dry_run,
+                  args.launch_verbose, launcher_args)
 
 
 if __name__ == "__main__":
