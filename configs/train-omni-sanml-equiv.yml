@@ -37,4 +37,6 @@ outer_params: all
 output_layer: classifier.linear
 
 eval_steps: [10000, 25000]
-eval: !include eval-sweep-omni-baseline.yml
+eval:
+  - olft: !include eval-sweep-omni-1FC.yml
+  - unfrozen: !include eval-sweep-omni-unfrozen.yml

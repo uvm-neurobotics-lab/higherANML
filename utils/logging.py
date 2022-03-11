@@ -169,13 +169,13 @@ class Log:
         self.verbose_freq = verbose_freq
         self.save_freq = save_freq
         self.full_test = full_test
+        self.config = config
         self.eval_steps = config.get("eval_steps")
         if self.eval_steps is None:
             self.eval_steps = []
-        self.config = config
-        if self.eval_steps and "eval" not in config:
-            raise RuntimeError("You must supply an evaluation config, or else disable eval_steps.")
         self.eval_config = config.get("eval")
+        if self.eval_steps and not self.eval_config:
+            raise RuntimeError("You must supply an evaluation config, or else disable eval_steps.")
         self.logger = logging.getLogger(name)
         self.save_path = Path("./trained_anmls")
         self.save_path.mkdir(exist_ok=True)
@@ -286,14 +286,22 @@ class Log:
             self.launch_eval(model_path)
 
     def launch_eval(self, model_path):
-        eval_config = self.eval_config.copy()
-        eval_config["model"] = str(model_path.resolve())
-        update_with_keys(self.config, eval_config, ["project", "entity", "group"])
-        check_eval_config(eval_config)
-        retcode = evaljob.launch(eval_config, cluster=self.config["cluster"], launcher_args=["--mem=64G"], force=True)
-        if retcode != 0:
-            self.warning(f"Eval job may not have launched. Launcher exited with code {retcode}. See above for"
-                         " possible errors.")
+        cfg_list = self.eval_config if isinstance(self.eval_config, list) else [self.eval_config]
+        for eval_config in cfg_list:
+            # If the config only has one key, then this names the "flavor" of the evaluation, and the corresponding
+            # value is actually the config.
+            flavor = None
+            if len(eval_config) == 1:
+                flavor, eval_config = next(iter(eval_config.items()))
+            eval_config = eval_config.copy()  # copy before editing
+            eval_config["model"] = str(model_path.resolve())
+            update_with_keys(self.config, eval_config, ["project", "entity", "group"])
+            check_eval_config(eval_config)
+            retcode = evaljob.launch(eval_config, flavor=flavor, cluster=self.config["cluster"],
+                                     launcher_args=["--mem=64G"], force=True)
+            if retcode != 0:
+                self.warning(f"Eval job may not have launched. Launcher exited with code {retcode}. See above for"
+                             " possible errors.")
 
     def close(self, it, model, sampler, device):
         # Eval if there is is at least one desired eval beyond this point in training, but this point is not already

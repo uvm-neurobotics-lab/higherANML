@@ -40,4 +40,7 @@ outer_params: all
 output_layer: classifier.mlp.2
 
 eval_steps: [10000, 25000]
-eval: !include eval-sweep-omni-oml-equiv.yml
+eval:
+  - 1ft: !include eval-sweep-omni-84-1layer.yml
+  - 2ft: !include eval-sweep-omni-84-2layer.yml
+  - ft-all: !include eval-sweep-omni-84-unfrozen.yml

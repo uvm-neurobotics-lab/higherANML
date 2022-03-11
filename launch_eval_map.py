@@ -64,7 +64,7 @@ def prep_config(parser, args):
     return config
 
 
-def get_input_output_dirs(config, output, dry_run):
+def get_input_output_dirs(config, output, flavor, dry_run):
     # Output Directory
     if output:
         outpath = Path(output).resolve()
@@ -81,7 +81,8 @@ def get_input_output_dirs(config, output, dry_run):
             # "eval-NAME-EPOCH/".
             model_file = Path(single_model).resolve()
             model_spec = model_file.stem.split("-")
-            outpath = model_file.parent.parent / f"eval-{model_spec[0]}-{model_spec[-1]}"
+            suffix = ("-" + str(flavor)) if flavor else ""
+            outpath = model_file.parent.parent / (f"eval-{model_spec[0]}-{model_spec[-1]}" + suffix)
         else:
             raise RuntimeError("You must supply an output destination (-o/--output) when evaluating more than one model.")
 
@@ -249,11 +250,11 @@ def build_commands(config, inpath, outpath, cluster, verbose, force, dry_run, la
     return cmd
 
 
-def launch(config, output=None, cluster="dggpu", verbose=0, force=False, dry_run=False, launch_verbose=False,
-           launcher_args=None):
+def launch(config, output=None, flavor=None, cluster="dggpu", verbose=0, force=False, dry_run=False,
+           launch_verbose=False, launcher_args=None):
 
     # Get destination path.
-    inpath, outpath = get_input_output_dirs(config, output, dry_run)
+    inpath, outpath = get_input_output_dirs(config, output, flavor, dry_run)
 
     # Get command and corresponding list of arguments.
     command = build_commands(config, inpath, outpath, cluster, verbose, force, dry_run, launcher_args)

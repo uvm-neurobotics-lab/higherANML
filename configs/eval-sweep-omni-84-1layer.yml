@@ -1,0 +1,16 @@
+#
+# Continual meta-test on Omniglot.
+# Learns last layer from scratch; fine-tunes second-to-last layer.
+#
+
+# Dataset
+dataset: omni
+im_size: 84
+train_examples: 15
+test_examples: 5
+
+# Test Method
+reinit_params: classifier.mlp.2
+opt_params: classifier.mlp.2
+classes: 600
+lr: !include learning-rates.yml
