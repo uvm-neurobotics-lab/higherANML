@@ -190,7 +190,7 @@ def write_argfile(arglines, outpath, fid, dry_run):
         print(f"Argfile that would be created: {argfile_path}")
         print("-" * 36 + " Argfile " + "-" * 35)
         for line in arglines:
-            print("    " + line)
+            print(line)
         print("-" * 80)
     return argfile_path
 

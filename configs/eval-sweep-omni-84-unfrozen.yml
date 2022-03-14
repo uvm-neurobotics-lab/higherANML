@@ -1,6 +1,6 @@
 #
 # Continual meta-test on Omniglot.
-# Learns last layer from scratch; fine-tunes second-to-last layer.
+# Learns last layer from scratch; fine-tunes the rest of the network.
 #
 
 # Dataset
