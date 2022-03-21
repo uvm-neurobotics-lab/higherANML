@@ -45,7 +45,8 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     # Set up progress/checkpoint logger. Name according to the supported input size, just for convenience.
     name = config.get("model", "ANML") + "-"
     name += "-".join(map(str, input_shape))
-    print_freq = 1 if verbose > 1 else 100  # if double-verbose, print every iteration
+    # If double-verbose, print every iteration. Else, print at least as often as we save.
+    print_freq = 1 if verbose > 1 else min(config["save_freq"], 100)
     log = StandardLog(name, model_args, print_freq, config["save_freq"], config["full_test"], config)
 
     optimizer = utils.optimization.optimizer_from_config(config, model.parameters())
@@ -92,9 +93,9 @@ def run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps=float("
 
 
 def evaluate_and_log(model, name, loader, step, device):
-    acc = overall_accuracy(model, loader, device)
-    wandb.log({f"test_{name}.acc": acc}, step=step)
-    return acc
+    acc1, acc5 = overall_accuracy(model, loader, device)
+    wandb.log({f"test_{name}.acc": acc1, f"test_{name}.top5_acc": acc5}, step=step)
+    return acc1, acc5
 
 
 def check_test_config(config):

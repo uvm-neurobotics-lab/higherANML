@@ -176,7 +176,7 @@ class eval_mode:
         self.module.train(self.prev_train)
 
 
-def overall_accuracy(model, all_batches, device, print_fn=None):
+def overall_accuracy(model, all_batches, device, topk=(1, 5), print_fn=None):
     """
     Evaluate the model on each batch and return the average accuracy over all samples. If there are no batches, or all
     batches are empty, then this will return NaN.
@@ -192,15 +192,16 @@ def overall_accuracy(model, all_batches, device, print_fn=None):
     with eval_mode(model):
         for ims, labels in all_batches:
             ims, labels = ims.to(device), labels.to(device)
-            acc_per_batch.append((forward_pass(model, ims, labels)[2], len(labels)))
+            out = model(ims)
+            acc = topk_accuracy(out, labels, topk=topk)
+            acc_per_batch.append((*acc, len(labels)))
 
     acc_per_batch = np.array(acc_per_batch)
-    accs = acc_per_batch[:, 0]
-    weights = acc_per_batch[:, 1]
+    weights = acc_per_batch[:, -1]
     if weights.sum() == 0:
         return np.nan
     else:
-        return np.ma.average(accs, weights=weights)
+        return [np.ma.average(acc_per_batch[:, i], weights=weights) for i in range(len(topk))]
 
 
 def check_eval_config(eval_config):
@@ -264,13 +265,18 @@ class BaseLog:
         if should_save:
             # Run full test on training data.
             if self.full_test:
-                full_train_acc = overall_accuracy(model, sampler.full_train_data(device), device, self.debug)
-                full_val_acc = overall_accuracy(model, sampler.full_val_data(device), device, self.debug)
+                full_train_acc1, full_train_acc5 = overall_accuracy(model, sampler.full_train_data(device), device,
+                                                                    print_fn=self.debug)
+                full_val_acc1, full_val_acc5 = overall_accuracy(model, sampler.full_val_data(device), device,
+                                                                print_fn=self.debug)
                 self.info(f"Saved Model Performance:"
-                          f" Train Acc = {full_train_acc:.1%} | Validation Acc = {full_val_acc:.1%}")
+                          f" Train Top-1 Acc = {full_train_acc1:.1%} | Train Top-5 Acc = {full_train_acc5:.1%} |"
+                          f" Validation Top-1 Acc = {full_val_acc1:.1%} | Validation Top-5 Acc = {full_val_acc5:.1%}")
                 wandb.log({
-                    "train_acc": full_train_acc,
-                    "val_acc": full_val_acc,
+                    "train.acc": full_train_acc1,
+                    "val.acc": full_val_acc1,
+                    "train.top5_acc": full_train_acc5,
+                    "val.top5_acc": full_val_acc5,
                 }, step=it)
 
             # Save the model.
