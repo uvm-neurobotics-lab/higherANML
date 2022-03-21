@@ -5,7 +5,7 @@ by Yinbo Chen. It was copied on 2021-12-17. The license for this file can be fou
 Some modifications have been made.
 """
 
-import inspect
+from utils import get_arg_names
 
 # Global registry of models.
 models = {}
@@ -27,24 +27,6 @@ def register(name):
     return decorator
 
 
-def get_model_arg_names(model_name):
-    """
-    Get the names of the constructor arguments for the given model.
-
-    Args:
-        model_name (str): The name of the model in the global registry.
-
-    Returns:
-        list: The list of argument names.
-    """
-    # This will get the list of arg names for either a factory function or a class constructor.
-    arg_names = inspect.getfullargspec(models[model_name])[0]
-    # If the first arg is 'self', skip it.
-    if arg_names and arg_names[0] == "self":
-        arg_names = arg_names[1:]
-    return arg_names
-
-
 def make(name, input_shape=None, device=None, **kwargs):
     """
     Create a new instance of the specified model.
@@ -62,7 +44,7 @@ def make(name, input_shape=None, device=None, **kwargs):
     """
     if not name:
         return None, kwargs
-    if "input_shape" in get_model_arg_names(name):
+    if "input_shape" in get_arg_names(models[name]):
         kwargs["input_shape"] = input_shape
 
     ret = models[name](**kwargs)

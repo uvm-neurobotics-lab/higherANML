@@ -1,11 +1,10 @@
 """
-ANML Training Script
+Standard Training Script
 """
 # NOTE: Use one of the following commands to test the functionality of this script:
-#   time python train_anml.py -c configs/train-omni-anml.yml --st
-#   time WANDB_MODE=disabled DEBUG=Y python train_anml.py -c configs/train-omni-anml.yml --val-size 64 --epochs 10 --no-full-test --eval-steps -vv --group mygroup
-#   time WANDB_MODE=disabled DEBUG=Y python train_anml.py -c configs/train-omni-anml.yml --val-size 64 --epochs 1 --no-full-test -vv --group mygroup
-#   time python train_anml.py -c configs/train-omni-anml.yml
+#   time WANDB_MODE=disabled DEBUG=Y python train_iid.py -c configs/train-omni-iid-sanml.yml --st
+#   time WANDB_MODE=disabled DEBUG=Y python train_iid.py -c configs/train-omni-iid-sanml.yml --train-size 15 --epochs 1 --no-full-test -vv --group mygroup
+#   time python train_iid.py -c configs/train-omni-iid-sanml.yml
 # Which you use depends on how much of the pipeline you actually want to test. You can further remove the `DEBUG` and
 # `WANDB_MODE` flags to actually test launching eval jobs and reporting results to W&B.
 
@@ -13,7 +12,7 @@ import logging
 import sys
 
 import utils.argparsing as argutils
-from anml import train
+from iid import train
 
 
 def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
@@ -34,23 +33,9 @@ def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
     argutils.add_dataset_arg(parser, add_train_size_arg=True)
     parser.add_argument("--batch-size", metavar="INT", type=int, default=1,
                         help="Number of examples per training batch in the inner loop.")
-    parser.add_argument("--num-batches", metavar="INT", type=int, default=20,
-                        help="Number of training batches in the inner loop.")
-    parser.add_argument("--train-cycles", metavar="INT", type=int, default=1,
-                        help="Number of times to run through all training batches, to comprise a single outer loop."
-                             " Total number of gradient updates will be num_batches * train_cycles.")
-    parser.add_argument("--val-size", metavar="INT", type=int, default=200,
-                        help="Total number of test examples to sample from the validation set each iteration (for"
-                             " testing generalization to never-seen examples).")
-    parser.add_argument("--remember-size", metavar="INT", type=int, default=64,
-                        help="Number of randomly sampled training examples to compute the meta-loss.")
-    parser.add_argument("--remember-only", action="store_true",
-                        help="Do not include the training examples from the inner loop into the meta-loss (only use"
-                             " the remember set for the outer loop of training).")
-    parser.add_argument("--inner-lr", metavar="RATE", type=float, default=1e-1, help="Inner learning rate.")
-    parser.add_argument("--outer-lr", metavar="RATE", type=float, default=1e-3, help="Outer learning rate.")
-    parser.add_argument("--save-freq", type=int, default=1000, help="Number of epochs between each saved model.")
-    parser.add_argument("--epochs", type=int, default=25000, help="Number of epochs to train.")
+    parser.add_argument("--lr", metavar="RATE", type=float, default=0.1, help="Global learning rate.")
+    parser.add_argument("--epochs", type=int, default=90, help="Number of epochs to train.")
+    parser.add_argument("--save-freq", type=int, default=1000, help="Number of steps between each saved model.")
     argutils.add_device_arg(parser)
     argutils.add_seed_arg(parser, default_seed=1)
     argutils.add_wandb_args(parser, allow_id=allow_id)
@@ -82,19 +67,16 @@ def prep_config(parser, args):
 
     argutils.configure_logging(args, level=logging.INFO)
 
-    overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "batch_size", "num_batches",
-                         "train_cycles", "val_size", "remember_size", "remember_only", "inner_lr", "outer_lr",
-                         "save_freq", "epochs", "device", "seed", "id", "project", "entity", "group", "full_test",
-                         "eval_steps", "cluster"]
+    overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "batch_size", "lr", "epochs",
+                         "save_freq", "device", "seed", "id", "project", "entity", "group", "full_test", "eval_steps",
+                         "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
 
     # Conduct a quick test.
     if args.smoke_test:
-        config["batch_size"] = 1
-        config["num_batches"] = 2
-        config["train_cycles"] = 1
-        if config.get("val_size", 0) > 2:
-            config["val_size"] = 2
+        config["batch_size"] = 256
+        config["train_size"] = 1
+        config["max_steps"] = 1
         config["epochs"] = 1
         config["save_freq"] = 1
         config["full_test"] = False
@@ -112,7 +94,7 @@ def setup_and_train(parser, config, verbose):
     # The prepare_wandb function will change our run directory.
     argutils.prepare_wandb(config, job_type="train")
 
-    sampler, input_shape = argutils.get_dataset_sampler(config)
+    sampler, input_shape = argutils.get_dataset_sampler(config, sampler_type="iid")
 
     logging.info("Commencing training.")
     train(sampler, input_shape, config, device, verbose)

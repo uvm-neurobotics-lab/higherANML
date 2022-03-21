@@ -10,6 +10,7 @@ from torchvision.transforms.functional import InterpolationMode
 
 from .class_indexed_dataset import ClassIndexedDataset
 from .ContinualMetaLearningSampler import ContinualMetaLearningSampler
+from .IIDSampler import IIDSampler
 from .utils import download_and_extract_archive, check_integrity, list_dir, list_files
 
 
@@ -142,11 +143,9 @@ class Omniglot(ClassIndexedDataset):
         return "images_background" if self.background else "images_evaluation"
 
 
-def create_OML_sampler(root, download=True, preload_train=False, preload_test=False, im_size=28, train_size=None,
-                       seed=None):
+def create_datasets(root, download=True, preload_train=False, preload_test=False, im_size=28):
     """
-    Create a sampler for Omniglot data that will return examples in the framework specified by OML (see
-    ContinualMetaLearningSampler).
+    Create a pair of (train, test) datasets for Omniglot.
 
     Args:
         root (str or Path): Folder where the dataset will be located.
@@ -154,12 +153,11 @@ def create_OML_sampler(root, download=True, preload_train=False, preload_test=Fa
         preload_train (bool): Whether to load all training images into memory up-front.
         preload_test (bool): Whether to load all testing images into memory up-front.
         im_size (int): Desired size of images, or None to default to 28x28.
-        train_size (int): Total number of samples from the train set to actually use for training.
-        seed (int or list[int]): Random seed for sampling.
 
     Returns:
-        ContinualMetaLearningSampler: The sampler class.
-        tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
+        Omniglot: The training ("images_background") set.
+        Omniglot: The testing ("images_evaluation") set.
+        tuple: The shape of the images that will be returned by both datasets (they will all be the same size).
     """
     if im_size is None:
         # For now, use 28x28 as default, instead of the Omniglot default of 105x105.
@@ -199,4 +197,49 @@ def create_OML_sampler(root, download=True, preload_train=False, preload_test=Fa
         logging.info(f"{end - start:.1f}s : Omniglot test pre-loaded.")
 
     image_shape = (1, im_size, im_size)
+    return omni_train, omni_test, image_shape
+
+
+def create_iid_sampler(root, download=True, preload_train=False, preload_test=False, im_size=28, batch_size=256,
+                       train_size=None):
+    """
+    Create a sampler for Omniglot data which will sample shuffled batches in the standard way for i.i.d. training.
+
+    Args:
+        root (str or Path): Folder where the dataset will be located.
+        download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
+        preload_train (bool): Whether to load all training images into memory up-front.
+        preload_test (bool): Whether to load all testing images into memory up-front.
+        im_size (int): Desired size of images, or None to default to 28x28.
+        batch_size (int): Number of images per batch for both datasets.
+        train_size (int): Total number of samples from the train set to actually use for training.
+
+    Returns:
+        IIDSampler: The sampler class.
+        tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
+    """
+    omni_train, omni_test, image_shape = create_datasets(root, download, preload_train, preload_test, im_size)
+    return IIDSampler(omni_train, omni_test, batch_size, train_size), image_shape
+
+
+def create_OML_sampler(root, download=True, preload_train=False, preload_test=False, im_size=28, train_size=None,
+                       seed=None):
+    """
+    Create a sampler for Omniglot data that will return examples in the framework specified by OML (see
+    ContinualMetaLearningSampler).
+
+    Args:
+        root (str or Path): Folder where the dataset will be located.
+        download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
+        preload_train (bool): Whether to load all training images into memory up-front.
+        preload_test (bool): Whether to load all testing images into memory up-front.
+        im_size (int): Desired size of images, or None to default to 28x28.
+        train_size (int): Total number of samples from the train set to actually use for training.
+        seed (int or list[int]): Random seed for sampling.
+
+    Returns:
+        ContinualMetaLearningSampler: The sampler class.
+        tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
+    """
+    omni_train, omni_test, image_shape = create_datasets(root, download, preload_train, preload_test, im_size)
     return ContinualMetaLearningSampler(omni_train, omni_test, seed, train_size), image_shape

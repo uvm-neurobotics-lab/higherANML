@@ -132,7 +132,7 @@ def main(args=None):
 
     device = argutils.get_device(parser, config)
     argutils.set_seed(config["seed"])
-    sampler, input_shape = argutils.get_OML_dataset_sampler(config)
+    sampler, input_shape = argutils.get_dataset_sampler(config)
 
     # Ensure the destination can be written.
     outpath = Path(config["output"]).resolve()

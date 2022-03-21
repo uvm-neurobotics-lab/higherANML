@@ -1,11 +1,15 @@
 """
 General utility functions.
 """
-
+import inspect
 import itertools
 from pathlib import Path
 from typing import Dict, Iterable
 
+
+###############################################################################
+# GENERAL - General python utilities
+#
 
 def as_strings(l):
     """ Convert all items in a list into their string representation. """
@@ -29,11 +33,35 @@ def divide_chunks(l, n):
         yield l[i: i + n]
 
 
+def get_arg_names(type_or_func):
+    """
+    Get the names of the arguments for the given function, excluding "self". If you pass a class/type into this
+    function, it returns the constructor arguments for that type.
+
+    Args:
+        type_or_func (type or function): The callable object for which to extract arguments.
+
+    Returns:
+        list: The list of argument names.
+    """
+    # This will get the list of arg names for either a factory function or a class constructor.
+    arg_names = inspect.getfullargspec(type_or_func)[0]
+    # If the first arg is 'self', skip it.
+    if arg_names and arg_names[0] == "self":
+        arg_names = arg_names[1:]
+    return arg_names
+
+
 def update_with_keys(src, dest, keys):
     """ Works like dict.update, but only copies the values from the given keys. """
     for k in keys:
         if k in src:
             dest[k] = src[k]
+
+
+###############################################################################
+# YAML - Utilities for dealing with YAML configs
+#
 
 
 def load_yaml(yfile):
@@ -117,6 +145,113 @@ def ensure_config_param(config, key, condition=None):
     value = config[key]
     if condition and not condition(value):
         raise RuntimeError(f'Config parameter "{key}" has an invalid value: {value}')
+
+
+###############################################################################
+# PYTORCH - Various utilities for programs that use PyTorch
+#
+
+
+def get_matching_module(model, target_name):
+    """
+    Return the submodule of `model` whose name is `target_name`.
+
+    Args:
+        model (torch.nn.Module): The model to search.
+        target_name (str): The name of the desired submodule.
+
+    Returns:
+        torch.nn.Module: The target module.
+
+    Raises:
+        RuntimeError: If the target module cannot be found.
+    """
+    named_modules = list(model.named_modules())
+    for name, m in named_modules:
+        if name == target_name:
+            return m
+    raise RuntimeError(f"Could not find {target_name} as a submodule of {type(model).__name__}. Named submodules:\n"
+                       f"{named_modules}")
+
+
+def collect_matching_named_params(model, param_list):
+    """
+    Retrieves all the parameters named by `param_list`. This can be a single string or a list of strings. You can supply
+    a name higher in the module hierarchy and this will return *all* sub-parameters of that module.
+
+    For example, given the following model:
+        Classifier(
+          (encoder): ConvNet(
+            (block1): Sequential(
+              (conv0): Conv2d(1, 256, kernel_size=(3, 3), stride=(1, 1))
+              (norm0): InstanceNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=False)
+              (relu0): ReLU()
+              (pool): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+            )
+          )
+          (classifier): LinearClassifier(
+            (linear): Linear(in_features=2304, out_features=1000, bias=True)
+          )
+        )
+
+    - To retrieve just the weights of the conv filter (not the biases):
+        - `collect_matching_named_params(model, "encoder.block1.conv0.weight")`
+    - To retrieve both weights and biases of the conv filter:
+        - `collect_matching_named_params(model, "encoder.block1.conv0")`
+    - To retrieve both conv and linear params:
+        - `collect_matching_named_params(model, ["encoder.block1.conv0", "classifier"])`
+    - Use a special keyword retrieve all params:
+        - `collect_matching_named_params(model, "all")`
+
+    Args:
+        model (torch.nn.Module): The model from which to get parameters.
+        param_list (list[str] or str):
+
+    Returns:
+        list: A list of (name, param) tuples, in the order returned from `model.named_parameters()`.
+    """
+    # Allow just a single name as well as a list.
+    if isinstance(param_list, str):
+        param_list = [param_list]
+
+    # Special keyword for "all parameters".
+    if "all" in param_list:
+        return list(model.named_parameters())
+
+    # Otherwise, add anything that is in param_list OR a child of something in param_list (name startswith).
+    params = []
+    used_names = set()
+    for name, p in model.named_parameters():
+        for to_opt in param_list:
+            if name.startswith(to_opt):
+                params.append((name, p))
+                used_names.add(to_opt)
+
+    # Check if any of the requested names were not found in the model.
+    unused_names = set(param_list) - used_names
+    if len(unused_names) > 0:
+        raise RuntimeError("Some of the requested parameters were not found in the model.\n"
+                           f"Missing params: {unused_names}\n"
+                           f"Model structure:\n{model}")
+    return params
+
+
+def collect_matching_params(model, param_list):
+    """ Identical to `collect_matching_named_params()`, but drops the name from each item. """
+    return [p for _, p in collect_matching_named_params(model, param_list)]
+
+
+def lobotomize(layer, class_num):
+    """
+    Reinitialize the weights of the given output layer corresponding to the given class, so that we "erase" what we
+    learned about classifying that class. The weights are initialized with `torch.nn.init.kaiming_normal_()`.
+
+    Args:
+        layer (torch.nn.Module): An object which has a `weight` property (like a Linear layer).
+        class_num (int): The index of the weights to reinitialize.
+    """
+    from torch.nn.init import kaiming_normal_
+    kaiming_normal_(layer.weight[class_num].unsqueeze(0))
 
 
 def calculate_output_shape(module, input_shape):

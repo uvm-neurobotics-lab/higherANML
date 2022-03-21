@@ -6,50 +6,12 @@ import numpy as np
 import torch
 import yaml
 from torch.nn.functional import cross_entropy
-from torch.nn.init import kaiming_normal_
 from torch.optim import SGD, Adam
 
 import models
-import utils.storage as storage
-from models import LegacyANML
-from utils import ensure_config_param
-from utils.logging import forward_pass, Log
-
-
-def load_model(model_path, sampler_input_shape, device=None):
-    model_path = Path(model_path).resolve()
-    if model_path.suffix == ".net":
-        # Assume this was saved by the storage module, which pickles the entire model.
-        model = storage.load(model_path, device=device)
-    elif model_path.suffix == ".pt" or model_path.suffix == ".pth":
-        # Assume the model was saved in the legacy format:
-        #   - Only state_dict is stored.
-        #   - Model shape is identified by the filename.
-        sizes = [int(num) for num in model_path.name.split("_")[:-1]]
-        if len(sizes) != 3:
-            raise RuntimeError(f"Unsupported model shape: {sizes}")
-        rln_chs, nm_chs, mask_size = sizes
-        if mask_size != (rln_chs * 9):
-            raise RuntimeError(f"Unsupported model shape: {sizes}")
-
-        # Backward compatibility: Before we constructed the network based on `input_shape` and `num_classes`. At this
-        # time, `num_classes` was always 1000 and we always used greyscale 28x28 images.
-        input_shape = (1, 28, 28)
-        out_classes = 1000
-        model = LegacyANML(input_shape, rln_chs, nm_chs, out_classes)
-        model.load_state_dict(torch.load(model_path, map_location="cpu"))
-    else:
-        supported = (".net", ".pt", ".pth")
-        raise RuntimeError(f"Unsupported model file type: {model_path}. Expected one of {supported}.")
-
-    logging.debug(f"Model shape:\n{model}")
-
-    # If possible, check if the images we are testing on match the dimensions of the images this model was built for.
-    if hasattr(model, "input_shape") and tuple(model.input_shape) != tuple(sampler_input_shape):
-        raise RuntimeError("The specified dataset image sizes do not match the size this model was trained for.\n"
-                           f"Data size:  {sampler_input_shape}\n"
-                           f"Model size: {model.input_shape}")
-    return model
+from models import fine_tuning_setup, load_model
+from utils import collect_matching_params, ensure_config_param, get_matching_module, lobotomize
+from utils.logging import forward_pass, MetaLearningLog
 
 
 def check_train_config(config):
@@ -80,50 +42,6 @@ def check_train_config(config):
     config.setdefault("full_test", True)
 
 
-def get_matching_module(model, target_name):
-    named_modules = list(model.named_modules())
-    for name, m in named_modules:
-        if name == target_name:
-            return m
-    raise RuntimeError(f"Could not find {target_name} as a submodule of {type(model).__name__}. Named submodules:\n"
-                       f"{named_modules}")
-
-
-def collect_matching_named_params(model, param_list):
-    # Allow just a single name as well as a list.
-    if isinstance(param_list, str):
-        param_list = [param_list]
-
-    # Special keyword for "all parameters".
-    if "all" in param_list:
-        return list(model.named_parameters())
-
-    # Otherwise, add anything that is in param_list OR a child of something in param_list (name startswith).
-    params = []
-    used_names = set()
-    for name, p in model.named_parameters():
-        for to_opt in param_list:
-            if name.startswith(to_opt):
-                params.append((name, p))
-                used_names.add(to_opt)
-
-    # Check if any of the requested names were not found in the model.
-    unused_names = set(param_list) - used_names
-    if len(unused_names) > 0:
-        raise RuntimeError("Some of the requested parameters were not found in the model.\n"
-                           f"Missing params: {unused_names}\n"
-                           f"Model structure:\n{model}")
-    return params
-
-
-def collect_matching_params(model, param_list):
-    return [p for _, p in collect_matching_named_params(model, param_list)]
-
-
-def lobotomize(layer, class_num):
-    kaiming_normal_(layer.weight[class_num].unsqueeze(0))
-
-
 def train(sampler, input_shape, config, device="cuda", verbose=0):
     # Output config for reference. Do it before checking config to assist debugging.
     logging.info("\n---- Train Config ----\n" + yaml.dump(config) + "----------------------")
@@ -138,7 +56,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     name += "-".join(map(str, input_shape))
     print_freq = 1 if verbose > 1 else 10  # if double-verbose, print every iteration
     verbose_freq = print_freq if verbose > 0 else 0  # if verbose, then print verbose info at the same frequency
-    log = Log(name, model_args, print_freq, verbose_freq, config["save_freq"], config["full_test"], config)
+    log = MetaLearningLog(name, model_args, print_freq, verbose_freq, config["save_freq"], config["full_test"], config)
 
     # inner optimizer used during the learning phase
     inner_params = collect_matching_params(model, config["inner_params"])
@@ -221,7 +139,7 @@ def evaluate(model, classes):
     return acc_per_class
 
 
-def evaluate_and_log(model, classes, step, num_seen=None, should_log=False):
+def evaluate_and_log(model, name, classes, step, num_seen=None, should_log=False):
     """
     Meta-test-test
 
@@ -230,6 +148,7 @@ def evaluate_and_log(model, classes, step, num_seen=None, should_log=False):
 
     Args:
         model (callable): The model to evaluate.
+        name (str): The name to use for the dataset being evaluated (e.g. "train", "test").
         classes (list): A list of tensor pairs (inputs, targets), where each tensor is a batch from a single class.
         step (int): The current step in meta-test-training.
         num_seen (int): The number of classes trained on so far (so we can report performance on "seen" vs. "unseen"
@@ -249,8 +168,8 @@ def evaluate_and_log(model, classes, step, num_seen=None, should_log=False):
 
     if should_log:
         wandb.log({
-            "overall_acc": acc_per_class.mean(),
-            "seen_class_acc": acc_per_class[:num_seen].mean(),
+            f"test_{name}.acc": acc_per_class.mean(),
+            f"test_{name}.seen_class_acc": acc_per_class[:num_seen].mean(),
         }, step=num_seen)
 
     return (step, num_seen), acc_per_class
@@ -287,24 +206,7 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
     model = model.to(device)
     model.eval()
 
-    # Set up which parameters we will be fine-tuning and/or learning from scratch.
-    # First, reinitialize layers that we want to learn from scratch.
-    for n, p in collect_matching_named_params(model, config["reinit_params"]):
-        # HACK: Here we will use the parameter naming to tell us how the params should be initialized. This may not be
-        # appropriate for all types of layers! We are typically only expecting fully-connected Linear layers here.
-        if n.endswith("weight"):
-            torch.nn.init.kaiming_normal_(p)
-        elif n.endswith("bias"):
-            torch.nn.init.constant_(p, 0)
-        else:
-            raise RuntimeError(f"Cannot reinitialize this unknown parameter type: {n}")
-
-    # Now, select which layers will recieve updates during optimization, by setting the requires_grad property.
-    for p in model.parameters():  # disable all learning by default.
-        p.requires_grad_(False)
-    for p in collect_matching_params(model, config["opt_params"]):  # re-enable just for these params.
-        p.requires_grad_(True)
-    opt = torch.optim.Adam(model.parameters(), lr=config["lr"])
+    opt = fine_tuning_setup(model, config)
 
     # Sample the learning trajectory.
     train_classes, test_classes = sampler.sample_test(config["classes"], config["train_examples"],
@@ -340,14 +242,16 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
             # If we wanted to only run inference on classes already seen, we would take a slice of the data:
             #     evaluate(model, train_classes[:idx + 1])
             # where `idx` is keeping track of the current training class index.
-            train_perf_trajectory.append(evaluate_and_log(model, train_classes, idx, idx + 1, should_log=log_to_wandb))
+            train_perf_trajectory.append(evaluate_and_log(model, "train", train_classes, idx, idx + 1,
+                                                          should_log=log_to_wandb))
             # NOTE: Assumes that test classes are in the same ordering as train classes.
-            test_perf_trajectory.append(evaluate_and_log(model, test_classes, idx, idx + 1, should_log=log_to_wandb))
+            test_perf_trajectory.append(evaluate_and_log(model, "test", test_classes, idx, idx + 1,
+                                                         should_log=log_to_wandb))
 
     # meta-test-TEST
     # We only need to do this if we didn't already do it in the last iteration of the loop.
     if not should_eval:
-        train_perf_trajectory.append(evaluate_and_log(model, train_classes, idx, should_log=log_to_wandb))
-        test_perf_trajectory.append(evaluate_and_log(model, test_classes, idx, should_log=log_to_wandb))
+        train_perf_trajectory.append(evaluate_and_log(model, "train", train_classes, idx, should_log=log_to_wandb))
+        test_perf_trajectory.append(evaluate_and_log(model, "test", test_classes, idx, should_log=log_to_wandb))
 
     return train_perf_trajectory, test_perf_trajectory

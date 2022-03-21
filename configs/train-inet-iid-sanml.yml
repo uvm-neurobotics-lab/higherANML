@@ -1,0 +1,34 @@
+#
+# Current best known config for training an ANML-like model on Mini-ImageNet.
+#
+
+# Dataset
+dataset: miniimagenet
+train_size: 500
+
+# Training Configuration
+batch_size: 256
+epochs: 90
+seed: 1
+
+# Model Architecture
+model: classifier
+model_args:
+  encoder: convnet4
+  classifier: linear-classifier
+  classifier_args: {num_classes: 64}
+
+# Optimization
+optimizer: SGD
+optimizer_args:
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 0.0001
+lr_scheduler: StepLR
+lr_scheduler_args:
+  step_size: 30
+  gamma: 0.1
+
+# Evaluation
+eval_steps: [10000, 25000]
+eval: !include eval-sweep-inet-baseline.yml

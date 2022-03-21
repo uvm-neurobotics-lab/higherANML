@@ -233,15 +233,19 @@ def add_dataset_arg(parser, dflt_data_dir="experiments/data", add_resize_arg=Tru
     return parser
 
 
-def get_OML_dataset_sampler(args, greyscale=None):
+def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
     """
-    Parses the dataset arguments, as given by `add_dataset_args()`. Also requires a `seed` argument.
+    Parses the dataset arguments, as given by `add_dataset_args()`. May require additional arguments, depending on
+    which type of sampler is being requested.
 
     Args:
         args (argparse.Namespace or dict): The parsed args.
         greyscale (bool): Whether to convert images to greyscale, or None to use the default coloring.
+        sampler_type (str): The type of sampler to get. One of:
+            - "oml": OML/ANML-style sampler for continual meta-learning.
+            - "iid": DataLoaders for standard i.i.d. sampling of shuffled batches.
     Returns:
-        ContinualMetaLearningSampler: A sampler for the user-specified dataset.
+        ContinualMetaLearningSampler or IIDSampler: The sampler.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
     import datasets.mini_imagenet as imagenet
@@ -251,14 +255,14 @@ def get_OML_dataset_sampler(args, greyscale=None):
     if isinstance(args, argparse.Namespace):
         old_args = args
         args = {}
-        for k in ("dataset", "data_path", "download", "im_size", "train_size", "seed"):
+        for k in ("dataset", "data_path", "download", "im_size", "batch_size", "train_size", "seed"):
             args[k] = getattr(old_args, k, None)
     else:
         # Do not modify the config that was passed in.
         args = args.copy()
 
     # These args are allowed to be missing.
-    for arg in ("im_size", "train_size", "seed"):
+    for arg in ("im_size", "batch_size", "train_size", "seed"):
         args.setdefault(arg)
     # Ensure we have a Path type here.
     args["data_path"] = Path(args["data_path"])
@@ -266,12 +270,27 @@ def get_OML_dataset_sampler(args, greyscale=None):
     if args["dataset"] == "omni":
         if greyscale is False:
             raise ValueError("Omniglot is only available in greyscale.")
-        return omniglot.create_OML_sampler(root=args["data_path"] / "omni", download=args["download"],
-                                           im_size=args["im_size"], train_size=args["train_size"], seed=args["seed"])
+        if sampler_type == "oml":
+            return omniglot.create_OML_sampler(root=args["data_path"] / "omni", download=args["download"],
+                                               im_size=args["im_size"], train_size=args["train_size"],
+                                               seed=args["seed"])
+        elif sampler_type == "iid":
+            return omniglot.create_iid_sampler(root=args["data_path"] / "omni", download=args["download"],
+                                               im_size=args["im_size"], batch_size=args["batch_size"],
+                                               train_size=args["train_size"])
+        else:
+            raise ValueError(f"Unknown sampler type: {sampler_type}")
     elif args["dataset"] == "miniimagenet":
-        return imagenet.create_OML_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
-                                           im_size=args["im_size"], greyscale=greyscale, train_size=args["train_size"],
-                                           seed=args["seed"])
+        if sampler_type == "oml":
+            return imagenet.create_OML_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
+                                               im_size=args["im_size"], greyscale=greyscale,
+                                               train_size=args["train_size"], seed=args["seed"])
+        elif sampler_type == "iid":
+            return imagenet.create_iid_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
+                                               im_size=args["im_size"], greyscale=greyscale,
+                                               batch_size=args["batch_size"], train_size=args["train_size"])
+        else:
+            raise ValueError(f"Unknown sampler type: {sampler_type}")
     else:
         raise ValueError(f"Unknown dataset: {args['dataset']}")
 

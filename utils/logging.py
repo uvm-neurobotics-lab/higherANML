@@ -6,6 +6,7 @@ import logging
 from collections import Counter
 from pathlib import Path
 from time import time, strftime, gmtime
+from typing import Union
 
 import numpy as np
 import scipy
@@ -23,6 +24,32 @@ def accuracy(preds, labels):
     if len(preds) == 0:
         return np.nan
     return (preds.argmax(axis=1) == labels).sum().item() / len(labels)
+
+
+def topk_accuracy(preds, labels, topk: Union[int, tuple, list] = 1):
+    """
+    Computes the accuracy over the k top predictions for the specified values of k.
+    """
+    assert len(preds) == len(labels)
+    if not isinstance(topk, (tuple, list)):
+        topk = [topk]
+
+    # Get largest K label indices in each row.
+    maxk = max(topk)
+    _, largest_indices = preds.topk(maxk, dim=1)
+    largest_indices = largest_indices.t()
+    # Mark as True any place where one of the top K indices matches the label index.
+    # Now columns are examples and rows are 1 thru K.
+    correct = largest_indices.eq(labels.view(1, -1).expand_as(largest_indices))
+
+    res = []
+    for k in topk:
+        # Take only the first K rows (corresponding to the top K answers for each sample), and sum.
+        # There cannot be more than one true value per sample, so the total sum is the total # correct.
+        # If we want a vector that would tell us which samples were correct, we could use `.sum(0, keepdim=True)`.
+        num_correct = correct[:k].sum().item()
+        res.append(num_correct / len(labels))
+    return res
 
 
 def spread(preds):
@@ -128,7 +155,28 @@ def forward_pass(model, ims, labels):
     return out, loss, acc
 
 
-def overall_accuracy(model, all_batches, print_fn):
+class eval_mode:
+    """
+    Context-manager that both disables gradient calculation (`torch.no_grad()`) and sets modules in eval mode
+    (`torch.nn.Module.eval()`).
+    """
+    def __init__(self, module):
+        self.module = module
+        self.prev_grad = False
+        self.prev_train = False
+
+    def __enter__(self):
+        self.prev_grad = torch.is_grad_enabled()
+        torch.set_grad_enabled(False)
+        self.prev_train = self.module.training
+        self.module.train(False)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        torch.set_grad_enabled(self.prev_grad)
+        self.module.train(self.prev_train)
+
+
+def overall_accuracy(model, all_batches, device, print_fn=None):
     """
     Evaluate the model on each batch and return the average accuracy over all samples. If there are no batches, or all
     batches are empty, then this will return NaN.
@@ -136,8 +184,17 @@ def overall_accuracy(model, all_batches, print_fn):
     # Allow the tensors to be empty.
     if len(all_batches) == 0:
         return np.nan
-    print_fn(f"Computing accuracy of {len(all_batches)} batches, {len(all_batches[0][0])} samples per batch...")
-    acc_per_batch = np.array([(forward_pass(model, ims, labels)[2], len(labels)) for ims, labels in all_batches])
+
+    if print_fn:
+        print_fn(f"Computing accuracy of {len(all_batches)} batches...")
+
+    acc_per_batch = []
+    with eval_mode(model):
+        for ims, labels in all_batches:
+            ims, labels = ims.to(device), labels.to(device)
+            acc_per_batch.append((forward_pass(model, ims, labels)[2], len(labels)))
+
+    acc_per_batch = np.array(acc_per_batch)
     accs = acc_per_batch[:, 0]
     weights = acc_per_batch[:, 1]
     if weights.sum() == 0:
@@ -160,15 +217,15 @@ def check_eval_config(eval_config):
         eval_config["eval_freq"] = max(1, eval_config["classes"] // 20)
 
 
-class Log:
-    def __init__(self, name, model_args, print_freq=10, verbose_freq=None, save_freq=1000, full_test=True, config=None):
-        self.start = -1
+class BaseLog:
+
+    def __init__(self, name, model_args, save_freq, full_test=True, config=None):
         self.name = name
         self.model_args = model_args
-        self.print_freq = print_freq
-        self.verbose_freq = verbose_freq
         self.save_freq = save_freq
         self.full_test = full_test
+        if config is None:
+            config = {}
         self.config = config
         self.eval_steps = config.get("eval_steps")
         if self.eval_steps is None:
@@ -188,6 +245,117 @@ class Log:
 
     def debug(self, msg):
         self.logger.debug(msg)
+
+    @torch.no_grad()
+    def maybe_save_and_eval(self, it, model, sampler, device, should_save=None, should_eval=None):
+        if should_eval is None:
+            should_eval = (it in self.eval_steps)
+        if should_save is None:
+            # Evaluating requires saving, unless it was forced off. See the note below about this corner case.
+            should_save = should_eval or (it % self.save_freq == 0)
+
+        # NOTE: If we are evaluating but not saving, it is assumed that the model for this iteration was already saved.
+        # This can happen if the model was saved in the final iteration, but it was not evaluated, and then we called
+        # `log.close()`. In this case, we don't want to save again, we just want to launch evaluation.
+        if not should_save and not should_eval:
+            return
+
+        model_path = self.save_path / f"{self.name}-{it}.net"
+        if should_save:
+            # Run full test on training data.
+            if self.full_test:
+                full_train_acc = overall_accuracy(model, sampler.full_train_data(device), device, self.debug)
+                full_val_acc = overall_accuracy(model, sampler.full_val_data(device), device, self.debug)
+                self.info(f"Saved Model Performance:"
+                          f" Train Acc = {full_train_acc:.1%} | Validation Acc = {full_val_acc:.1%}")
+                wandb.log({
+                    "train_acc": full_train_acc,
+                    "val_acc": full_val_acc,
+                }, step=it)
+
+            # Save the model.
+            save(model, model_path, **self.model_args)
+
+        # Launch full evaluation of the model as a separate job.
+        if should_eval:
+            self.launch_eval(model_path)
+
+    def launch_eval(self, model_path):
+        cfg_list = self.eval_config if isinstance(self.eval_config, list) else [self.eval_config]
+        for eval_config in cfg_list:
+            # If the config only has one key, then this names the "flavor" of the evaluation, and the corresponding
+            # value is actually the config.
+            flavor = None
+            if len(eval_config) == 1:
+                flavor, eval_config = next(iter(eval_config.items()))
+            eval_config = eval_config.copy()  # copy before editing
+            eval_config["model"] = str(model_path.resolve())
+            update_with_keys(self.config, eval_config, ["project", "entity", "group"])
+            check_eval_config(eval_config)
+            retcode = evaljob.launch(eval_config, flavor=flavor, cluster=self.config["cluster"],
+                                     launcher_args=["--mem=64G"], force=True)
+            if retcode != 0:
+                self.warning(f"Eval job may not have launched. Launcher exited with code {retcode}. See above for"
+                             " possible errors.")
+
+    def close(self, it, model, sampler, device):
+        # Negate the normal "should save" logic because this indicates the model was already saved at the end of the
+        # last iteration, so we don't need to do it again.
+        should_save = not (it % self.save_freq == 0)
+        # Eval if there is is at least one desired eval beyond this point in training, but this point is not already
+        # included.
+        has_larger = any([s > it for s in self.eval_steps])
+        has_equal = any([s == it for s in self.eval_steps])
+        should_eval = has_larger and not has_equal
+        self.maybe_save_and_eval(it, model, sampler, device, should_save=should_save, should_eval=should_eval)
+
+
+class StandardLog(BaseLog):
+
+    def __init__(self, name, model_args, print_freq=100, save_freq=2000, full_test=True, config=None):
+        super().__init__(name, model_args, save_freq, full_test, config)
+        self.start = -1
+        self.print_freq = print_freq
+
+    def epoch(self, it, epoch, model, sampler, device):
+        self.info(f"---- Beginning Epoch {epoch}: {len(sampler.train_loader)} batches, {sampler.batch_size} samples"
+                  " each ----")
+
+    def step(self, it, epoch, loss, acc, out, labels, model, sampler, device):
+        metrics = {}
+        acc1, acc5 = topk_accuracy(out, labels, topk=(1, 5))
+        metrics["epoch"] = epoch
+        metrics["loss"] = loss.item()
+        metrics["batch_train_acc"] = acc
+        metrics["batch_train_acc_top1"] = acc1
+        metrics["batch_train_acc_top5"] = acc5
+
+        time_to_print = (it % self.print_freq == 0)
+        if time_to_print:
+            # Track runtime since last printout.
+            if self.start < 0:
+                self.start = time()
+                elapsed = 0
+            else:
+                end = time()
+                elapsed = end - self.start
+                self.start = end
+                metrics["runtime"] = elapsed
+
+            self.info(f"Step {it}: Loss = {loss.item():.3f} | Train Acc = {acc:.1%} | Train Top 5 Acc = {acc5:.1%}"
+                      f" ({strftime('%H:%M:%S', gmtime(elapsed))})")
+
+        wandb.log(metrics, step=it)
+        self.maybe_save_and_eval(it, model, sampler, device)
+
+
+class MetaLearningLog(BaseLog):
+
+    def __init__(self, name, model_args, print_freq=10, verbose_freq=None, save_freq=1000, full_test=True, config=None):
+        super().__init__(name, model_args, save_freq, full_test, config)
+        self.start = -1
+        self.print_freq = print_freq
+        self.verbose_freq = verbose_freq
 
     def outer_begin(self, it):
         if self.start < 0:
@@ -259,54 +427,4 @@ class Log:
                                        lambda msg: self.debug("    " + msg))
 
         wandb.log(metrics, step=it)
-
-        should_save = (it % self.save_freq == 0)
-        should_eval = (it in self.eval_steps)
-        if should_save or should_eval:
-            self.save_and_eval(it, meta_model, sampler, device, should_eval)
-
-    def save_and_eval(self, it, model, sampler, device, should_eval):
-        # Run full test on training data.
-        if self.full_test:
-            meta_train_acc = overall_accuracy(model, sampler.full_train_data(device), self.debug)
-            meta_test_acc = overall_accuracy(model, sampler.full_val_data(device), self.debug)
-            self.info(f"Meta-Model Performance:"
-                      f" Train Acc = {meta_train_acc:.1%} | Full Test Acc = {meta_test_acc:.1%}")
-            wandb.log({
-                "meta_train_acc": meta_train_acc,
-                "meta_test_acc": meta_test_acc,
-            }, step=it)
-
-        # Save the model.
-        model_path = self.save_path / f"{self.name}-{it}.net"
-        save(model, model_path, **self.model_args)
-
-        # Launch full evaluation of the model as a separate job.
-        if should_eval:
-            self.launch_eval(model_path)
-
-    def launch_eval(self, model_path):
-        cfg_list = self.eval_config if isinstance(self.eval_config, list) else [self.eval_config]
-        for eval_config in cfg_list:
-            # If the config only has one key, then this names the "flavor" of the evaluation, and the corresponding
-            # value is actually the config.
-            flavor = None
-            if len(eval_config) == 1:
-                flavor, eval_config = next(iter(eval_config.items()))
-            eval_config = eval_config.copy()  # copy before editing
-            eval_config["model"] = str(model_path.resolve())
-            update_with_keys(self.config, eval_config, ["project", "entity", "group"])
-            check_eval_config(eval_config)
-            retcode = evaljob.launch(eval_config, flavor=flavor, cluster=self.config["cluster"],
-                                     launcher_args=["--mem=64G"], force=True)
-            if retcode != 0:
-                self.warning(f"Eval job may not have launched. Launcher exited with code {retcode}. See above for"
-                             " possible errors.")
-
-    def close(self, it, model, sampler, device):
-        # Eval if there is is at least one desired eval beyond this point in training, but this point is not already
-        # included.
-        has_larger = any([s > it for s in self.eval_steps])
-        has_equal = any([s == it for s in self.eval_steps])
-        should_eval = has_larger and not has_equal
-        self.save_and_eval(it, model, sampler, device, should_eval)
+        self.maybe_save_and_eval(it, meta_model, sampler, device)

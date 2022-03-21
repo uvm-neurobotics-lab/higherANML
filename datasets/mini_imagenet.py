@@ -15,6 +15,7 @@ from torchvision.transforms.functional import InterpolationMode
 
 from .class_indexed_dataset import ClassIndexedDataset
 from .ContinualMetaLearningSampler import ContinualMetaLearningSampler
+from .IIDSampler import IIDSampler
 from .utils import extract_archive, check_integrity, list_dir, list_files
 
 
@@ -157,21 +158,19 @@ class MiniImageNet(ClassIndexedDataset):
         gdown.cached_download(id=self.split.gid, path=self.tarpath, md5=self.split.md5, quiet=self.quiet)
 
 
-def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train_size=None, seed=None):
+def create_datasets(root, download=True, im_size=None, greyscale=False):
     """
-    Create a sampler for Mini-ImageNet data that will return examples in the framework specified by OML (see
-    ContinualMetaLearningSampler).
+    Create a pair of (train, test) datasets for Mini-ImageNet.
 
     Args:
         root (str or Path): Folder where the dataset will be located.
         download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
         im_size (int): Desired size of images, or None to use the on-disk sizes.
         greyscale (bool): Whether to convert images to greyscale; False or None to keep the default coloring.
-        train_size (int): Total number of samples from the train set to actually use for training.
-        seed (int or list[int]): Random seed for sampling.
 
     Returns:
-        ContinualMetaLearningSampler: The sampler class.
+        MiniImageNet: The training set.
+        MiniImageNet: The testing set.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
     transforms = [
@@ -208,4 +207,45 @@ def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train
     # We know that by default this dataset has 84x84 color images.
     actual_size = 84 if im_size is None else im_size
     image_shape = (1 if greyscale else 3, actual_size, actual_size)
+    return train, test, image_shape
+
+
+def create_iid_sampler(root, download=True, im_size=None, greyscale=False, batch_size=128, train_size=None):
+    """
+    Create a sampler for Mini-ImageNet data which will sample shuffled batches in the standard way for i.i.d. training.
+
+    Args:
+        root (str or Path): Folder where the dataset will be located.
+        download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
+        im_size (int): Desired size of images, or None to use the on-disk sizes.
+        greyscale (bool): Whether to convert images to greyscale; False or None to keep the default coloring.
+        batch_size (int): Number of images per batch for both datasets.
+        train_size (int): Total number of samples from the train set to actually use for training.
+
+    Returns:
+        IIDSampler: The sampler class.
+        tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
+    """
+    train, test, image_shape = create_datasets(root, download, im_size, greyscale)
+    return IIDSampler(train, test, batch_size, train_size), image_shape
+
+
+def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train_size=None, seed=None):
+    """
+    Create a sampler for Mini-ImageNet data that will return examples in the framework specified by OML (see
+    ContinualMetaLearningSampler).
+
+    Args:
+        root (str or Path): Folder where the dataset will be located.
+        download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
+        im_size (int): Desired size of images, or None to use the on-disk sizes.
+        greyscale (bool): Whether to convert images to greyscale; False or None to keep the default coloring.
+        train_size (int): Total number of samples from the train set to actually use for training.
+        seed (int or list[int]): Random seed for sampling.
+
+    Returns:
+        ContinualMetaLearningSampler: The sampler class.
+        tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
+    """
+    train, test, image_shape = create_datasets(root, download, im_size, greyscale)
     return ContinualMetaLearningSampler(train, test, seed, train_size), image_shape

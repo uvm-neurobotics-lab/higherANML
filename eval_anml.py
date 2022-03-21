@@ -64,7 +64,7 @@ def main(args=None):
 
     device = argutils.get_device(parser, config)
     argutils.set_seed(config["seed"])
-    sampler, input_shape = argutils.get_OML_dataset_sampler(config)
+    sampler, input_shape = argutils.get_dataset_sampler(config)
 
     repeats(sampler, input_shape, config, device)
 
