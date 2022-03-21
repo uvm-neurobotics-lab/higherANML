@@ -297,6 +297,12 @@ class BaseLog:
             eval_config = eval_config.copy()  # copy before editing
             eval_config["model"] = str(model_path.resolve())
             update_with_keys(self.config, eval_config, ["project", "entity", "group"])
+            if not eval_config.get("group"):
+                # If group is not defined, try a couple more backups, because we really want these runs grouped.
+                if wandb.run.group:
+                    eval_config["group"] = wandb.run.group
+                else:
+                    eval_config["group"] = wandb.run.name
             check_eval_config(eval_config)
             retcode = evaljob.launch(eval_config, flavor=flavor, cluster=self.config["cluster"],
                                      launcher_args=["--mem=64G"], force=True)

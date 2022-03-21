@@ -418,7 +418,7 @@ def get_location():
 
 
 def prepare_wandb(parsed_args, job_type=None, create_folder=True, root_path="experiments", save_args=False,
-                  allow_reinit=None, dry_run=False):
+                  autogroup=False, allow_reinit=None, dry_run=False):
     """
     Calls `wandb.init()` and (optionally) sets up the result folder, based on the arguments from `add_wandb_args()`.
 
@@ -432,6 +432,8 @@ def prepare_wandb(parsed_args, job_type=None, create_folder=True, root_path="exp
         root_path (str): The root path in which to create result folders. Not used if `args.id` is present.
         save_args (bool): Whether to also save the arguments locally in the result folder. They will be saved on W&B
             regardless.
+        autogroup (bool): If true, and group is not specified by the config, then we will set the group to be the same
+            as the run name. This modifies the `parsed_args` passed in.
         allow_reinit (bool): If true, you may call this function multiple times; see the `reinit` argument to
             `wandb.init()`.
         dry_run (bool): If true, don't actually take actions, just print what actions would be taken.
@@ -441,11 +443,14 @@ def prepare_wandb(parsed_args, job_type=None, create_folder=True, root_path="exp
     """
     import wandb
 
+    orig_args = parsed_args
     parsed_args = args_as_dict(parsed_args)
 
     parsed_args["job_type"] = job_type
     parsed_args["location"] = get_location()
     parsed_args["date"] = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+
+    existing_id = parsed_args.get("id")
 
     if not dry_run:
         kwargs = {
@@ -456,19 +461,31 @@ def prepare_wandb(parsed_args, job_type=None, create_folder=True, root_path="exp
             "entity": parsed_args["entity"],
             "project": parsed_args["project"],
         }
-        if parsed_args.get("id"):
+        if existing_id:
             kwargs["id"] = parsed_args["id"]
         run = wandb.init(**kwargs)
     else:
         from collections import namedtuple
-        Run = namedtuple("Run", ["id", "config", "project", "name"])
-        run = Run("abcd1234", {"foo": "bar"}, parsed_args.get("project", get_user()), "fake-name-8")
-        if parsed_args.get("id", None):
-            print(f"Would overwrite an existing W&B run with ID={parsed_args['id']}.")
+
+        Run = namedtuple("Run", ["id", "name", "config", "project", "group"])
+        run = Run(parsed_args.get("id", "abcd1234"), "fake-name-8", {"foo": "bar"},
+                  parsed_args.get("project", get_user()), None)
+        if existing_id:
+            print(f"Would overwrite an existing W&B run with ID={existing_id}.")
         else:
             print(f"Would launch a new W&B run.")
 
-    if create_folder and not parsed_args.get("id", None):
+    if autogroup and not run.group and not existing_id:
+        # If the run doesn't have a group, and we aren't re-using a pre-existing run, then place the run into a group
+        # based on its own name.
+        run.config.update({"group": run.name}, allow_val_change=True)
+        # Also update the group in the original config.
+        if isinstance(orig_args, dict):
+            orig_args["group"] = run.name
+        else:
+            setattr(orig_args, "group", run.name)
+
+    if create_folder and not existing_id:
         # Only create a new folder if the ID wasn't pre-existing.
         folder = (Path(root_path) / run.project / run.name).resolve()
         if not dry_run:

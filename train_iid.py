@@ -92,7 +92,7 @@ def setup_and_train(parser, config, verbose):
 
     # Keep this before we load the dataset b/c we want to use a dataset location that's relative to the run directory.
     # The prepare_wandb function will change our run directory.
-    argutils.prepare_wandb(config, job_type="train")
+    argutils.prepare_wandb(config, job_type="train", autogroup=True)
 
     sampler, input_shape = argutils.get_dataset_sampler(config, sampler_type="iid")
 
