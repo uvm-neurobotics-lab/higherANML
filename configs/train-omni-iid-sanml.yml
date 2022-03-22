@@ -4,12 +4,12 @@
 
 # Dataset
 dataset: omni
-train_size: 20
+train_size: 15
 
 # Training Configuration
 batch_size: 256
-epochs: 90
-seed: 1
+epochs: 10
+seed: 12345
 
 # Model Architecture
 model: classifier
@@ -24,10 +24,11 @@ model_args:
   classifier_args: {num_classes: 1000}
 
 # Optimization
-lr: 0.003
+lr: 0.001
 
 # Evaluation
-eval_steps: [10000, 25000]
+save_freq: 57
+eval_steps: [300, 10000]
 eval:
   - olft: !include eval-sweep-omni-1FC.yml
   - unfrozen: !include eval-sweep-omni-unfrozen.yml

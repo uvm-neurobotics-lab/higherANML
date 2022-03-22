@@ -12,3 +12,6 @@ reinit_params: classifier.linear
 opt_params: all
 classes: 600
 lr: !include learning-rates.yml
+
+# Reporting
+eval_freq: 50

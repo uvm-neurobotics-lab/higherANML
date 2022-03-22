@@ -13,3 +13,6 @@ reinit_params: fc
 opt_params: fc
 classes: 600
 lr: !include learning-rates.yml
+
+# Reporting
+eval_freq: 50
