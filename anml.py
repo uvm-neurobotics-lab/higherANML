@@ -3,10 +3,12 @@ from pathlib import Path
 
 import higher
 import numpy as np
+import pandas as pd
 import torch
 import yaml
 from torch.nn.functional import cross_entropy
 from torch.optim import SGD, Adam
+from tqdm import trange
 
 import models
 from models import fine_tuning_setup, load_model
@@ -159,14 +161,13 @@ def evaluate_and_log(model, name, classes, step, num_seen=None, should_log=False
         tuple: An index of the current training step: (step, classes seen).
         numpy.ndarray: Array of accuracy per class.
     """
-    import wandb
-
     acc_per_class = evaluate(model, classes)
 
     if num_seen is None:
         num_seen = len(classes)
 
     if should_log:
+        import wandb
         wandb.log({
             f"test_{name}.acc": acc_per_class.mean(),
             f"test_{name}.seen_class_acc": acc_per_class[:num_seen].mean(),
@@ -188,12 +189,9 @@ def check_test_config(config):
         return test_fn
 
     ensure_config_param(config, "model", of_type((str, Path)))
-    ensure_config_param(config, "reinit_params", of_type((str, list, tuple)))
-    ensure_config_param(config, "opt_params", of_type((str, list, tuple)))
     ensure_config_param(config, "classes", gt_zero)
     ensure_config_param(config, "train_examples", gt_zero)
     ensure_config_param(config, "test_examples", gt_zero)
-    ensure_config_param(config, "lr", gt_zero)
     if config.get("eval_freq") is None:
         config["eval_freq"] = 0
     ensure_config_param(config, "eval_freq", gte_zero)
@@ -255,3 +253,94 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
         test_perf_trajectory.append(evaluate_and_log(model, "test", test_classes, idx, should_log=log_to_wandb))
 
     return train_perf_trajectory, test_perf_trajectory
+
+
+def test_repeats(num_runs, wandb_init, **kwargs):
+    """ Run `num_runs` times and collect results into a single list. """
+    num_classes = kwargs["config"]["classes"]
+    kwargs["log_to_wandb"] = True
+    nanfill = [float("nan")]
+    results = []
+
+    # Run the tests `num_runs` times.
+    for r in trange(num_runs):
+        with wandb_init("eval"):
+            # RUN THE TEST
+            train_traj, test_traj = test_train(**kwargs)
+            # Train and test should be evaluated the same number of times.
+            assert len(train_traj) == len(test_traj)
+            # At the end of training, train and test should both have the full number of classes.
+            assert len(train_traj[-1][1]) == len(test_traj[-1][1]) == num_classes
+            # Accumulate the results.
+            for ((step, classes_trained), tr), (_, te) in zip(train_traj, test_traj):
+                # Extend each result to make sure it has the full number of classes.
+                tr = list(tr) + nanfill * (num_classes - len(tr))
+                te = list(te) + nanfill * (num_classes - len(te))
+                # Add the current run index to create an overall index.
+                index = [r, step, classes_trained]
+                results.append((index, tr, te))
+
+    return results
+
+
+def save_results(results, output_path, config):
+    """ Transform results from `test_repeats()` into a pandas Dataframe and save to the given file. """
+    # These params describing the evaluation should be prepended to each row in the table.
+    eval_param_names = ["model", "dataset", "train_examples", "test_examples", "reinit_params", "opt_params", "classes",
+                        "lr"]
+    eval_params = [config[k] for k in eval_param_names]
+
+    # Unflatten the data into one row per class, per epoch.
+    full_data = []
+    for idx, train_acc, test_acc in results:
+        # All params which apply to all results in this epoch.
+        prefix = eval_params + idx
+        for c in range(config["classes"]):
+            # A pair of (train, test) results per class.
+            full_data.append(prefix + [c, train_acc[c], test_acc[c]])
+
+    # Now assemble the data into a dataframe and save it.
+    colnames = eval_param_names + ["trial", "epoch", "classes_trained", "class_id", "train_acc", "test_acc"]
+    result_matrix = pd.DataFrame(full_data, columns=colnames)
+    # Although it makes some operations more cumbersome, we can save a lot of space and maybe some time by treating
+    # most of the columns as a MultiIndex. Also makes indexing easier. All but the final metrics columns.
+    result_matrix.set_index(colnames[:-2], inplace=True)
+    result_matrix.to_pickle(output_path)
+    print(f"Saved result matrix of size {result_matrix.shape} to: {output_path}")
+    return result_matrix
+
+
+def report_summary(result_matrix):
+    """ Take dataframe resulting from `save_results()` and compute and print some summary metrics. """
+    # Average over all classes to get overall performance numbers, by grouping by columns other than class.
+    non_class_columns = list(filter(lambda x: x != "class_id", result_matrix.index.names))
+    avg_over_classes = result_matrix.groupby(non_class_columns).mean()
+    # Get just the final test accuracy of each run (when we've trained on all classes).
+    classes_trained = avg_over_classes.index.get_level_values("classes_trained")
+    num_classes = classes_trained.max()
+    train_acc = avg_over_classes.loc[classes_trained == num_classes, "train_acc"]
+    test_acc = avg_over_classes.loc[classes_trained == num_classes, "test_acc"]
+    # NOTE: Right now we're just printing to console, but it may be useful in the future to report this back to the
+    # original training job as a summary metric? Example here: https://docs.wandb.ai/guides/track/log#summary-metrics
+    print(f"Final accuracy on {num_classes} classes:")
+    print(f"Train {train_acc.mean():.1%} (std: {train_acc.std():.1%}) | "
+          f"Test {test_acc.mean():.1%} (std: {test_acc.std():.1%})")
+
+
+def run_full_test(config, wandb_init, sampler, input_shape, outpath, device):
+    """ Run `test_train()` a number of times and collect the results. """
+    # The name of these keyword arguments needs to match the ones in `test_train()`, as we will pass them on.
+    results = test_repeats(
+        num_runs=config["runs"],
+        wandb_init=wandb_init,
+        sampler=sampler,
+        sampler_input_shape=input_shape,
+        config=config,
+        device=device,
+    )
+
+    # Assemble and save the result matrix.
+    result_matrix = save_results(results, outpath, config)
+
+    # Print summary to console.
+    report_summary(result_matrix)

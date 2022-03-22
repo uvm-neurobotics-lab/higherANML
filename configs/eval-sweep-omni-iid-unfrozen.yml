@@ -1,0 +1,18 @@
+#
+# Config for i.i.d. transfer learning of Classifier-Basline models on Omniglot. Fine-tunes just the classifier.
+#
+
+# Dataset
+dataset: omni
+train_examples: 15
+test_examples: 5
+
+# Test Method
+method: iid
+reinit_params: classifier.linear
+opt_params: all
+classes: 600
+lr: !include learning-rates.yml
+
+# Reporting
+eval_freq: 50

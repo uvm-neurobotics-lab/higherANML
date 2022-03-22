@@ -23,7 +23,7 @@ def unzip(l):
 
 def flatten(list_of_lists):
     """ Flatten one level of nesting. """
-    return itertools.chain.from_iterable(list_of_lists)
+    return list(itertools.chain.from_iterable(list_of_lists))
 
 
 def divide_chunks(l, n):

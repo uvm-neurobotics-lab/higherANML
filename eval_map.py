@@ -6,6 +6,7 @@ The "map" portion of a map-reduce job for evaluating ANML and related models.
 # You should get a final accuracy somewhere around:
 #   Train 96.8% (std: 3.4%) | Test 92.6% (std: 6.2%)
 # Other learning rates will result in lower performance.
+# Optionally add `--method iid` to test standard transfer learning ("oracle" style).
 # Optionally add `--eval-freq 2` to test a full trajectory of evaluation numbers. This will take longer and will print
 # the same result, but more data will end up in the resulting dataframe.
 
@@ -13,12 +14,11 @@ import argparse
 import sys
 from pathlib import Path
 
-import pandas as pd
 import yaml
-from tqdm import trange
 
 import utils.argparsing as argutils
-from anml import test_train
+from anml import run_full_test as seq_test
+from iid import run_full_test as iid_test
 
 
 def check_path(path):
@@ -28,80 +28,14 @@ def check_path(path):
         raise argparse.ArgumentTypeError(f"model: {path} is not a valid path")
 
 
-def repeats(num_runs, wandb_init, **kwargs):
-    num_classes = kwargs["config"]["classes"]
-    kwargs["log_to_wandb"] = True
-    nanfill = [float("nan")]
-    results = []
-
-    # Run the tests `num_runs` times.
-    for r in trange(num_runs):
-        with wandb_init("eval"):
-            # RUN THE TEST
-            train_traj, test_traj = test_train(**kwargs)
-            # Train and test should be evaluated the same number of times.
-            assert len(train_traj) == len(test_traj)
-            # At the end of training, train and test should both have the full number of classes.
-            assert len(train_traj[-1][1]) == len(test_traj[-1][1]) == num_classes
-            # Accumulate the results.
-            for ((step, classes_trained), tr), (_, te) in zip(train_traj, test_traj):
-                # Extend each result to make sure it has the full number of classes.
-                tr = list(tr) + nanfill * (num_classes - len(tr))
-                te = list(te) + nanfill * (num_classes - len(te))
-                # Add the current run index to create an overall index.
-                index = [r, step, classes_trained]
-                results.append((index, tr, te))
-
-    return results
-
-
-def save_results(results, output_path, config):
-    # These params describing the evaluation should be prepended to each row in the table.
-    eval_param_names = ["model", "dataset", "train_examples", "test_examples", "reinit_params", "opt_params", "classes",
-                        "lr"]
-    eval_params = [config[k] for k in eval_param_names]
-
-    # Unflatten the data into one row per class, per epoch.
-    full_data = []
-    for idx, train_acc, test_acc in results:
-        # All params which apply to all results in this epoch.
-        prefix = eval_params + idx
-        for c in range(config["classes"]):
-            # A pair of (train, test) results per class.
-            full_data.append(prefix + [c, train_acc[c], test_acc[c]])
-
-    # Now assemble the data into a dataframe and save it.
-    colnames = eval_param_names + ["trial", "epoch", "classes_trained", "class_id", "train_acc", "test_acc"]
-    result_matrix = pd.DataFrame(full_data, columns=colnames)
-    # Although it makes some operations more cumbersome, we can save a lot of space and maybe some time by treating
-    # most of the columns as a MultiIndex. Also makes indexing easier. All but the final metrics columns.
-    result_matrix.set_index(colnames[:-2], inplace=True)
-    result_matrix.to_pickle(output_path)
-    print(f"Saved result matrix of size {result_matrix.shape} to: {output_path}")
-    return result_matrix
-
-
-def report_summary(result_matrix):
-    # Average over all classes to get overall performance numbers, by grouping by columns other than class.
-    non_class_columns = list(filter(lambda x: x != "class_id", result_matrix.index.names))
-    avg_over_classes = result_matrix.groupby(non_class_columns).mean()
-    # Get just the final test accuracy of each run (when we've trained on all classes).
-    classes_trained = avg_over_classes.index.get_level_values("classes_trained")
-    num_classes = classes_trained.max()
-    train_acc = avg_over_classes.loc[classes_trained == num_classes, "train_acc"]
-    test_acc = avg_over_classes.loc[classes_trained == num_classes, "test_acc"]
-    # NOTE: Right now we're just printing to console, but it may be useful in the future to report this back to the
-    # original training job as a summary metric? Example here: https://docs.wandb.ai/guides/track/log#summary-metrics
-    print(f"Final accuracy on {num_classes} classes:")
-    print(f"Train {train_acc.mean():.1%} (std: {train_acc.std():.1%}) | "
-          f"Test {test_acc.mean():.1%} (std: {test_acc.std():.1%})")
-
-
 def main(args=None):
     parser = argutils.create_parser(__doc__)
 
     parser.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
                         help="Evaluation config file.")
+    parser.add_argument("--method", choices=("sequential", "iid"), default="sequential",
+                        help="The testing method to use: sequential (continual learning) or i.i.d. (standard transfer"
+                             " learning.")
     argutils.add_dataset_arg(parser)
     parser.add_argument("-m", "--model", metavar="PATH", type=check_path, help="Path to the model to evaluate.")
     parser.add_argument("-l", "--lr", metavar="RATE", type=float,
@@ -111,6 +45,10 @@ def main(args=None):
                         help="Number of examples per class, for training.")
     parser.add_argument("--test-examples", metavar="INT", type=int, default=5,
                         help="Number of examples per class, for testing.")
+    parser.add_argument("--epochs", metavar="INT", type=int, default=5,
+                        help="Number of epochs to fine-tune for. Only used in i.i.d. testing.")
+    parser.add_argument("--batch-size", metavar="INT", type=int, default=256,
+                        help="Size of batches to train on. Only used in i.i.d. testing.")
     parser.add_argument("--eval-freq", metavar="INT", type=int,
                         help="The frequency at which to evaluate performance of the model throughout the learning"
                              " process. This can be very expensive, if evaluating after every class learned (freq = 1)."
@@ -124,15 +62,17 @@ def main(args=None):
 
     args = parser.parse_args(args)
     argutils.configure_logging(args)
-    overrideable_args = ["dataset", "data_path", "download", "im_size", "model", "classes", "train_examples",
-                         "test_examples", "lr", "eval_freq", "runs", "output", "device", "seed", "project", "entity",
-                         "group"]
+    overrideable_args = ["method", "dataset", "data_path", "download", "im_size", "model", "classes", "train_examples",
+                         "test_examples", "epochs", "batch_size", "lr", "eval_freq", "runs", "output", "device", "seed",
+                         "project", "entity", "group"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
     print("\n---- Test Config ----\n" + yaml.dump(config) + "----------------------")
 
     device = argutils.get_device(parser, config)
     argutils.set_seed(config["seed"])
-    sampler, input_shape = argutils.get_dataset_sampler(config)
+
+    sampler_type = "iid" if config["method"] == "iid" else "oml"
+    sampler, input_shape = argutils.get_dataset_sampler(config, sampler_type=sampler_type)
 
     # Ensure the destination can be written.
     outpath = Path(config["output"]).resolve()
@@ -144,21 +84,8 @@ def main(args=None):
     def wandb_init(job_type):
         return argutils.prepare_wandb(config, job_type=job_type, create_folder=False, allow_reinit=True)
 
-    # The name of these keyword arguments needs to match the ones in `test_train()`, as we will pass them on.
-    results = repeats(
-        num_runs=config["runs"],
-        wandb_init=wandb_init,
-        sampler=sampler,
-        sampler_input_shape=input_shape,
-        config=config,
-        device=device,
-    )
-
-    # Assemble and save the result matrix.
-    result_matrix = save_results(results, outpath, config)
-
-    # Print summary to console.
-    report_summary(result_matrix)
+    run_full_test = iid_test if config["method"] == "iid" else seq_test
+    run_full_test(config, wandb_init, sampler, input_shape, outpath, device)
 
 
 if __name__ == "__main__":

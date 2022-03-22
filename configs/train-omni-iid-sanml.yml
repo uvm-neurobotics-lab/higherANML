@@ -33,3 +33,5 @@ eval_steps: [300, 10000]
 eval:
   - olft: !include eval-sweep-omni-1FC.yml
   - unfrozen: !include eval-sweep-omni-unfrozen.yml
+  - olft-oracle: !include eval-sweep-omni-iid-1FC.yml
+  - unfrozen-oracle: !include eval-sweep-omni-iid-unfrozen.yml

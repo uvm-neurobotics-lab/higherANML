@@ -1,15 +1,16 @@
 import logging
 from pathlib import Path
 
-import wandb
+import pandas as pd
 import yaml
 from torch.nn.functional import cross_entropy
 from torch.utils.data import DataLoader
+from tqdm import trange
 
 import models
 import utils.optimization
 from models import fine_tuning_setup, load_model
-from utils import (ensure_config_param)
+from utils import ensure_config_param, flatten
 from utils.logging import forward_pass, overall_accuracy, StandardLog
 
 
@@ -92,10 +93,12 @@ def run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps=float("
     return step
 
 
-def evaluate_and_log(model, name, loader, step, device):
+def evaluate_and_log(model, name, loader, epoch, step, device, should_log):
     acc1, acc5 = overall_accuracy(model, loader, device)
-    wandb.log({f"test_{name}.acc": acc1, f"test_{name}.top5_acc": acc5}, step=step)
-    return acc1, acc5
+    if should_log:
+        import wandb
+        wandb.log({f"test_{name}.acc": acc1, f"test_{name}.top5_acc": acc5}, step=step)
+    return (epoch, step), (acc1, acc5)
 
 
 def check_test_config(config):
@@ -112,12 +115,11 @@ def check_test_config(config):
         return test_fn
 
     ensure_config_param(config, "model", of_type((str, Path)))
-    ensure_config_param(config, "reinit_params", of_type((str, list, tuple)))
-    ensure_config_param(config, "opt_params", of_type((str, list, tuple)))
+    ensure_config_param(config, "epochs", gt_zero)
     ensure_config_param(config, "classes", gt_zero)
+    ensure_config_param(config, "batch_size", gt_zero)
     ensure_config_param(config, "train_examples", gt_zero)
     ensure_config_param(config, "test_examples", gt_zero)
-    ensure_config_param(config, "lr", gt_zero)
     if config.get("eval_freq") is None:
         config["eval_freq"] = 0
     ensure_config_param(config, "eval_freq", gte_zero)
@@ -148,7 +150,7 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
     test_perf_trajectory = []
     eval_freq = config["eval_freq"]
     should_eval = False
-    step = 0
+    step = 1
 
     # meta-test-TRAIN
     for epoch in range(config["epochs"]):
@@ -165,17 +167,101 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
             opt.step()
 
             # Evaluation, once per X steps. Additionally, record after the first step.
-            should_eval = eval_freq and (step == 0 or ((step + 1) % eval_freq == 0))
+            should_eval = eval_freq and (step == 1 or (step % eval_freq == 0))
             if should_eval:
-                train_perf_trajectory.append(evaluate_and_log(model, "train", query_loader, step + 1, device))
-                test_perf_trajectory.append(evaluate_and_log(model, "test", support_loader, step + 1, device))
+                train_perf_trajectory.append(evaluate_and_log(model, "train", support_loader, epoch, step, device,
+                                                              should_log=log_to_wandb))
+                test_perf_trajectory.append(evaluate_and_log(model, "test", query_loader, epoch, step, device,
+                                                             should_log=log_to_wandb))
 
             step += 1
 
     # meta-test-TEST
     # We only need to do this if we didn't already do it in the last iteration of the loop.
     if not should_eval:
-        train_perf_trajectory.append(evaluate_and_log(model, "train", query_loader, step, device))
-        test_perf_trajectory.append(evaluate_and_log(model, "test", support_loader, step, device))
+        train_perf_trajectory.append(evaluate_and_log(model, "train", support_loader, epoch, step - 1, device,
+                                                      should_log=log_to_wandb))
+        test_perf_trajectory.append(evaluate_and_log(model, "test", query_loader, epoch, step - 1, device,
+                                                     should_log=log_to_wandb))
 
     return train_perf_trajectory, test_perf_trajectory
+
+
+def test_repeats(num_runs, wandb_init, **kwargs):
+    """ Run `num_runs` times and collect results into a single list. """
+    kwargs["log_to_wandb"] = True
+    results = []
+
+    # Run the tests `num_runs` times.
+    for r in trange(num_runs):
+        with wandb_init("eval"):
+            # RUN THE TEST
+            train_traj, test_traj = test_train(**kwargs)
+            # Train and test should be evaluated the same number of times and have the same indices.
+            assert len(train_traj) == len(test_traj)  # run the same number of times
+            assert train_traj[-1][0] == test_traj[-1][0]  # ending at the same index
+            assert len(train_traj[0][1]) == len(test_traj[0][1])  # and having the same number of metrics in each row
+            # Accumulate the results.
+            for ((epoch, step), tr), (_, te) in zip(train_traj, test_traj):
+                # Add the current run index to create an overall index.
+                index = [r, epoch, step]
+                results.append((index, tr, te))
+
+    return results
+
+
+def save_results(results, output_path, config):
+    """ Transform results from `test_repeats()` into a pandas Dataframe and save to the given file. """
+    # These params describing the evaluation should be prepended to each row in the table.
+    eval_param_names = ["model", "dataset", "train_examples", "test_examples", "reinit_params", "opt_params", "classes",
+                        "epochs", "batch_size", "lr"]
+    eval_params = [config[k] for k in eval_param_names]
+
+    # Flatten the data in each row into matrix form, while adding the above metadata.
+    full_data = []
+    for idx, train_acc, test_acc in results:
+        full_data.append(flatten([eval_params, idx, train_acc, test_acc]))
+
+    # Now assemble the data into a dataframe and save it.
+    colnames = eval_param_names + ["trial", "epoch", "step", "train_acc", "train_top5_acc", "test_acc", "test_top5_acc"]
+    result_matrix = pd.DataFrame(full_data, columns=colnames)
+    # Although it makes some operations more cumbersome, we can save a lot of space and maybe some time by treating
+    # most of the columns as a MultiIndex. Also makes indexing easier. All but the final metrics columns.
+    result_matrix.set_index(colnames[:-4], inplace=True)
+    result_matrix.to_pickle(output_path)
+    print(f"Saved result matrix of size {result_matrix.shape} to: {output_path}")
+    return result_matrix
+
+
+def report_summary(result_matrix):
+    """ Take dataframe resulting from `save_results()` and compute and print some summary metrics. """
+    # Get just the final test accuracy of each run (when step is max).
+    steps = result_matrix.index.get_level_values("step")
+    final_step = steps.max()
+    train_acc = result_matrix.loc[steps == final_step, "train_acc"]
+    test_acc = result_matrix.loc[steps == final_step, "test_acc"]
+    # NOTE: Right now we're just printing to console, but it may be useful in the future to report this back to the
+    # original training job as a summary metric? Example here: https://docs.wandb.ai/guides/track/log#summary-metrics
+    num_classes = result_matrix.index.get_level_values("classes").max()
+    print(f"Final accuracy on {num_classes} classes:")
+    print(f"Train {train_acc.mean():.1%} (std: {train_acc.std():.1%}) | "
+          f"Test {test_acc.mean():.1%} (std: {test_acc.std():.1%})")
+
+
+def run_full_test(config, wandb_init, sampler, input_shape, outpath, device):
+    """ Run `test_train()` a number of times and collect the results. """
+    # The name of these keyword arguments needs to match the ones in `test_train()`, as we will pass them on.
+    results = test_repeats(
+        num_runs=config["runs"],
+        wandb_init=wandb_init,
+        sampler=sampler,
+        sampler_input_shape=input_shape,
+        config=config,
+        device=device,
+    )
+
+    # Assemble and save the result matrix.
+    result_matrix = save_results(results, outpath, config)
+
+    # Print summary to console.
+    report_summary(result_matrix)

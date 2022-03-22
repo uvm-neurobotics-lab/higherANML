@@ -18,7 +18,7 @@ from . import resnet
 from . import resnet12
 
 import utils.storage as storage
-from utils import collect_matching_named_params, collect_matching_params
+from utils import collect_matching_named_params, collect_matching_params, ensure_config_param
 
 
 def load_model(model_path, sampler_input_shape, device=None):
@@ -81,6 +81,10 @@ def fine_tuning_setup(model, config):
     Returns:
         torch.optim.Optimizer: The optimizer that can be used in a training loop.
     """
+    ensure_config_param(config, "reinit_params", lambda obj: isinstance(obj, (str, list, tuple)))
+    ensure_config_param(config, "opt_params", lambda obj: isinstance(obj, (str, list, tuple)))
+    ensure_config_param(config, "lr", lambda val: val > 0)
+
     # Set up which parameters we will be fine-tuning and/or learning from scratch.
     # First, reinitialize layers that we want to learn from scratch.
     for n, p in collect_matching_named_params(model, config["reinit_params"]):
