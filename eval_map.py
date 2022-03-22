@@ -45,7 +45,7 @@ def main(args=None):
                         help="Number of examples per class, for training.")
     parser.add_argument("--test-examples", metavar="INT", type=int, default=5,
                         help="Number of examples per class, for testing.")
-    parser.add_argument("--epochs", metavar="INT", type=int, default=5,
+    parser.add_argument("--epochs", metavar="INT", type=int, default=10,
                         help="Number of epochs to fine-tune for. Only used in i.i.d. testing.")
     parser.add_argument("--batch-size", metavar="INT", type=int, default=256,
                         help="Size of batches to train on. Only used in i.i.d. testing.")
