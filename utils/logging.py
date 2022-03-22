@@ -183,7 +183,7 @@ def overall_accuracy(model, all_batches, device, topk=(1, 5), print_fn=None):
     """
     # Allow the tensors to be empty.
     if len(all_batches) == 0:
-        return np.nan
+        return [np.nan] * len(topk)
 
     if print_fn:
         print_fn(f"Computing accuracy of {len(all_batches)} batches...")
@@ -199,7 +199,7 @@ def overall_accuracy(model, all_batches, device, topk=(1, 5), print_fn=None):
     acc_per_batch = np.array(acc_per_batch)
     weights = acc_per_batch[:, -1]
     if weights.sum() == 0:
-        return np.nan
+        return [np.nan] * len(topk)
     else:
         return [np.ma.average(acc_per_batch[:, i], weights=weights) for i in range(len(topk))]
 
