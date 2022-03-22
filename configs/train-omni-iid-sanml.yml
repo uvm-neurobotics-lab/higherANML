@@ -7,6 +7,7 @@ dataset: omni
 train_size: 15
 
 # Training Configuration
+method: iid
 batch_size: 256
 epochs: 10
 seed: 12345
