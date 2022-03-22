@@ -22,7 +22,7 @@ seed: 1
 # Model Architecture
 model: classifier
 model_args:
-  encoder: resnet12
+  encoder: resnet18
   encoder_args: {}
   classifier: linear-classifier
   classifier_args: {num_classes: 64}
@@ -33,4 +33,8 @@ outer_params: all
 output_layer: classifier.linear
 
 eval_steps: [10000, 25000]
-eval: !include eval-sweep-inet-baseline.yml
+eval:
+  - olft: !include eval-sweep-inet-1FC.yml
+  - unfrozen: !include eval-sweep-inet-unfrozen.yml
+  - olft-oracle: !include eval-sweep-inet-iid-1FC.yml
+  - unfrozen-oracle: !include eval-sweep-inet-iid-unfrozen.yml

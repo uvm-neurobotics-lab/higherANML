@@ -1,0 +1,18 @@
+#
+# Config for i.i.d. transfer learning of Classifier-Baseline models on Mini-ImageNet. Fine-tunes just the classifier.
+#
+
+# Dataset
+dataset: miniimagenet
+train_examples: [30, 500]
+test_examples: 100
+
+# Test Method
+method: iid
+reinit_params: classifier.linear
+opt_params: classifier
+classes: 20
+lr: !include learning-rates.yml
+
+# Reporting
+eval_freq: 3

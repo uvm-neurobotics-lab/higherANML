@@ -1,0 +1,14 @@
+#
+# Config for continual meta-test of Classifier-Basline models on Mini-ImageNet. Fine-tunes just the classifier.
+#
+
+# Dataset
+dataset: miniimagenet
+train_examples: [10, 20, 30]
+test_examples: 200
+
+# Test Method
+reinit_params: classifier.linear
+opt_params: all
+classes: 20
+lr: !include learning-rates.yml

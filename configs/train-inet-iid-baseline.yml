@@ -7,36 +7,35 @@ dataset: miniimagenet
 train_size: 500
 
 # Training Configuration
-batch_size: 1
-num_batches: 20
-train_cycles: 1
-val_size: 200
-remember_size: 100
-remember_only: false
-inner_lr: 0.001
-outer_lr: 0.001
-
-epochs: 25000
+method: iid
+batch_size: 256
+epochs: 90
 seed: 1
 
 # Model Architecture
 model: classifier
 model_args:
-  encoder: convnet
-  encoder_args:
-    num_blocks: 4
-    num_filters: 256
+  encoder: resnet18
   classifier: linear-classifier
-  classifier_args: {num_classes: 1000}
+  classifier_args: {num_classes: 64}
 
-# Optimization Configuration
-inner_params: all
-outer_params: all
-output_layer: classifier.linear
+# Optimization
+optimizer: SGD
+optimizer_args:
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 0.0001
+lr_scheduler: StepLR
+lr_scheduler_args:
+  step_size: 30
+  gamma: 0.1
 
-eval_steps: [10000, 25000]
+# Evaluation
+save_freq: 125
+eval_steps: [7500, 25000]
 eval:
   - olft: !include eval-sweep-inet-1FC.yml
   - unfrozen: !include eval-sweep-inet-unfrozen.yml
   - olft-oracle: !include eval-sweep-inet-iid-1FC.yml
   - unfrozen-oracle: !include eval-sweep-inet-iid-unfrozen.yml
+

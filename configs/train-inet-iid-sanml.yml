@@ -15,9 +15,12 @@ seed: 1
 # Model Architecture
 model: classifier
 model_args:
-  encoder: convnet4
+  encoder: convnet
+  encoder_args:
+    num_blocks: 4
+    num_filters: 256
   classifier: linear-classifier
-  classifier_args: {num_classes: 64}
+  classifier_args: {num_classes: 1000}
 
 # Optimization
 optimizer: SGD
@@ -31,5 +34,11 @@ lr_scheduler_args:
   gamma: 0.1
 
 # Evaluation
-eval_steps: [10000, 25000]
-eval: !include eval-sweep-inet-baseline.yml
+save_freq: 125
+eval_steps: [7500, 25000]
+eval:
+  - olft: !include eval-sweep-inet-1FC.yml
+  - unfrozen: !include eval-sweep-inet-unfrozen.yml
+  - olft-oracle: !include eval-sweep-inet-iid-1FC.yml
+  - unfrozen-oracle: !include eval-sweep-inet-iid-unfrozen.yml
+
