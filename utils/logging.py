@@ -237,6 +237,7 @@ class BaseLog:
         self.logger = logging.getLogger(name)
         self.save_path = Path("./trained_anmls")
         self.save_path.mkdir(exist_ok=True)
+        self.last_save_step = -1
 
     def warning(self, msg):
         self.logger.warning(msg)
@@ -251,14 +252,14 @@ class BaseLog:
     def maybe_save_and_eval(self, it, model, sampler, device, should_save=None, should_eval=None):
         if should_eval is None:
             should_eval = (it in self.eval_steps)
-        if should_save is None:
-            # Evaluating requires saving, unless it was forced off. See the note below about this corner case.
+        if not should_save:
+            # Turn on saving if it is time to save, or if evaluation requires it.
             should_save = should_eval or (it % self.save_freq == 0)
+            # Do not save if the model for this iteration was already saved (the same iteration can be called twice).
+            should_save &= (it != self.last_save_step)
 
-        # NOTE: If we are evaluating but not saving, it is assumed that the model for this iteration was already saved.
-        # This can happen if the model was saved in the final iteration, but it was not evaluated, and then we called
-        # `log.close()`. In this case, we don't want to save again, we just want to launch evaluation.
         if not should_save and not should_eval:
+            # Nothing to do.
             return
 
         model_path = self.save_path / f"{self.name}-{it}.net"
@@ -280,6 +281,7 @@ class BaseLog:
                 }, step=it)
 
             # Save the model.
+            self.last_save_step = it
             save(model, model_path, **self.model_args)
 
         # Launch full evaluation of the model as a separate job.
@@ -299,8 +301,9 @@ class BaseLog:
             update_with_keys(self.config, eval_config, ["project", "entity", "group"])
             if not eval_config.get("group"):
                 # If group is not defined, try a couple more backups, because we really want these runs grouped.
-                if wandb.run.group:
-                    eval_config["group"] = wandb.run.group
+                group = str(wandb.run.group)
+                if group:
+                    eval_config["group"] = group
                 else:
                     eval_config["group"] = wandb.run.name
             check_eval_config(eval_config)
@@ -311,15 +314,12 @@ class BaseLog:
                              " possible errors.")
 
     def close(self, it, model, sampler, device):
-        # Negate the normal "should save" logic because this indicates the model was already saved at the end of the
-        # last iteration, so we don't need to do it again.
-        should_save = not (it % self.save_freq == 0)
         # Eval if there is is at least one desired eval beyond this point in training, but this point is not already
         # included.
         has_larger = any([s > it for s in self.eval_steps])
         has_equal = any([s == it for s in self.eval_steps])
         should_eval = has_larger and not has_equal
-        self.maybe_save_and_eval(it, model, sampler, device, should_save=should_save, should_eval=should_eval)
+        self.maybe_save_and_eval(it, model, sampler, device, should_eval=should_eval)
 
 
 class StandardLog(BaseLog):

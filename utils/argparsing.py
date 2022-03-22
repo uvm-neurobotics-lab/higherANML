@@ -475,9 +475,9 @@ def prepare_wandb(parsed_args, job_type=None, create_folder=True, root_path="exp
         else:
             print(f"Would launch a new W&B run.")
 
-    if autogroup and not run.group and not existing_id:
+    if autogroup and not str(run.group) and not existing_id:
         # If the run doesn't have a group, and we aren't re-using a pre-existing run, then place the run into a group
-        # based on its own name.
+        # based on its own name. (We can't actually change the group, all we can do is store it in config.)
         run.config.update({"group": run.name}, allow_val_change=True)
         # Also update the group in the original config.
         if isinstance(orig_args, dict):
