@@ -46,6 +46,6 @@ def scheduler_from_config(config, opt):
         return DummyScheduler()
     sched_args = config.get("lr_scheduler_args", {})
     cls = getattr(torch.optim.lr_scheduler, sched_name)
-    if "input_shape" in get_arg_names(cls):
+    if "verbose" in get_arg_names(cls):
         sched_args.setdefault("verbose", True)
     return cls(opt, **sched_args)
