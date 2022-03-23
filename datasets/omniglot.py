@@ -5,7 +5,7 @@ from time import time
 import numpy as np
 import torch
 from PIL import Image
-from torchvision.transforms import Compose, ToTensor, Resize, Lambda
+from torchvision.transforms import Compose, ToTensor, Resize, RandomResizedCrop, Lambda
 from torchvision.transforms.functional import InterpolationMode
 
 from .class_indexed_dataset import ClassIndexedDataset
@@ -46,12 +46,14 @@ class Omniglot(ClassIndexedDataset):
             target_transform=None,
             greyscale=True,
             download=False,
+            memoize=True,
     ):
         self.root = join(root, self.folder)
         self.background = background
         self.transform = transform
         self.target_transform = target_transform
         self.greyscale = greyscale
+        self.memoize = memoize
         self.memo = {}
 
         if download:
@@ -106,7 +108,7 @@ class Omniglot(ClassIndexedDataset):
         Returns:
             tuple: (image, target) where target is index of the target character class.
         """
-        if index not in self.memo:
+        if not self.memoize or index not in self.memo:
             image_name, character_class = self._flat_character_images[index]
             image_path = join(
                 self.target_folder, self._characters[character_class], image_name
@@ -120,7 +122,9 @@ class Omniglot(ClassIndexedDataset):
 
             if self.target_transform:
                 character_class = self.target_transform(character_class)
-            self.memo[index] = (image, character_class)
+
+            if self.memoize:
+                self.memo[index] = (image, character_class)
         else:
             image, character_class = self.memo[index]
 
@@ -143,7 +147,7 @@ class Omniglot(ClassIndexedDataset):
         return "images_background" if self.background else "images_evaluation"
 
 
-def create_datasets(root, download=True, preload_train=False, preload_test=False, im_size=28):
+def create_datasets(root, download=True, preload_train=False, preload_test=False, im_size=28, augment=False):
     """
     Create a pair of (train, test) datasets for Omniglot.
 
@@ -153,6 +157,7 @@ def create_datasets(root, download=True, preload_train=False, preload_test=False
         preload_train (bool): Whether to load all training images into memory up-front.
         preload_test (bool): Whether to load all testing images into memory up-front.
         im_size (int): Desired size of images, or None to default to 28x28.
+        augment (bool): Whether to apply data augmentation to the training set.
 
     Returns:
         Omniglot: The training ("images_background") set.
@@ -162,23 +167,31 @@ def create_datasets(root, download=True, preload_train=False, preload_test=False
     if im_size is None:
         # For now, use 28x28 as default, instead of the Omniglot default of 105x105.
         im_size = 28
-    transforms = Compose([
+    test_transforms = Compose([
         Resize(im_size, InterpolationMode.LANCZOS),
         ToTensor(),
     ])
+    if augment:
+        train_transforms = Compose([
+            RandomResizedCrop(im_size, scale=(0.8, 1.0), interpolation=InterpolationMode.LANCZOS),
+            ToTensor(),
+        ])
+    else:
+        train_transforms = test_transforms
     t_transforms = Lambda(lambda x: torch.tensor(x))
     omni_train = Omniglot(
         root=root,
         background=True,
         download=download,
-        transform=transforms,
+        transform=train_transforms,
         target_transform=t_transforms,
+        memoize=not augment,
     )
     omni_test = Omniglot(
         root=root,
         background=False,
         download=download,
-        transform=transforms,
+        transform=test_transforms,
         target_transform=t_transforms,
     )
 
@@ -201,7 +214,7 @@ def create_datasets(root, download=True, preload_train=False, preload_test=False
 
 
 def create_iid_sampler(root, download=True, preload_train=False, preload_test=False, im_size=28, batch_size=256,
-                       train_size=None):
+                       train_size=None, augment=False):
     """
     Create a sampler for Omniglot data which will sample shuffled batches in the standard way for i.i.d. training.
 
@@ -213,17 +226,18 @@ def create_iid_sampler(root, download=True, preload_train=False, preload_test=Fa
         im_size (int): Desired size of images, or None to default to 28x28.
         batch_size (int): Number of images per batch for both datasets.
         train_size (int): Total number of samples from the train set to actually use for training.
+        augment (bool): Whether to apply data augmentation to the training set.
 
     Returns:
         IIDSampler: The sampler class.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
-    omni_train, omni_test, image_shape = create_datasets(root, download, preload_train, preload_test, im_size)
+    omni_train, omni_test, image_shape = create_datasets(root, download, preload_train, preload_test, im_size, augment)
     return IIDSampler(omni_train, omni_test, batch_size, train_size), image_shape
 
 
 def create_OML_sampler(root, download=True, preload_train=False, preload_test=False, im_size=28, train_size=None,
-                       seed=None):
+                       augment=False, seed=None):
     """
     Create a sampler for Omniglot data that will return examples in the framework specified by OML (see
     ContinualMetaLearningSampler).
@@ -236,10 +250,11 @@ def create_OML_sampler(root, download=True, preload_train=False, preload_test=Fa
         im_size (int): Desired size of images, or None to default to 28x28.
         train_size (int): Total number of samples from the train set to actually use for training.
         seed (int or list[int]): Random seed for sampling.
+        augment (bool): Whether to apply data augmentation to the training set.
 
     Returns:
         ContinualMetaLearningSampler: The sampler class.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
-    omni_train, omni_test, image_shape = create_datasets(root, download, preload_train, preload_test, im_size)
+    omni_train, omni_test, image_shape = create_datasets(root, download, preload_train, preload_test, im_size, augment)
     return ContinualMetaLearningSampler(omni_train, omni_test, seed, train_size), image_shape

@@ -212,7 +212,8 @@ def add_verbose_arg(parser):
     return parser
 
 
-def add_dataset_arg(parser, dflt_data_dir="experiments/data", add_resize_arg=True, add_train_size_arg=False):
+def add_dataset_arg(parser, dflt_data_dir="experiments/data", add_resize_arg=True, add_train_size_arg=False,
+                    add_augment_arg=True):
     """
     Add an argument for the user to specify a dataset.
     """
@@ -230,6 +231,10 @@ def add_dataset_arg(parser, dflt_data_dir="experiments/data", add_resize_arg=Tru
         parser.add_argument("--train-size", metavar="INT", type=int, default=500,
                             help="Number of examples per class to use in training split. Remainder (if any) will be"
                                  " reserved for validation.")
+    if add_augment_arg:
+        parser.add_argument("--augment", "--data-augmentation", action="store_true",
+                            help="Add random data augmentation transforms to the training data. Note that this also"
+                                 " affects the validation data, which is split from the training data.")
     return parser
 
 
@@ -255,7 +260,7 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
     if isinstance(args, argparse.Namespace):
         old_args = args
         args = {}
-        for k in ("dataset", "data_path", "download", "im_size", "batch_size", "train_size", "seed"):
+        for k in ("dataset", "data_path", "download", "im_size", "batch_size", "train_size", "augment", "seed"):
             args[k] = getattr(old_args, k, None)
     else:
         # Do not modify the config that was passed in.
@@ -264,6 +269,7 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
     # These args are allowed to be missing.
     for arg in ("im_size", "batch_size", "train_size", "seed"):
         args.setdefault(arg)
+    args.setdefault("augment", False)
     # Ensure we have a Path type here.
     args["data_path"] = Path(args["data_path"])
 
@@ -273,21 +279,21 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
         if sampler_type == "oml":
             return omniglot.create_OML_sampler(root=args["data_path"] / "omni", download=args["download"],
                                                im_size=args["im_size"], train_size=args["train_size"],
-                                               seed=args["seed"])
+                                               augment=args["augment"], seed=args["seed"])
         elif sampler_type == "iid":
             return omniglot.create_iid_sampler(root=args["data_path"] / "omni", download=args["download"],
                                                im_size=args["im_size"], batch_size=args["batch_size"],
-                                               train_size=args["train_size"])
+                                               train_size=args["train_size"], augment=args["augment"])
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")
     elif args["dataset"] == "miniimagenet":
         if sampler_type == "oml":
             return imagenet.create_OML_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
-                                               im_size=args["im_size"], greyscale=greyscale,
+                                               im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
                                                train_size=args["train_size"], seed=args["seed"])
         elif sampler_type == "iid":
             return imagenet.create_iid_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
-                                               im_size=args["im_size"], greyscale=greyscale,
+                                               im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
                                                batch_size=args["batch_size"], train_size=args["train_size"])
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")

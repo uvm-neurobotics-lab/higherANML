@@ -10,7 +10,7 @@ import gdown
 import numpy as np
 import torch
 from PIL import Image
-from torchvision.transforms import Compose, Lambda, Normalize, Resize, ToTensor
+from torchvision.transforms import Compose, Lambda, Normalize, RandomResizedCrop, RandomHorizontalFlip, Resize, ToTensor
 from torchvision.transforms.functional import InterpolationMode
 
 from .class_indexed_dataset import ClassIndexedDataset
@@ -158,7 +158,7 @@ class MiniImageNet(ClassIndexedDataset):
         gdown.cached_download(id=self.split.gid, path=self.tarpath, md5=self.split.md5, quiet=self.quiet)
 
 
-def create_datasets(root, download=True, im_size=None, greyscale=False):
+def create_datasets(root, download=True, im_size=None, greyscale=False, augment=False):
     """
     Create a pair of (train, test) datasets for Mini-ImageNet.
 
@@ -167,50 +167,70 @@ def create_datasets(root, download=True, im_size=None, greyscale=False):
         download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
         im_size (int): Desired size of images, or None to use the on-disk sizes.
         greyscale (bool): Whether to convert images to greyscale; False or None to keep the default coloring.
+        augment (bool): Whether to apply data augmentation to the training set.
 
     Returns:
         MiniImageNet: The training set.
         MiniImageNet: The testing set.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
-    transforms = [
-        ToTensor(),
-        # Normalize images as done in prior work:
-        #   - https://github.com/yinboc/few-shot-meta-baseline/blob/779fae39dad3537e7c801049c858923e2a352dfe/datasets/mini_imagenet.py#L35-L37
-        #   - https://github.com/wyharveychen/CloserLookFewShot/blob/e03aca8a2d01c9b5861a5a816cd5d3fdfc47cd45/data/datamgr.py#L13
-        #   - https://github.com/dragen1860/MAML-Pytorch/blob/98a00d41724c133bd29619a2fb2cc46dd128a368/MiniImagenet.py#L49-L62
-        #   - https://github.com/khurramjaved96/mrcl/blob/2855a6b7e820f171432981b58c49664fcdbf00ed/datasets/miniimagenet.py#L49-L62
-        # Some other works simply divide by 255.
-        Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-    ]
-    # Only resize if a specific size is requested.
-    if im_size is not None:
-        transforms.insert(0, Resize(im_size, InterpolationMode.LANCZOS))
-    transforms = Compose(transforms)
+    # We know that by default this dataset has 84x84 color images.
+    actual_size = 84 if im_size is None else im_size
+    # Normalize images as done in prior work:
+    #   - https://github.com/yinboc/few-shot-meta-baseline/blob/779fae39dad3537e7c801049c858923e2a352dfe/datasets/mini_imagenet.py#L35-L37
+    #   - https://github.com/wyharveychen/CloserLookFewShot/blob/e03aca8a2d01c9b5861a5a816cd5d3fdfc47cd45/data/datamgr.py#L13
+    #   - https://github.com/dragen1860/MAML-Pytorch/blob/98a00d41724c133bd29619a2fb2cc46dd128a368/MiniImagenet.py#L49-L62
+    #   - https://github.com/khurramjaved96/mrcl/blob/2855a6b7e820f171432981b58c49664fcdbf00ed/datasets/miniimagenet.py#L49-L62
+    # Some other works simply divide by 255.
+    normalize = Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+
+    # Build train set.
+    train_transforms = []
+    if augment:
+        # NOTE: This will also augment the "validation" set. It would be better if we didn't do this, but I don't have
+        # the energy for the necessary refactor right now.
+        train_transforms.append(RandomResizedCrop(actual_size))
+        train_transforms.append(RandomHorizontalFlip())
+    else:
+        # Only resize if a specific size is requested.
+        if im_size is not None:
+            train_transforms.append(Resize(im_size, InterpolationMode.LANCZOS))
+    train_transforms.append(ToTensor())
+    train_transforms.append(normalize)
+    train_transforms = Compose(train_transforms)
     t_transforms = Lambda(lambda x: torch.tensor(x))
     train = MiniImageNet(
         root=root,
         split=Split.TRAIN,
-        transform=transforms,
+        transform=train_transforms,
         target_transform=t_transforms,
         greyscale=greyscale,
         download=download,
     )
+
+    # Build test set.
+    test_transforms = []
+    # Only resize if a specific size is requested.
+    if im_size is not None:
+        test_transforms.append(Resize(im_size, InterpolationMode.LANCZOS))
+    test_transforms.append(ToTensor())
+    test_transforms.append(normalize)
+    test_transforms = Compose(test_transforms)
     test = MiniImageNet(
         root=root,
         split=Split.TEST,
-        transform=transforms,
+        transform=test_transforms,
         target_transform=t_transforms,
         greyscale=greyscale,
         download=download,
     )
-    # We know that by default this dataset has 84x84 color images.
-    actual_size = 84 if im_size is None else im_size
+
     image_shape = (1 if greyscale else 3, actual_size, actual_size)
     return train, test, image_shape
 
 
-def create_iid_sampler(root, download=True, im_size=None, greyscale=False, batch_size=128, train_size=None):
+def create_iid_sampler(root, download=True, im_size=None, greyscale=False, batch_size=128, train_size=None,
+                       augment=False):
     """
     Create a sampler for Mini-ImageNet data which will sample shuffled batches in the standard way for i.i.d. training.
 
@@ -221,16 +241,17 @@ def create_iid_sampler(root, download=True, im_size=None, greyscale=False, batch
         greyscale (bool): Whether to convert images to greyscale; False or None to keep the default coloring.
         batch_size (int): Number of images per batch for both datasets.
         train_size (int): Total number of samples from the train set to actually use for training.
+        augment (bool): Whether to apply data augmentation to the training set.
 
     Returns:
         IIDSampler: The sampler class.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
-    train, test, image_shape = create_datasets(root, download, im_size, greyscale)
+    train, test, image_shape = create_datasets(root, download, im_size, greyscale, augment)
     return IIDSampler(train, test, batch_size, train_size), image_shape
 
 
-def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train_size=None, seed=None):
+def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train_size=None, augment=False, seed=None):
     """
     Create a sampler for Mini-ImageNet data that will return examples in the framework specified by OML (see
     ContinualMetaLearningSampler).
@@ -241,11 +262,12 @@ def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train
         im_size (int): Desired size of images, or None to use the on-disk sizes.
         greyscale (bool): Whether to convert images to greyscale; False or None to keep the default coloring.
         train_size (int): Total number of samples from the train set to actually use for training.
+        augment (bool): Whether to apply data augmentation to the training set.
         seed (int or list[int]): Random seed for sampling.
 
     Returns:
         ContinualMetaLearningSampler: The sampler class.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
-    train, test, image_shape = create_datasets(root, download, im_size, greyscale)
+    train, test, image_shape = create_datasets(root, download, im_size, greyscale, augment)
     return ContinualMetaLearningSampler(train, test, seed, train_size), image_shape

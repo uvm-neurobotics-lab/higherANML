@@ -62,9 +62,9 @@ def main(args=None):
 
     args = parser.parse_args(args)
     argutils.configure_logging(args)
-    overrideable_args = ["method", "dataset", "data_path", "download", "im_size", "model", "classes", "train_examples",
-                         "test_examples", "epochs", "batch_size", "lr", "eval_freq", "runs", "output", "device", "seed",
-                         "project", "entity", "group"]
+    overrideable_args = ["method", "dataset", "data_path", "download", "im_size", "augment", "model", "classes",
+                         "train_examples", "test_examples", "epochs", "batch_size", "lr", "eval_freq", "runs", "output",
+                         "device", "seed", "project", "entity", "group"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
     print("\n---- Test Config ----\n" + yaml.dump(config) + "----------------------")
 

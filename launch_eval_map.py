@@ -47,8 +47,8 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 
 
 def prep_config(parser, args):
-    overrideable_args = ["dataset", "data_path", "im_size", "model", "classes", "train_examples", "test_examples", "lr",
-                         "eval_freq", "runs", "device", "seed", "project", "entity", "group"]
+    overrideable_args = ["dataset", "data_path", "im_size", "augment", "model", "classes", "train_examples",
+                         "test_examples", "lr", "eval_freq", "runs", "device", "seed", "project", "entity", "group"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
     ensure_config_param(config, "dataset")
     ensure_config_param(config, "model")

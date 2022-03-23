@@ -82,10 +82,10 @@ def prep_config(parser, args):
 
     argutils.configure_logging(args, level=logging.INFO)
 
-    overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "batch_size", "num_batches",
-                         "train_cycles", "val_size", "remember_size", "remember_only", "inner_lr", "outer_lr",
-                         "save_freq", "epochs", "device", "seed", "id", "project", "entity", "group", "full_test",
-                         "eval_steps", "cluster"]
+    overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "augment", "batch_size",
+                         "num_batches", "train_cycles", "val_size", "remember_size", "remember_only", "inner_lr",
+                         "outer_lr", "save_freq", "epochs", "device", "seed", "id", "project", "entity", "group",
+                         "full_test", "eval_steps", "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
 
     # Conduct a quick test.
