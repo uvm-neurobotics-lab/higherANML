@@ -266,13 +266,17 @@ class BaseLog:
         if should_save:
             # Run full test on training data.
             if self.full_test:
+                start = time()
                 full_train_acc1, full_train_acc5 = overall_accuracy(model, sampler.full_train_data(device), device,
                                                                     print_fn=self.debug)
                 full_val_acc1, full_val_acc5 = overall_accuracy(model, sampler.full_val_data(device), device,
                                                                 print_fn=self.debug)
+                end = time()
+                elapsed = end - start
                 self.info(f"Saved Model Performance:"
                           f" Train Top-1 Acc = {full_train_acc1:.1%} | Train Top-5 Acc = {full_train_acc5:.1%} |"
-                          f" Validation Top-1 Acc = {full_val_acc1:.1%} | Validation Top-5 Acc = {full_val_acc5:.1%}")
+                          f" Validation Top-1 Acc = {full_val_acc1:.1%} | Validation Top-5 Acc = {full_val_acc5:.1%}"
+                          f" (Time to Eval = {strftime('%H:%M:%S', gmtime(elapsed))})")
                 wandb.log({
                     "train.acc": full_train_acc1,
                     "val.acc": full_val_acc1,
