@@ -24,6 +24,7 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 # Mapping from training method to corresponding script.
 TRAINING_METHODS = {
     "meta": "train_anml.py",
+    "sequential_episodic": "train_anml.py",
     "iid": "train_iid.py",
 }
 
