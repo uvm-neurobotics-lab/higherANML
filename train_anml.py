@@ -32,6 +32,8 @@ def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
     parser.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
                         help="Training config file.")
     argutils.add_dataset_arg(parser, add_train_size_arg=True)
+    parser.add_argument("--train-method", choices=["meta", "sequential_episodic"], type=str.lower, default="meta",
+                        help="Training method to use.")
     parser.add_argument("--batch-size", metavar="INT", type=int, default=1,
                         help="Number of examples per training batch in the inner loop.")
     parser.add_argument("--num-batches", metavar="INT", type=int, default=20,
@@ -47,6 +49,9 @@ def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
     parser.add_argument("--remember-only", action="store_true",
                         help="Do not include the training examples from the inner loop into the meta-loss (only use"
                              " the remember set for the outer loop of training).")
+    parser.add_argument("--no-lobotomize", dest="lobotomize", action="store_false",
+                        help="Do not lobotomize. Do not reset the weights of the logits of a class just before learning"
+                             " that class. (See code for explanation.)")
     parser.add_argument("--inner-lr", metavar="RATE", type=float, default=1e-1, help="Inner learning rate.")
     parser.add_argument("--outer-lr", metavar="RATE", type=float, default=1e-3, help="Outer learning rate.")
     parser.add_argument("--save-freq", type=int, default=1000, help="Number of epochs between each saved model.")
@@ -82,10 +87,10 @@ def prep_config(parser, args):
 
     argutils.configure_logging(args, level=logging.INFO)
 
-    overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "augment", "batch_size",
-                         "num_batches", "train_cycles", "val_size", "remember_size", "remember_only", "inner_lr",
-                         "outer_lr", "save_freq", "epochs", "device", "seed", "id", "project", "entity", "group",
-                         "full_test", "eval_steps", "cluster"]
+    overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "augment", "train_method",
+                         "batch_size", "num_batches", "train_cycles", "val_size", "remember_size", "remember_only",
+                         "lobotomize", "inner_lr", "outer_lr", "save_freq", "epochs", "device", "seed", "id", "project",
+                         "entity", "group", "full_test", "eval_steps", "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
 
     # Conduct a quick test.

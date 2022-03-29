@@ -40,8 +40,53 @@ def check_train_config(config):
     ensure_config_param(config, "inner_params", of_type((str, list, tuple)))
     ensure_config_param(config, "outer_params", of_type((str, list, tuple)))
     ensure_config_param(config, "output_layer", of_type(str))
+    ensure_config_param(config, "train_method", of_type(str))
     ensure_config_param(config, "model", of_type(str))
+    config.setdefault("lobotomize", True)
     config.setdefault("full_test", True)
+
+
+def run_meta_episode(config, episode, model, inner_opt, outer_opt, log, it, verbose):
+    # higher turns a standard pytorch model into a functional version that can be used to
+    # preserve the computation graph across multiple optimization steps
+    with higher.innerloop_ctx(model, inner_opt, copy_initial_weights=False) as (fnet, diffopt):
+        # Inner loop of 1 random task, in batches, for some number of cycles.
+        for i, (ims, labels) in enumerate(episode.train_traj * config["train_cycles"]):
+            out, inner_loss, inner_acc = forward_pass(fnet, ims, labels)
+            log.inner(it, i, inner_loss, inner_acc, episode, fnet, verbose)
+            diffopt.step(inner_loss)
+
+        log.outer_step(it, "adapted", inner_loss, inner_acc, episode, fnet, verbose)
+
+        # Outer "loop" of 1 task (all training batches) + `remember_size` random chars, in a single large batch.
+        m_out, m_loss, m_acc = forward_pass(fnet, episode.meta_ims, episode.meta_labels)
+        m_loss.backward()
+
+    outer_opt.step()
+    outer_opt.zero_grad()
+
+    log.outer_step(it, "meta", m_loss, m_acc, episode, model, verbose)
+
+
+def run_sequential_episode(config, episode, model, inner_opt, outer_opt, log, it, verbose):
+    # Sequential loop of a single task, in batches, for some number of cycles.
+    for i, (ims, labels) in enumerate(episode.train_traj * config["train_cycles"]):
+        out, inner_loss, inner_acc = forward_pass(model, ims, labels)
+        log.inner(it, i, inner_loss, inner_acc, episode, model, verbose)
+        inner_loss.backward()
+        inner_opt.step()
+        inner_opt.zero_grad()
+
+    log.outer_step(it, "adapted", inner_loss, inner_acc, episode, model, verbose)
+
+    # Outer "loop" of 1 task (all training batches) + `remember_size` random chars, in a single large batch.
+    m_out, m_loss, m_acc = forward_pass(model, episode.meta_ims, episode.meta_labels)
+    m_loss.backward()
+
+    outer_opt.step()
+    outer_opt.zero_grad()
+
+    log.outer_step(it, "meta", m_loss, m_acc, episode, model, verbose)
 
 
 def train(sampler, input_shape, config, device="cuda", verbose=0):
@@ -67,6 +112,17 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     # optimizations, computing second order gradients.
     outer_params = collect_matching_params(model, config["outer_params"])
     outer_opt = Adam(outer_params, lr=config["outer_lr"])
+    # Output layer so we can reset output classes when needed (see `lobotomize()`).
+    output_layer = get_matching_module(model, config["output_layer"])
+
+    # What kind of training will we be doing?
+    train_method = config["train_method"]
+    if train_method == "meta":
+        run_one_episode = run_meta_episode
+    elif train_method == "sequential_episodic":
+        run_one_episode = run_sequential_episode
+    else:
+        raise RuntimeError(f'Unsupported train method: "{train_method}"')
 
     # (epochs + 1) because we want the iteration counts to be 1-based, but we still keep the 0th iteration as a sort of
     # "test run" where we make sure we can successfully run full test metrics and save the model checkpoints. This
@@ -88,29 +144,12 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
         # To facilitate the propagation of gradients through the model we prevent memorization of training examples by
         # randomizing the weights in the last fully connected layer corresponding to the task that is about to be
         # learned. The config gives us the name of this final output layer.
-        output_layer = get_matching_module(model, config["output_layer"])
-        lobotomize(output_layer, episode.train_class)
+        if config["lobotomize"]:
+            lobotomize(output_layer, episode.train_class)
 
-        # higher turns a standard pytorch model into a functional version that can be used to
-        # preserve the computation graph across multiple optimization steps
-        with higher.innerloop_ctx(model, inner_opt, copy_initial_weights=False) as (
-                fnet,
-                diffopt,
-        ):
-            # Inner loop of 1 random task, in batches, for some number of cycles.
-            for i, (ims, labels) in enumerate(episode.train_traj * config["train_cycles"]):
-                out, loss, inner_acc = forward_pass(fnet, ims, labels)
-                log.inner(it, i, loss, inner_acc, episode, fnet, verbose)
-                diffopt.step(loss)
+        run_one_episode(config, episode, model, inner_opt, outer_opt, log, it, verbose)
 
-            # Outer "loop" of 1 task (all training batches) + `remember_size` random chars, in a single large batch.
-            m_out, m_loss, m_acc = forward_pass(fnet, episode.meta_ims, episode.meta_labels)
-            m_loss.backward()
-
-        outer_opt.step()
-        outer_opt.zero_grad()
-
-        log.outer_end(it, m_loss, m_acc, episode, fnet, model, sampler, device, verbose)
+        log.outer_end(it, model, sampler, device)
 
     log.close(it, model, sampler, device)
 

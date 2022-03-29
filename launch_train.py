@@ -30,7 +30,7 @@ TRAINING_METHODS = {
 
 def build_command(config, config_path, smoke_test, verbosity, launcher_args):
     # Find the script to run next to this file.
-    target_script = SCRIPT_DIR / TRAINING_METHODS[config["method"]]
+    target_script = SCRIPT_DIR / TRAINING_METHODS[config["train_method"]]
     assert target_script.exists(), f"Script file ({target_script}) not found."
     assert target_script.is_file(), f"Script file ({target_script}) is not a file."
 
@@ -55,7 +55,7 @@ def main(argv=None):
     parser = argutils.create_parser(__doc__, allow_abbrev=False)
     parser.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
                         help="Training config file.")
-    parser.add_argument("--method", choices=list(TRAINING_METHODS.keys()), default="meta",
+    parser.add_argument("--train-method", choices=list(TRAINING_METHODS.keys()), default="meta",
                         help="The training method to use.")
     argutils.add_dataset_arg(parser, add_train_size_arg=True)
     argutils.add_device_arg(parser)
@@ -94,8 +94,8 @@ def main(argv=None):
     argutils.configure_logging(args, level=logging.INFO)
 
     # Create the full config using all the command line arguments.
-    overrideable_args = ["method", "dataset", "data_path", "download", "im_size", "train_size", "augment", "device",
-                         "seed", "id", "project", "entity", "group", "full_test", "eval_steps", "cluster"]
+    overrideable_args = ["train_method", "dataset", "data_path", "download", "im_size", "train_size", "augment",
+                         "device", "seed", "id", "project", "entity", "group", "full_test", "eval_steps", "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
 
     # Set up, and jump into, the destination path.

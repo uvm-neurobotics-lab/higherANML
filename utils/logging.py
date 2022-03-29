@@ -255,8 +255,8 @@ class BaseLog:
         if not should_save:
             # Turn on saving if it is time to save, or if evaluation requires it.
             should_save = should_eval or (it % self.save_freq == 0)
-            # Do not save if the model for this iteration was already saved (the same iteration can be called twice).
-            should_save &= (it != self.last_save_step)
+        # Do not save if the model for this iteration was already saved (the same iteration can be called twice).
+        should_save &= (it != self.last_save_step)
 
         if not should_save and not should_eval:
             # Nothing to do.
@@ -323,7 +323,7 @@ class BaseLog:
         has_larger = any([s > it for s in self.eval_steps])
         has_equal = any([s == it for s in self.eval_steps])
         should_eval = has_larger and not has_equal
-        self.maybe_save_and_eval(it, model, sampler, device, should_eval=should_eval)
+        self.maybe_save_and_eval(it, model, sampler, device, should_save=True, should_eval=should_eval)
 
 
 class StandardLog(BaseLog):
@@ -379,7 +379,7 @@ class MetaLearningLog(BaseLog):
 
     def outer_info(self, it, train_class):
         if it % self.print_freq == 0:
-            self.info(f"**** Outer loop {it}: Learning on class {train_class}...")
+            self.info(f"**** Episode {it}: Learning on class {train_class}...")
 
     @torch.no_grad()
     def inner(self, outer_it, inner_it, inner_loss, inner_acc, episode, model, verbose):
@@ -400,47 +400,47 @@ class MetaLearningLog(BaseLog):
                                        lambda msg: self.debug("    " + msg))
 
     @torch.no_grad()
-    def outer_end(self, it, loss, acc, episode, adapted_model, meta_model, sampler, device, verbose):
+    def outer_step(self, it, name, loss, acc, episode, model, verbose):
+        capname = name.capitalize()
         metrics = {}
         time_to_print = (it % self.print_freq == 0)
         time_to_verbose_print = (self.verbose_freq > 0) and (it % self.verbose_freq == 0)
+
         if time_to_print or time_to_verbose_print:
-            ada_train_out = forward_pass(adapted_model, episode.train_ims, episode.train_labels)[0]
-            ada_rem_out = forward_pass(adapted_model, episode.rem_ims, episode.rem_labels)[0]
-            ada_val_out = forward_pass(adapted_model, episode.val_ims, episode.val_labels)[0]
+            train_out = forward_pass(model, episode.train_ims, episode.train_labels)[0]
+            rem_out = forward_pass(model, episode.rem_ims, episode.rem_labels)[0]
+            val_out = forward_pass(model, episode.val_ims, episode.val_labels)[0]
 
             if time_to_print:
-                end = time()
-                elapsed = end - self.start
-                self.start = -1
-
-                train_acc = accuracy(ada_train_out, episode.train_labels)
-                rem_acc = accuracy(ada_rem_out, episode.rem_labels)
-                val_acc = accuracy(ada_val_out, episode.val_labels)
-                metrics["meta_loss"] = loss.item()
-                metrics["adapted_acc"] = acc
-                metrics["adapted_train_acc"] = train_acc
-                metrics["adapted_remember_acc"] = rem_acc
-                metrics["adapted_valid_acc"] = val_acc
-                metrics["runtime"] = elapsed
-                self.info(f"  Final Meta-Loss = {loss.item():.3f} | Meta-Acc = {acc:.1%} | Train Acc = {train_acc:.1%}"
-                          f" | Remember Acc = {rem_acc:.1%} | Test Acc = {val_acc:.1%}"
-                          f" ({strftime('%H:%M:%S', gmtime(elapsed))})")
+                train_acc = accuracy(train_out, episode.train_labels)
+                rem_acc = accuracy(rem_out, episode.rem_labels)
+                val_acc = accuracy(val_out, episode.val_labels)
+                metrics[name + ".loss"] = loss.item()
+                metrics[name + ".acc"] = acc
+                metrics[name + ".train_acc"] = train_acc
+                metrics[name + ".remember_acc"] = rem_acc
+                metrics[name + ".valid_acc"] = val_acc
+                self.info(f"  {capname} Model on Episode {it}: Loss = {loss.item():.3f} | Acc = {acc:.1%}"
+                          f" | Train = {train_acc:.1%} | Remember = {rem_acc:.1%} | Val = {val_acc:.1%}")
 
             # If verbose, then also evaluate the new meta-model on the previous train/validation data so we can see the
             # impact of meta-learning.
             if time_to_verbose_print:
                 # TODO: Idea: report difference b/w meta-model and end-model perf.
-                self.debug("  End Model Performance:")
-                print_validation_stats(episode, ada_train_out, ada_rem_out, ada_val_out, verbose,
-                                       lambda msg: self.debug("    " + msg))
-
-                self.debug("  Meta-Model Performance:")
-                meta_train_out = forward_pass(meta_model, episode.train_ims, episode.train_labels)[0]
-                meta_rem_out = forward_pass(meta_model, episode.rem_ims, episode.rem_labels)[0]
-                meta_val_out = forward_pass(meta_model, episode.val_ims, episode.val_labels)[0]
-                print_validation_stats(episode, meta_train_out, meta_rem_out, meta_val_out, verbose,
+                self.debug(f"  {capname} Model Details:")
+                print_validation_stats(episode, train_out, rem_out, val_out, verbose,
                                        lambda msg: self.debug("    " + msg))
 
         wandb.log(metrics, step=it)
-        self.maybe_save_and_eval(it, meta_model, sampler, device)
+
+    @torch.no_grad()
+    def outer_end(self, it, model, sampler, device):
+        metrics = {}
+        if it % self.print_freq == 0:
+            end = time()
+            elapsed = end - self.start
+            self.start = -1
+            self.info(f"  Time since last print: {strftime('%H:%M:%S', gmtime(elapsed))}")
+
+        wandb.log(metrics, step=it)
+        self.maybe_save_and_eval(it, model, sampler, device)

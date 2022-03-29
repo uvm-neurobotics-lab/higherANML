@@ -33,7 +33,7 @@ def main(args=None):
 
     parser.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
                         help="Evaluation config file.")
-    parser.add_argument("--method", choices=("sequential", "iid"), default="sequential",
+    parser.add_argument("--eval-method", choices=("sequential", "iid"), default="sequential",
                         help="The testing method to use: sequential (continual learning) or i.i.d. (standard transfer"
                              " learning.")
     argutils.add_dataset_arg(parser)
@@ -62,7 +62,7 @@ def main(args=None):
 
     args = parser.parse_args(args)
     argutils.configure_logging(args)
-    overrideable_args = ["method", "dataset", "data_path", "download", "im_size", "augment", "model", "classes",
+    overrideable_args = ["eval_method", "dataset", "data_path", "download", "im_size", "augment", "model", "classes",
                          "train_examples", "test_examples", "epochs", "batch_size", "lr", "eval_freq", "runs", "output",
                          "device", "seed", "project", "entity", "group"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
@@ -71,7 +71,10 @@ def main(args=None):
     device = argutils.get_device(parser, config)
     argutils.set_seed(config["seed"])
 
-    sampler_type = "iid" if config["method"] == "iid" else "oml"
+    if config["eval_method"] not in ("sequential", "iid"):
+        raise ValueError(f'Unrecognized evaluation method: "{config["eval_method"]}"')
+
+    sampler_type = "iid" if config["eval_method"] == "iid" else "oml"
     sampler, input_shape = argutils.get_dataset_sampler(config, sampler_type=sampler_type)
 
     # Ensure the destination can be written.
@@ -84,7 +87,7 @@ def main(args=None):
     def wandb_init(job_type):
         return argutils.prepare_wandb(config, job_type=job_type, create_folder=False, allow_reinit=True)
 
-    run_full_test = iid_test if config["method"] == "iid" else seq_test
+    run_full_test = iid_test if config["eval_method"] == "iid" else seq_test
     run_full_test(config, wandb_init, sampler, input_shape, outpath, device)
 
 

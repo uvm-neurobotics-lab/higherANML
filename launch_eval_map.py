@@ -301,6 +301,7 @@ def main(args=None):
                               help="Learning rate to use (check README for suggestions).")
 
     # Non-Repeating Arguments
+    # TODO: Add --eval-method as a non-repeating arg. (Do any other args need to change in light of this?)
     non_repeat_group = parser.add_argument_group("Non-Repeating Evaluation Arguments",
                                                  "Arguments that will be the same across all eval_map.py jobs.")
     non_repeat_group.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
