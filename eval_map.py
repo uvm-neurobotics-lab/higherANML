@@ -33,7 +33,7 @@ def main(args=None):
 
     parser.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
                         help="Evaluation config file.")
-    parser.add_argument("--eval-method", choices=("sequential", "iid"), default="sequential",
+    parser.add_argument("--eval-method", choices=("sequential", "seq", "iid"), default="sequential",
                         help="The testing method to use: sequential (continual learning) or i.i.d. (standard transfer"
                              " learning.")
     argutils.add_dataset_arg(parser)
@@ -71,7 +71,7 @@ def main(args=None):
     device = argutils.get_device(parser, config)
     argutils.set_seed(config["seed"])
 
-    if config["eval_method"] not in ("sequential", "iid"):
+    if config["eval_method"] not in ("sequential", "seq", "iid"):
         raise ValueError(f'Unrecognized evaluation method: "{config["eval_method"]}"')
 
     sampler_type = "iid" if config["eval_method"] == "iid" else "oml"
