@@ -44,3 +44,5 @@ eval:
   - 1ft: !include eval-sweep-omni-84-1layer.yml
   - 2ft: !include eval-sweep-omni-84-2layer.yml
   - ft-all: !include eval-sweep-omni-84-unfrozen.yml
+  - iid-1ft: !include eval-sweep-omni-84-iid-1layer.yml
+  - iid-ft-all: !include eval-sweep-omni-84-iid-unfrozen.yml
