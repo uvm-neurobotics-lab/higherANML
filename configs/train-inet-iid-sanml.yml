@@ -7,7 +7,7 @@ dataset: miniimagenet
 train_size: 500
 
 # Training Configuration
-method: iid
+train_method: iid
 batch_size: 256
 epochs: 30
 seed: 1

@@ -8,7 +8,7 @@ train_examples: 15
 test_examples: 5
 
 # Test Method
-method: seq
+eval_method: seq
 reinit_params: classifier.linear
 opt_params: all
 classes: 600

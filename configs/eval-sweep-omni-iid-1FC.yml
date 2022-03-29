@@ -8,7 +8,7 @@ train_examples: 15
 test_examples: 5
 
 # Test Method
-method: iid
+eval_method: iid
 reinit_params: classifier.linear
 opt_params: classifier
 classes: 600
