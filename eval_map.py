@@ -36,6 +36,9 @@ def main(args=None):
     parser.add_argument("--eval-method", choices=("sequential", "seq", "iid"), default="sequential",
                         help="The testing method to use: sequential (continual learning) or i.i.d. (standard transfer"
                              " learning.")
+    parser.add_argument("--reinit-method", choices=("kaiming", "lstsq"), default="kaiming",
+                        help="The method to use to reinitialize trainable parameters: typical kaiming normal"
+                             "initialization or least squares estimate of the final linear layer.")
     argutils.add_dataset_arg(parser)
     parser.add_argument("-m", "--model", metavar="PATH", type=check_path, help="Path to the model to evaluate.")
     parser.add_argument("-l", "--lr", metavar="RATE", type=float,
@@ -62,9 +65,9 @@ def main(args=None):
 
     args = parser.parse_args(args)
     argutils.configure_logging(args)
-    overrideable_args = ["eval_method", "dataset", "data_path", "download", "im_size", "augment", "model", "classes",
-                         "train_examples", "test_examples", "epochs", "batch_size", "lr", "eval_freq", "runs", "output",
-                         "device", "seed", "project", "entity", "group"]
+    overrideable_args = ["eval_method", "reinit_method", "dataset", "data_path", "download", "im_size", "augment",
+                         "model", "classes", "train_examples", "test_examples", "epochs", "batch_size", "lr",
+                         "eval_freq", "runs", "output", "device", "seed", "project", "entity", "group"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
     print("\n---- Test Config ----\n" + yaml.dump(config) + "----------------------")
 

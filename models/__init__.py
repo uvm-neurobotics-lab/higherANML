@@ -5,6 +5,7 @@ Models
 import logging
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from .legacy import ANML as LegacyANML
@@ -18,7 +19,7 @@ from . import resnet
 from . import resnet12
 
 import utils.storage as storage
-from utils import collect_matching_named_params, collect_matching_params, ensure_config_param
+from utils import collect_matching_named_params, collect_matching_params, ensure_config_param, get_matching_module
 
 
 def load_model(model_path, sampler_input_shape, device=None):
@@ -70,24 +71,8 @@ def load_model(model_path, sampler_input_shape, device=None):
     return model
 
 
-def fine_tuning_setup(model, config):
-    """
-    Set up the given model for fine-tuning; creating an optimizer to optimize parameters selected by the given config.
-
-    Args:
-        model (torch.nn.Module): The model to be fine-tuned.
-        config (dict): The config with fine-tuning and optimization parameters.
-
-    Returns:
-        torch.optim.Optimizer: The optimizer that can be used in a training loop.
-    """
-    ensure_config_param(config, "reinit_params", lambda obj: isinstance(obj, (str, list, tuple)))
-    ensure_config_param(config, "opt_params", lambda obj: isinstance(obj, (str, list, tuple)))
-    ensure_config_param(config, "lr", lambda val: val > 0)
-
-    # Set up which parameters we will be fine-tuning and/or learning from scratch.
-    # First, reinitialize layers that we want to learn from scratch.
-    for n, p in collect_matching_named_params(model, config["reinit_params"]):
+def kaiming_reinit(params, model):
+    for n, p in collect_matching_named_params(model, params):
         # HACK: Here we will use the parameter naming to tell us how the params should be initialized. This may not be
         # appropriate for all types of layers! We are typically only expecting fully-connected Linear layers here.
         if n.endswith("weight"):
@@ -96,6 +81,83 @@ def fine_tuning_setup(model, config):
             torch.nn.init.constant_(p, 0)
         else:
             raise RuntimeError(f"Cannot reinitialize this unknown parameter type: {n}")
+
+
+def onehottify(labels, num_total_classes):
+    onehots = torch.zeros((len(labels), num_total_classes))
+    onehots[torch.arange(len(labels)), labels] = 1
+    return onehots.cpu().detach().numpy()
+
+
+def lstsq_reinit(params, model, init_support_set):
+    # Sanity checking inputs.
+    if isinstance(params, (list, tuple)):
+        if len(params) == 0:
+            params = None
+        elif len(params) == 1:
+            params = params[0]
+        else:
+            raise ValueError("To use least squares initialization, you must only supply a single linear layer to be"
+                             f" reinitialized. Instead you gave: {params}.")
+    if not isinstance(params, str):
+        raise ValueError(f"Expected the name of a single module. Instead received: {params}")
+    if not params:
+        # Nothing to reinit.
+        return
+
+    if not init_support_set:
+        raise ValueError("You must supply an init support set for least squares initialization.")
+    images, labels = init_support_set
+
+    # Get the linear layer to reinit.
+    fc = get_matching_module(model, params)
+
+    # Now reinit.
+    ys = onehottify(labels, fc.weight.shape[0])  # num_total_classes = fc.out_features
+    # TODO: Clean this up so we don't need to magically know the model contains an "encoder".
+    feats = model.encoder(images)
+    device = feats.device
+    dtype = feats.dtype
+
+    xs = feats.detach().cpu().numpy()
+    bias = np.ones([xs.shape[0], 1])
+    inp = np.concatenate([xs, bias], axis=1)  # add bias
+    W, residuals, rank, s = np.linalg.lstsq(inp, ys, rcond=-1)
+    W, b = W[:-1], W[-1]  # retrieve bias
+
+    # insert W,b into Linear layer
+    fc.weight.data = torch.from_numpy(W.T).type(dtype)
+    fc.bias.data = torch.from_numpy(b).type(dtype)
+    # TODO: Do we actually need this? Don't think so...
+    # fc = fc.to(device).type(dtype)
+
+
+def fine_tuning_setup(model, config, init_support_set=None):
+    """
+    Set up the given model for fine-tuning; creating an optimizer to optimize parameters selected by the given config,
+    and reinitialize certain parameters as dictated by the config.
+
+    Args:
+        model (torch.nn.Module): The model to be fine-tuned.
+        config (dict): The config with fine-tuning and optimization parameters.
+        init_support_set (tuple): A pair of (image, label) tensors which may be used for any special initialization.
+
+    Returns:
+        torch.optim.Optimizer: The optimizer that can be used in a training loop.
+    """
+    ensure_config_param(config, "reinit_params", lambda obj: isinstance(obj, (str, list, tuple)))
+    ensure_config_param(config, "opt_params", lambda obj: isinstance(obj, (str, list, tuple)))
+    ensure_config_param(config, "lr", lambda val: val > 0)
+    if "reinit_method" in config:
+        ensure_config_param(config, "reinit_method", lambda val: val in ("kaiming", "lstsq"))
+
+    # Set up which parameters we will be fine-tuning and/or learning from scratch.
+    # First, reinitialize layers that we want to learn from scratch.
+    if config.get("reinit_method") == "lstsq":
+        lstsq_reinit(config["reinit_params"], model, init_support_set)
+    else:
+        # Default to kaiming normal.
+        kaiming_reinit(config["reinit_params"], model)
 
     # Now, select which layers will recieve updates during optimization, by setting the requires_grad property.
     for p in model.parameters():  # disable all learning by default.

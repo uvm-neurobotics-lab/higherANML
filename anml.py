@@ -236,6 +236,18 @@ def check_test_config(config):
     ensure_config_param(config, "eval_freq", gte_zero)
 
 
+def collect_init_sample(train_classes):
+    images = []
+    labels = []
+    for idx, train_data in enumerate(train_classes):
+        # train_data is a pair of (list[img], list[label]). Take the first of each.
+        images.append(train_data[0][0])
+        labels.append(train_data[1][0])
+    images = torch.stack(images)
+    labels = torch.stack(labels)
+    return images, labels
+
+
 def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb=False):
     check_test_config(config)
 
@@ -243,12 +255,13 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
     model = model.to(device)
     model.eval()
 
-    opt = fine_tuning_setup(model, config)
-
     # Sample the learning trajectory.
     train_classes, test_classes = sampler.sample_test(config["classes"], config["train_examples"],
                                                       config["test_examples"], device)
     assert len(train_classes) > 0
+
+    init_sample = collect_init_sample(train_classes)
+    opt = fine_tuning_setup(model, config, init_sample)
 
     train_perf_trajectory = []
     test_perf_trajectory = []

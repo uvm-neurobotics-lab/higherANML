@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 
 import pandas as pd
+import torch
 import yaml
 from torch.nn.functional import cross_entropy
 from torch.utils.data import DataLoader
@@ -125,14 +126,27 @@ def check_test_config(config):
     ensure_config_param(config, "eval_freq", gte_zero)
 
 
+def collect_init_sample(dataset):
+    """ Collect a single example from each class (the first one returned when iterating through the entire dataset). """
+    images = []
+    labels = []
+    seen = set()
+    for image, label in dataset:
+        if label.item() not in seen:
+            seen.add(label.item())
+            images.append(image)
+            labels.append(label)
+    images = torch.stack(images)
+    labels = torch.stack(labels)
+    return images, labels
+
+
 def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb=False):
     check_test_config(config)
 
     model = load_model(config["model"], sampler_input_shape, device)
     model = model.to(device)
     model.eval()
-
-    opt = fine_tuning_setup(model, config)
 
     # Sample the support set we'll use to train and the query set we'll use to test.
     support_set, query_set = sampler.sample_support_and_query_sets(config["classes"], config["train_examples"],
@@ -145,6 +159,11 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
     train_loader = DataLoader(support_set, batch_size=config["batch_size"], shuffle=True)
     support_loader = DataLoader(support_set, batch_size=config["batch_size"], shuffle=True)
     query_loader = DataLoader(query_set, batch_size=config["batch_size"], shuffle=True)
+
+    # NOTE: We could skip this sampling if it turns out to be expensive and we know we aren't using a reinit method that
+    # requires it. We could also make it cheaper by using the class information.
+    init_sample = collect_init_sample(support_set)
+    opt = fine_tuning_setup(model, config, init_sample)
 
     train_perf_trajectory = []
     test_perf_trajectory = []
