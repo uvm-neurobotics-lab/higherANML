@@ -240,9 +240,10 @@ class ContinualMetaLearningSampler:
             device (str): The device to send the torch arrays to.
 
         Returns:
-            train_episodes (list): A list of lists of (image, target) tuples, where each list represents a new class to
-                be learned.
-            full_test_data (list): A list of lists of (image, target) tuples, where each list represents a class to test on.
+            train_data (list): A list of (image, target) tuples, where each element is a pair of tensors from a single
+                class, to be used for training.
+            test_data (list): A list of (image, target) tuples, where each element is a pair of tensors from a single
+                class, to be used for testing.
         """
         if num_classes > len(self.test.class_index):
             raise ValueError(f"Number of classes requested is too large: {num_classes} > {len(self.test.class_index)}")

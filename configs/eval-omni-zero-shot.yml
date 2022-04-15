@@ -8,8 +8,9 @@ train_examples: 15
 test_examples: 5
 
 # Test Method
-eval_method: iid
+eval_method: zero_shot
+reinit_method: lstsq
 reinit_params: classifier.linear
-opt_params: all
+init_size: 3295
+batch_size: 512
 classes: 600
-lr: 0.01

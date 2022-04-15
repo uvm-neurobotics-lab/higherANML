@@ -2,7 +2,6 @@ import logging
 from pathlib import Path
 
 import pandas as pd
-import torch
 import yaml
 from torch.nn.functional import cross_entropy
 from torch.utils.data import DataLoader
@@ -10,7 +9,7 @@ from tqdm import trange
 
 import models
 import utils.optimization
-from models import fine_tuning_setup, load_model
+from models import fine_tuning_setup, load_model, maybe_collect_init_sample
 from utils import ensure_config_param, flatten
 from utils.logging import forward_pass, overall_accuracy, StandardLog
 
@@ -126,21 +125,6 @@ def check_test_config(config):
     ensure_config_param(config, "eval_freq", gte_zero)
 
 
-def collect_init_sample(dataset):
-    """ Collect a single example from each class (the first one returned when iterating through the entire dataset). """
-    images = []
-    labels = []
-    seen = set()
-    for image, label in dataset:
-        if label.item() not in seen:
-            seen.add(label.item())
-            images.append(image)
-            labels.append(label)
-    images = torch.stack(images)
-    labels = torch.stack(labels)
-    return images, labels
-
-
 def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb=False):
     check_test_config(config)
 
@@ -160,9 +144,7 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
     support_loader = DataLoader(support_set, batch_size=config["batch_size"], shuffle=True)
     query_loader = DataLoader(query_set, batch_size=config["batch_size"], shuffle=True)
 
-    # NOTE: We could skip this sampling if it turns out to be expensive and we know we aren't using a reinit method that
-    # requires it. We could also make it cheaper by using the class information.
-    init_sample = collect_init_sample(support_set)
+    init_sample = maybe_collect_init_sample(model, config, support_set, device)
     opt = fine_tuning_setup(model, config, init_sample)
 
     train_perf_trajectory = []
@@ -232,9 +214,9 @@ def test_repeats(num_runs, wandb_init, **kwargs):
 def save_results(results, output_path, config):
     """ Transform results from `test_repeats()` into a pandas Dataframe and save to the given file. """
     # These params describing the evaluation should be prepended to each row in the table.
-    eval_param_names = ["model", "dataset", "train_examples", "test_examples", "reinit_params", "opt_params", "classes",
-                        "epochs", "batch_size", "lr"]
-    eval_params = [config[k] for k in eval_param_names]
+    eval_param_names = ["model", "dataset", "train_examples", "test_examples", "eval_method", "reinit_method",
+                        "reinit_params", "opt_params", "classes", "epochs", "batch_size", "lr"]
+    eval_params = [config.get(k) for k in eval_param_names]
 
     # Flatten the data in each row into matrix form, while adding the above metadata.
     full_data = []

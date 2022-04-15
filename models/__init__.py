@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 
 from .legacy import ANML as LegacyANML
 from .registry import make, make_from_config, load
@@ -71,6 +72,82 @@ def load_model(model_path, sampler_input_shape, device=None):
     return model
 
 
+def collect_sparse_init_sample(encoder, dataset, device):
+    """ Collect a single example from each class (the first one returned when iterating through the entire dataset). """
+    images = []
+    labels = []
+    seen = set()
+    for image, label in dataset:
+        if label.item() not in seen:
+            seen.add(label.item())
+            images.append(image)
+            labels.append(label)
+    xs = encoder(torch.stack(images).to(device))
+    ys = torch.stack(labels)
+    return xs, ys
+
+
+def collect_dense_init_sample(encoder, config, dataset, device):
+    """ Collect as many samples as requested by the init_size parameter. """
+    ensure_config_param(config, "init_size", lambda val: val > 0)
+    ensure_config_param(config, "batch_size", lambda val: val > 0)
+
+    xs = []
+    ys = []
+    num_remaining = config["init_size"]
+    loader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
+    while num_remaining > 0:
+        for images, labels in loader:
+            images, labels = images.to(device), labels.to(device)
+            feats = encoder(images)
+            num_remaining -= len(feats)
+            if num_remaining < 0:
+                # Drop the unneeded items.
+                feats = feats[:num_remaining]
+                labels = labels[:num_remaining]
+            xs.append(feats)
+            ys.append(labels)
+            if num_remaining <= 0:
+                break
+
+    xs = torch.cat(xs)
+    ys = torch.cat(ys)
+    return xs, ys
+
+
+def maybe_collect_init_sample(model, config, dataset, device):
+    """
+    Collect samples from the given support set that may be used for initialization of parameters. If the "init_size"
+    variable isn't present in the config, then simply take one sample per class according to
+    `collect_sparse_init_sample`.
+
+    The samples will be pre-processed into a single batch of feature encodings, taken from the second-to-last layer of
+    the model. This is a suitable format to use for, e.g., `lstsq_reinit()`.
+
+    This will return None if no samples are needed according to the config.
+
+    Args:
+        model (torch.nn.Module): The model to be partially reinitialized (used to encode the samples).
+        config (dict): The config with initialization parameters.
+        dataset (torch.utils.data.Dataset): The support set containing samples which are allowed to be used for
+            initialization purposes.
+        device (torch.device or str): The device on which to run inference.
+
+    Returns:
+        xs (torch.Tensor or None): The feature-encodings of all samples in a single batch.
+        ys (torch.Tensor or None): The labels corresponding to the samples.
+    """
+    # Shortcut: We can skip this whole procedure if the samples won't be used.
+    if not ("reinit_params" in config) or config.get("reinit_method") != "lstsq":
+        return None, None
+
+    # TODO: Fix this so we can extract the next-to-last layer, whatever that is.
+    if config.get("init_size"):
+        return collect_dense_init_sample(model.encoder, config, dataset, device)
+    else:
+        return collect_sparse_init_sample(model.encoder, dataset, device)
+
+
 def kaiming_reinit(params, model):
     for n, p in collect_matching_named_params(model, params):
         # HACK: Here we will use the parameter naming to tell us how the params should be initialized. This may not be
@@ -107,17 +184,19 @@ def lstsq_reinit(params, model, init_support_set):
 
     if not init_support_set:
         raise ValueError("You must supply an init support set for least squares initialization.")
-    images, labels = init_support_set
+    feats, labels = init_support_set
+    assert len(feats) == len(labels)
 
     # Get the linear layer to reinit.
     fc = get_matching_module(model, params)
+    # Check that our samples match the linear layer size.
+    if len(feats.shape) != 2 or feats.shape[1] != fc.in_features:
+        raise RuntimeError(f"Expected the init sample set to be a batch of {fc.in_features}-length vectors.")
 
     # Now reinit.
-    ys = onehottify(labels, fc.weight.shape[0])  # num_total_classes = fc.out_features
-    # TODO: Clean this up so we don't need to magically know the model contains an "encoder".
-    feats = model.encoder(images)
-    device = feats.device
-    dtype = feats.dtype
+    ys = onehottify(labels, fc.out_features)
+    device = fc.weight.device
+    dtype = fc.weight.dtype
 
     xs = feats.detach().cpu().numpy()
     bias = np.ones([xs.shape[0], 1])
@@ -126,10 +205,55 @@ def lstsq_reinit(params, model, init_support_set):
     W, b = W[:-1], W[-1]  # retrieve bias
 
     # insert W,b into Linear layer
-    fc.weight.data = torch.from_numpy(W.T).type(dtype)
-    fc.bias.data = torch.from_numpy(b).type(dtype)
-    # TODO: Do we actually need this? Don't think so...
-    # fc = fc.to(device).type(dtype)
+    fc.weight.data = torch.from_numpy(W.T).to(device).type(dtype)
+    fc.bias.data = torch.from_numpy(b).to(device).type(dtype)
+
+
+def reinit_params(model, config, init_support_set=None):
+    """
+    Reinitialize certain parameters as dictated by the config.
+
+    Args:
+        model (torch.nn.Module): The model to be partially reinitialized.
+        config (dict): The config with fine-tuning and optimization parameters.
+        init_support_set (tuple): A pair of (feature, label) tensors which may be used for any special initialization.
+    """
+    if not ("reinit_params" in config):
+        # Nothing to reinit.
+        return
+    ensure_config_param(config, "reinit_params", lambda obj: isinstance(obj, (str, list, tuple)))
+    if "reinit_method" in config:
+        ensure_config_param(config, "reinit_method", lambda val: val in ("kaiming", "lstsq"))
+
+    if config.get("reinit_method") == "lstsq":
+        lstsq_reinit(config["reinit_params"], model, init_support_set)
+    else:
+        # Default to kaiming normal.
+        kaiming_reinit(config["reinit_params"], model)
+
+
+def create_optimizer(model, config):
+    """
+    Create an optimizer and set up certain parameters for optimization, as specified by the given config.
+
+    Args:
+        model (torch.nn.Module): The model to be fine-tuned.
+        config (dict): The config with fine-tuning and optimization parameters.
+
+    Returns:
+        torch.optim.Optimizer: The optimizer that can be used in a training loop.
+    """
+    ensure_config_param(config, "opt_params", lambda obj: isinstance(obj, (str, list, tuple)))
+    ensure_config_param(config, "lr", lambda val: val > 0)
+
+    # Select which layers will recieve updates during optimization, by setting the requires_grad property.
+    for p in model.parameters():  # disable all learning by default.
+        p.requires_grad_(False)
+    for p in collect_matching_params(model, config["opt_params"]):  # re-enable just for these params.
+        p.requires_grad_(True)
+
+    opt = torch.optim.Adam(model.parameters(), lr=config["lr"])
+    return opt
 
 
 def fine_tuning_setup(model, config, init_support_set=None):
@@ -140,30 +264,14 @@ def fine_tuning_setup(model, config, init_support_set=None):
     Args:
         model (torch.nn.Module): The model to be fine-tuned.
         config (dict): The config with fine-tuning and optimization parameters.
-        init_support_set (tuple): A pair of (image, label) tensors which may be used for any special initialization.
+        init_support_set (tuple): A pair of (feature, label) tensors which may be used for any special initialization.
 
     Returns:
         torch.optim.Optimizer: The optimizer that can be used in a training loop.
     """
-    ensure_config_param(config, "reinit_params", lambda obj: isinstance(obj, (str, list, tuple)))
-    ensure_config_param(config, "opt_params", lambda obj: isinstance(obj, (str, list, tuple)))
-    ensure_config_param(config, "lr", lambda val: val > 0)
-    if "reinit_method" in config:
-        ensure_config_param(config, "reinit_method", lambda val: val in ("kaiming", "lstsq"))
-
     # Set up which parameters we will be fine-tuning and/or learning from scratch.
     # First, reinitialize layers that we want to learn from scratch.
-    if config.get("reinit_method") == "lstsq":
-        lstsq_reinit(config["reinit_params"], model, init_support_set)
-    else:
-        # Default to kaiming normal.
-        kaiming_reinit(config["reinit_params"], model)
+    reinit_params(model, config, init_support_set)
 
-    # Now, select which layers will recieve updates during optimization, by setting the requires_grad property.
-    for p in model.parameters():  # disable all learning by default.
-        p.requires_grad_(False)
-    for p in collect_matching_params(model, config["opt_params"]):  # re-enable just for these params.
-        p.requires_grad_(True)
-
-    opt = torch.optim.Adam(model.parameters(), lr=config["lr"])
-    return opt
+    # Now, set up an optimizer for just the layers we want to be updated.
+    return create_optimizer(model, config)

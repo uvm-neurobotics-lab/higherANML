@@ -236,16 +236,82 @@ def check_test_config(config):
     ensure_config_param(config, "eval_freq", gte_zero)
 
 
-def collect_init_sample(train_classes):
-    images = []
-    labels = []
-    for idx, train_data in enumerate(train_classes):
+def collect_sparse_init_sample(encoder, train_classes, device):
+    xs = []
+    ys = []
+    for images, labels in train_classes:
         # train_data is a pair of (list[img], list[label]). Take the first of each.
-        images.append(train_data[0][0])
-        labels.append(train_data[1][0])
-    images = torch.stack(images)
-    labels = torch.stack(labels)
-    return images, labels
+        xs.append(images[0])
+        ys.append(labels[0])
+    xs = encoder(torch.stack(xs).to(device))
+    ys = torch.stack(ys)
+    return xs, ys
+
+
+def collect_dense_init_sample(encoder, config, train_classes, device):
+    """ Collect as many samples as requested by the init_size parameter. """
+    ensure_config_param(config, "init_size", lambda val: val > 0)
+
+    # Sample as uniformly as possible from all classes; first figure out how many from each class.
+    num_requested = config["init_size"]
+    num_classes = len(train_classes)
+    num_per_class = len(train_classes[0][0])  # NOTE: Assumes all classes have the same number of samples.
+    num_available = num_per_class * num_classes
+    if num_requested >= num_available:
+        samples_per_class = num_per_class
+        num_extra = 0
+    else:
+        samples_per_class = num_requested // num_classes
+        num_extra = num_requested % num_classes
+
+    xs = []
+    ys = []
+    for idx, (images, labels) in enumerate(train_classes):
+        num_to_sample = samples_per_class
+        # The first `num_extra` classes get sampled one extra time.
+        if idx < num_extra:
+            num_to_sample += 1
+        # NOTE: We could use a random.choice() here, but the samples themselves are already randomly sampled.
+        xs.append(encoder(images[:num_to_sample].to(device)))
+        ys.append(labels[:num_to_sample])
+
+    # Assemble N batches into one batch.
+    xs = torch.cat(xs)
+    ys = torch.cat(ys)
+    return xs, ys
+
+
+def maybe_collect_init_sample(model, config, train_classes, device):
+    """
+    Collect samples from the given support set that may be used for initialization of parameters. If the "init_size"
+    variable isn't present in the config, then simply take one sample per class according to
+    `collect_sparse_init_sample`.
+
+    The samples will be pre-processed into a single batch of feature encodings, taken from the second-to-last layer of
+    the model. This is a suitable format to use for, e.g., `lstsq_reinit()`.
+
+    This will return None if no samples are needed according to the config.
+
+    Args:
+        model (torch.nn.Module): The model to be partially reinitialized (used to encode the samples).
+        config (dict): The config with initialization parameters.
+        train_classes (list): The support set containing samples which are allowed to be used for initialization
+            purposes. A list of (image, target) tuples, where each element is a pair of tensors from a single class.
+        device (torch.device or str): The device on which to run inference.
+
+    Returns:
+        xs (torch.Tensor or None): The feature-encodings of all samples in a single batch.
+        ys (torch.Tensor or None): The labels corresponding to the samples.
+    """
+    # Shortcut: We can skip this whole procedure if the samples won't be used.
+    if not ("reinit_params" in config) or config.get("reinit_method") != "lstsq":
+        return None, None
+
+    # TODO: Fix this so we can extract the next-to-last layer, whatever that is.
+    if config.get("init_size"):
+        return collect_dense_init_sample(model.encoder, config, train_classes, device)
+    else:
+        return collect_sparse_init_sample(model.encoder, train_classes, device)
 
 
 def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb=False):
@@ -260,7 +326,7 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
                                                       config["test_examples"], device)
     assert len(train_classes) > 0
 
-    init_sample = collect_init_sample(train_classes)
+    init_sample = maybe_collect_init_sample(model, config, train_classes, device)
     opt = fine_tuning_setup(model, config, init_sample)
 
     train_perf_trajectory = []
@@ -338,9 +404,9 @@ def test_repeats(num_runs, wandb_init, **kwargs):
 def save_results(results, output_path, config):
     """ Transform results from `test_repeats()` into a pandas Dataframe and save to the given file. """
     # These params describing the evaluation should be prepended to each row in the table.
-    eval_param_names = ["model", "dataset", "train_examples", "test_examples", "reinit_params", "opt_params", "classes",
-                        "lr"]
-    eval_params = [config[k] for k in eval_param_names]
+    eval_param_names = ["model", "dataset", "train_examples", "test_examples", "eval_method", "reinit_method",
+                        "reinit_params", "opt_params", "classes", "lr"]
+    eval_params = [config.get(k) for k in eval_param_names]
 
     # Unflatten the data into one row per class, per epoch.
     full_data = []
