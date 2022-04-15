@@ -98,8 +98,8 @@ def collect_dense_init_sample(encoder, config, dataset, device):
     loader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
     while num_remaining > 0:
         for images, labels in loader:
-            images, labels = images.to(device), labels.to(device)
-            feats = encoder(images)
+            images = images.to(device)
+            feats = encoder(images).detach().cpu()
             num_remaining -= len(feats)
             if num_remaining < 0:
                 # Drop the unneeded items.
