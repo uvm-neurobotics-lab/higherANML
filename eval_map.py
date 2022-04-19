@@ -44,7 +44,7 @@ def main(args=None):
                         help="Evaluation config file.")
     parser.add_argument("--eval-method", choices=("sequential", "seq", "iid", "zero_shot"), default="sequential",
                         help="The testing method to use: sequential (continual learning) or i.i.d. (standard transfer"
-                             " learning.")
+                             " learning).")
     parser.add_argument("--reinit-method", choices=("kaiming", "lstsq"), default="kaiming",
                         help="The method to use to reinitialize trainable parameters: typical kaiming normal"
                              "initialization or least squares estimate of the final linear layer.")

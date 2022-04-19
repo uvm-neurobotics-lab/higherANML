@@ -47,8 +47,9 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 
 
 def prep_config(parser, args):
-    overrideable_args = ["dataset", "data_path", "im_size", "augment", "model", "classes", "train_examples",
-                         "test_examples", "lr", "eval_freq", "runs", "device", "seed", "project", "entity", "group"]
+    overrideable_args = ["eval_method", "reinit_method", "dataset", "data_path", "im_size", "augment", "model",
+                         "classes", "train_examples", "test_examples", "lr", "init_size", "batch_size", "eval_freq",
+                         "runs", "device", "seed", "project", "entity", "group"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
     ensure_config_param(config, "dataset")
     ensure_config_param(config, "model")
@@ -57,8 +58,6 @@ def prep_config(parser, args):
     ensure_config_param(config, "test_examples")
     ensure_config_param(config, "lr")
     ensure_config_param(config, "runs")
-    ensure_config_param(config, "reinit_params")
-    ensure_config_param(config, "opt_params")
     eval_freq = config.get("eval_freq")
     if eval_freq is None:
         config["eval_freq"] = max(1, config["classes"] // 20)
@@ -301,11 +300,16 @@ def main(args=None):
                               help="Learning rate to use (check README for suggestions).")
 
     # Non-Repeating Arguments
-    # TODO: Add --eval-method as a non-repeating arg. (Do any other args need to change in light of this?)
     non_repeat_group = parser.add_argument_group("Non-Repeating Evaluation Arguments",
                                                  "Arguments that will be the same across all eval_map.py jobs.")
     non_repeat_group.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
                                   help="Evaluation config file.")
+    non_repeat_group.add_argument("--eval-method", choices=("sequential", "seq", "iid", "zero_shot"),
+                                  default="sequential", help="The testing method to use: sequential (continual"
+                                                             " learning) or i.i.d. (standard transfer learning).")
+    non_repeat_group.add_argument("--reinit-method", choices=("kaiming", "lstsq"), default="kaiming",
+                                  help="The method to use to reinitialize trainable parameters: typical kaiming normal"
+                                       "initialization or least squares estimate of the final linear layer.")
     non_repeat_group.add_argument("--data-path", "--data-dir", metavar="PATH", type=check_path,
                                   help="The root path in which to look for the dataset(s). Default location will be"
                                        " relative to the output directory: <output>/../../data. IMPORTANT: The datasets"
@@ -313,6 +317,11 @@ def main(args=None):
                                        " launching.")
     non_repeat_group.add_argument("--im-size", metavar="PX", type=int, default=None,
                                   help="Resize all input images to the given size (in pixels).")
+    non_repeat_group.add_argument("--batch-size", metavar="INT", type=int, default=256,
+                                  help="Size of batches to train on. Only used in i.i.d. testing.")
+    non_repeat_group.add_argument("--init-size", metavar="INT", type=int, default=256,
+                                  help="Number of samples from the support set allowed to be used for parameter"
+                                       " initialization.")
     non_repeat_group.add_argument("--eval-freq", metavar="INT", type=int, default=1,
                                   help="The frequency at which to evaluate performance of the model throughout the"
                                        " learning process. This can be very expensive, if evaluating after every class"

@@ -11,4 +11,4 @@ test_examples: 5
 reinit_params: classifier.linear
 opt_params: all
 classes: 600
-lr: 0.0007
+lr: 0.00004
