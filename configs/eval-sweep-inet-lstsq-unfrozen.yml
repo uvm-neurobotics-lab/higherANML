@@ -1,0 +1,17 @@
+#
+# Config for continual meta-test of Classifier-Basline models on Mini-ImageNet. Initializes final layer with LLS, then
+# fine-tunes all layers.
+#
+
+# Dataset
+dataset: miniimagenet
+train_examples: [10, 20, 30]
+test_examples: 200
+
+# Test Method
+reinit_method: lstsq
+reinit_params: classifier.linear
+init_size: 0  # use one example per class to init
+opt_params: all
+classes: 20
+lr: !include learning-rates.yml

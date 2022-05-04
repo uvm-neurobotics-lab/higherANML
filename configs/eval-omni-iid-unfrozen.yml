@@ -1,5 +1,5 @@
 #
-# Config for continual meta-test of Classifier-Basline models on Omniglot. Fine-tunes just the classifier.
+# Config for i.i.d. transfer learning of Classifier-Basline models on Omniglot. Fine-tunes all layers.
 #
 
 # Dataset

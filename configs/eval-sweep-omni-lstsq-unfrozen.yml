@@ -1,5 +1,6 @@
 #
-# Config for continual meta-test of Classifier-Basline models on Omniglot. Fine-tunes the entire network.
+# Config for continual meta-test of Classifier-Basline models on Omniglot. Initializes final layer with LLS, then
+# fine-tunes all layers.
 #
 
 # Dataset

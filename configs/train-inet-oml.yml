@@ -20,12 +20,31 @@ epochs: 25000
 seed: 1
 
 # Model Architecture
-model: oml
+model: classifier
+model_args:
+  encoder: convnet
+  encoder_args:
+    num_blocks: 6
+    num_filters: 256
+    stride: [2, 1, 2, 1, 2, 2]
+    padding: 0
+    norm_type: null
+    pool_size: null
+  classifier: mlp-classifier
+  classifier_args: {num_classes: 1000, hidden_layers: 1024}
 
 # Optimization Configuration
-inner_params: pn
+inner_params: classifier
 outer_params: all
-output_layer: pn.2
+output_layer: classifier.mlp.2
 
 eval_steps: [10000, 25000]
-eval: !include eval-sweep-inet-oml.yml
+eval:
+  # WARNING: Currently these apply to the linear classifier, not the MLP classifier. Edit before launching.
+  - no-sgd: !include eval-inet-zero-shot.yml
+  - olft: !include eval-sweep-inet-1FC.yml
+  - unfrozen: !include eval-sweep-inet-unfrozen.yml
+  - lstsq-unfrozen: !include eval-sweep-inet-lstsq-unfrozen.yml
+  - iid-olft: !include eval-sweep-inet-iid-1FC.yml
+  - iid-unfrozen: !include eval-sweep-inet-iid-unfrozen.yml
+  - iid-lstsq-unfrozen: !include eval-sweep-inet-iid-lstsq-unfrozen.yml

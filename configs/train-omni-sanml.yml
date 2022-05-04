@@ -1,5 +1,5 @@
 #
-# Config for standard training of ANML for continuous learning on Omniglot.
+# Config for a model which is equivalent to SANML, but built using Classifier.
 #
 
 # Dataset
@@ -7,6 +7,7 @@ dataset: omni
 train_size: 20
 
 # Training Configuration
+train_method: meta
 batch_size: 1
 num_batches: 20
 train_cycles: 1
@@ -20,15 +21,26 @@ epochs: 25000
 seed: 1
 
 # Model Architecture
-model: sanml
+model: classifier
 model_args:
-    rln_chs: 256
-    pool_rln_output: false
+  encoder: convnet
+  encoder_args:
+    num_blocks: 3
+    num_filters: 256
+    padding: 0
+    pool_size: [2, 2, 0]
+  classifier: linear-classifier
+  classifier_args: {num_classes: 1000}
 
 # Optimization Configuration
-inner_params: [rln, fc]
-outer_params: all  # special keyword for "all parameters"
-output_layer: fc
+inner_params: all
+outer_params: all
+output_layer: classifier.linear
 
 eval_steps: [10000, 25000]
-eval: !include eval-sweep-omni-anml.yml
+eval:
+  - no-sgd: !include eval-omni-zero-shot.yml
+  - olft: !include eval-sweep-omni-1FC.yml
+  - unfrozen: !include eval-sweep-omni-unfrozen.yml
+  - olft-oracle: !include eval-sweep-omni-iid-1FC.yml
+  - unfrozen-oracle: !include eval-sweep-omni-iid-unfrozen.yml

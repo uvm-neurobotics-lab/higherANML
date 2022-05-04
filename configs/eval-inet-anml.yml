@@ -5,11 +5,11 @@
 
 # Dataset
 dataset: miniimagenet
-train_examples: 10
+train_examples: 30
 test_examples: 200
 
 # Test Method
 reinit_params: fc
 opt_params: fc
 classes: 20
-lr: 0.002
+lr: 0.0007

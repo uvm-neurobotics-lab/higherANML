@@ -4,11 +4,11 @@
 
 # Dataset
 dataset: miniimagenet
-train_examples: [10, 20, 30]
+train_examples: 30
 test_examples: 200
 
 # Test Method
 reinit_params: classifier.linear
 opt_params: all
 classes: 20
-lr: !include learning-rates.yml
+lr: 0.00007

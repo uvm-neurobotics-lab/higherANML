@@ -1,5 +1,6 @@
 #
-# Config for i.i.d. transfer learning of Classifier-Basline models on Omniglot. Fine-tunes just the classifier.
+# Config for i.i.d. transfer learning of Classifier-Basline models on Omniglot. Initializes final layer with LLS, then
+# fine-tunes all layers.
 #
 
 # Dataset

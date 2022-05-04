@@ -1,6 +1,6 @@
 #
-# Config for "zero-shot" (no SGD) test of Classifier-Basline models on Omniglot. Just fits the last linear layer
-# using Linear Least Squares.
+# Config for "zero-shot" (no SGD) test of Classifier-Basline models on Omniglot. Just fits the last linear layer using
+# Linear Least Squares. Works on models which use a two-layer classifier.
 #
 
 # Dataset
@@ -11,7 +11,7 @@ test_examples: 5
 # Test Method - Fit a linear layer using the entire support set.
 eval_method: zero_shot
 reinit_method: lstsq
-reinit_params: classifier.linear
+reinit_params: classifier.mlp.2
 init_size: 9000  # = 15 * 600
 batch_size: 512
 classes: 600

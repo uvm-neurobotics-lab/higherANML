@@ -1,0 +1,17 @@
+#
+# Config for "zero-shot" (no SGD) test of Classifier-Basline models on Mini-ImageNet. Just fits the last linear layer
+# using Linear Least Squares.
+#
+
+# Dataset
+dataset: miniimagenet
+train_examples: 30
+test_examples: 200
+
+# Test Method - Fit a linear layer using the entire support set.
+eval_method: zero_shot
+reinit_method: lstsq
+reinit_params: classifier.linear
+init_size: 600  # = 20 * 30
+batch_size: 256
+classes: 20
