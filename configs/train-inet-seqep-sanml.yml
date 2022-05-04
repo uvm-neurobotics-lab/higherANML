@@ -1,5 +1,5 @@
 #
-# Current best known config for i.i.d. pre-training on Mini-ImageNet.
+# Current best known config for meta-training an ANML-like model on Mini-ImageNet.
 #
 
 # Dataset
@@ -7,32 +7,35 @@ dataset: miniimagenet
 train_size: 500
 
 # Training Configuration
-train_method: iid
-batch_size: 256
-epochs: 30
+train_method: sequential_episodic
+batch_size: 1
+num_batches: 20
+train_cycles: 1
+val_size: 200
+remember_size: 100
+remember_only: false
+inner_lr: 0.001
+outer_lr: 0.001
+
+epochs: 9000
 seed: 1
 
 # Model Architecture
 model: classifier
 model_args:
-  encoder: resnet18
+  encoder: convnet
+  encoder_args:
+    num_blocks: 4
+    num_filters: 256
   classifier: linear-classifier
-  classifier_args: {num_classes: 64}
+  classifier_args: {num_classes: 1000}
 
-# Optimization
-optimizer: SGD
-optimizer_args:
-  lr: 0.1
-  momentum: 0.9
-  weight_decay: 0.0001
-lr_scheduler: StepLR
-lr_scheduler_args:
-  step_size: 10
-  gamma: 0.1
+# Optimization Configuration
+inner_params: all
+outer_params: all
+output_layer: classifier.linear
 
-# Evaluation
-save_freq: 125
-eval_steps: [1000, 2000]
+eval_steps: [5000, 9000]
 eval:
   - no-sgd: !include eval-inet-zero-shot.yml
   - olft: !include eval-sweep-inet-1FC.yml

@@ -1,5 +1,5 @@
 #
-# Current best known config for training an ANML-like model on Mini-ImageNet.
+# Current best known config for i.i.d. pre-training an ANML-like model on Mini-ImageNet.
 #
 
 # Dataset
@@ -37,8 +37,11 @@ lr_scheduler_args:
 save_freq: 125
 eval_steps: [1000, 2000]
 eval:
+  - no-sgd: !include eval-inet-zero-shot.yml
   - olft: !include eval-sweep-inet-1FC.yml
   - unfrozen: !include eval-sweep-inet-unfrozen.yml
-  - olft-oracle: !include eval-sweep-inet-iid-1FC.yml
-  - unfrozen-oracle: !include eval-sweep-inet-iid-unfrozen.yml
+  - lstsq-unfrozen: !include eval-sweep-inet-lstsq-unfrozen.yml
+  - iid-olft: !include eval-sweep-inet-iid-1FC.yml
+  - iid-unfrozen: !include eval-sweep-inet-iid-unfrozen.yml
+  - iid-lstsq-unfrozen: !include eval-sweep-inet-iid-lstsq-unfrozen.yml
 

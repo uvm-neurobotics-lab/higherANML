@@ -1,5 +1,5 @@
 #
-# Current best known config for training an ANML-like model on Mini-ImageNet.
+# Current best known config for meta-training on Mini-ImageNet.
 #
 
 # Dataset
@@ -34,7 +34,10 @@ output_layer: classifier.linear
 
 eval_steps: [10000, 25000]
 eval:
+  - no-sgd: !include eval-inet-zero-shot.yml
   - olft: !include eval-sweep-inet-1FC.yml
   - unfrozen: !include eval-sweep-inet-unfrozen.yml
-  - olft-oracle: !include eval-sweep-inet-iid-1FC.yml
-  - unfrozen-oracle: !include eval-sweep-inet-iid-unfrozen.yml
+  - lstsq-unfrozen: !include eval-sweep-inet-lstsq-unfrozen.yml
+  - iid-olft: !include eval-sweep-inet-iid-1FC.yml
+  - iid-unfrozen: !include eval-sweep-inet-iid-unfrozen.yml
+  - iid-lstsq-unfrozen: !include eval-sweep-inet-iid-lstsq-unfrozen.yml

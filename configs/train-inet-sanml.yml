@@ -1,5 +1,5 @@
 #
-# Current best known config for training an ANML-like model on Mini-ImageNet.
+# Current best known config for meta-training an ANML-like model on Mini-ImageNet.
 #
 
 # Dataset
@@ -7,6 +7,7 @@ dataset: miniimagenet
 train_size: 500
 
 # Training Configuration
+train_method: meta
 batch_size: 1
 num_batches: 20
 train_cycles: 1
