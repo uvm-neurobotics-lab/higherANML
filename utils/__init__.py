@@ -130,7 +130,7 @@ def make_pretty(config):
         return config
 
 
-def ensure_config_param(config, key, condition=None):
+def ensure_config_param(config, key, condition=None, required=True):
     """
     Function to check that a config parameter is present and satisfies a given condition.
 
@@ -139,9 +139,13 @@ def ensure_config_param(config, key, condition=None):
         key (str): The key that should be present in the config.
         condition (function): (Optional) A function of (obj) -> bool that returns whether the value for this key is
             valid.
+        required (bool): True if this key must be present in the config; false if it can be missing.
     """
     if key not in config:
-        raise RuntimeError(f'Required key "{key}" not found in config.')
+        if required:
+            raise RuntimeError(f'Required key "{key}" not found in config.')
+        else:
+            return
     value = config[key]
     if condition and not condition(value):
         raise RuntimeError(f'Config parameter "{key}" has an invalid value: {value}')

@@ -8,6 +8,7 @@ train_size: 20
 
 # Training Configuration
 train_method: sequential_episodic
+sample_method: single
 batch_size: 1
 num_batches: 20
 train_cycles: 1

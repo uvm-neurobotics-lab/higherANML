@@ -109,7 +109,7 @@ def print_validation_stats(episode, train_out, rem_out, val_out, verbose, print_
     if len(rem_out) > 0:
         set_list.append(("Remember", rem_out, episode.rem_labels))
     if len(val_out) > 0:
-        set_list.append(("Test", val_out, episode.val_labels))
+        set_list.append(("Val", val_out, episode.val_labels))
 
     # Loss & Accuracy
     print_oneline(set_list, print_fn, lambda name, output, labels: f"{name} Acc = {accuracy(output, labels) :.1%}")
@@ -378,6 +378,8 @@ class MetaLearningLog(BaseLog):
 
     @torch.no_grad()
     def inner(self, outer_it, inner_it, inner_loss, inner_acc, episode, model, verbose):
+        wandb.log({"inner.loss": inner_loss, "inner.acc": inner_acc}, step=outer_it)
+
         # Only print inner loop info when verbose is turned on.
         if (self.verbose_freq > 0) and (outer_it % self.verbose_freq == 0):
             if inner_it < 2:
@@ -387,8 +389,8 @@ class MetaLearningLog(BaseLog):
                 # TODO: and/or plot some idea of how much outputs are changing, in general
                 val_out = forward_pass(model, episode.val_ims, episode.val_labels)[0]
                 val_acc = accuracy(val_out, episode.val_labels)
-                self.debug(f"  Inner iter {inner_it}: Loss = {inner_loss:.5f}, Acc = {inner_acc:.1%}"
-                           f", Test Acc = {val_acc:.1%}")
+                self.debug(f"  Inner iter {inner_it}: Batch Loss = {inner_loss:.5f}, Batch Acc = {inner_acc:.1%}"
+                           f", Sampled Val Acc = {val_acc:.1%}")
                 train_out = forward_pass(model, episode.train_ims, episode.train_labels)[0]
                 rem_out = forward_pass(model, episode.rem_ims, episode.rem_labels)[0]
                 print_validation_stats(episode, train_out, rem_out, val_out, verbose,
@@ -415,8 +417,8 @@ class MetaLearningLog(BaseLog):
                 metrics[name + ".train_acc"] = train_acc
                 metrics[name + ".remember_acc"] = rem_acc
                 metrics[name + ".valid_acc"] = val_acc
-                self.info(f"  {capname} Model on Episode {it}: Loss = {loss.item():.3f} | Acc = {acc:.1%}"
-                          f" | Train = {train_acc:.1%} | Remember = {rem_acc:.1%} | Val = {val_acc:.1%}")
+                self.info(f"  {capname} Model on Episode {it}: Meta-Loss = {loss.item():.3f} | Meta-Acc = {acc:.1%}"
+                          f" | Train = {train_acc:.1%} | Remember = {rem_acc:.1%} | Sampled Val = {val_acc:.1%}")
 
             # If verbose, then also evaluate the new meta-model on the previous train/validation data so we can see the
             # impact of meta-learning.

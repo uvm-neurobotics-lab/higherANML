@@ -28,6 +28,11 @@ def check_train_config(config):
             return isinstance(val, types)
         return test_fn
 
+    def one_of(options):
+        def test_fn(val):
+            return val in options
+        return test_fn
+
     ensure_config_param(config, "batch_size", gt_zero)
     ensure_config_param(config, "num_batches", gt_zero)
     ensure_config_param(config, "val_size", gte_zero)
@@ -42,6 +47,8 @@ def check_train_config(config):
     ensure_config_param(config, "output_layer", of_type(str))
     ensure_config_param(config, "train_method", of_type(str))
     ensure_config_param(config, "model", of_type(str))
+    config.setdefault("sample_method", "single")
+    ensure_config_param(config, "sample_method", one_of(("single", "uniform")))
     config.setdefault("lobotomize", True)
     config.setdefault("full_test", True)
 
@@ -52,19 +59,19 @@ def run_meta_episode(config, episode, model, inner_opt, outer_opt, log, it, verb
     with higher.innerloop_ctx(model, inner_opt, copy_initial_weights=False) as (fnet, diffopt):
         # Inner loop of 1 random task, in batches, for some number of cycles.
         for i, (ims, labels) in enumerate(episode.train_traj * config["train_cycles"]):
-            out, inner_loss, inner_acc = forward_pass(fnet, ims, labels)
+            _, inner_loss, inner_acc = forward_pass(fnet, ims, labels)
             log.inner(it, i, inner_loss, inner_acc, episode, fnet, verbose)
             diffopt.step(inner_loss)
 
-        log.outer_step(it, "adapted", inner_loss, inner_acc, episode, fnet, verbose)
-
         # Outer "loop" of 1 task (all training batches) + `remember_size` random chars, in a single large batch.
-        m_out, m_loss, m_acc = forward_pass(fnet, episode.meta_ims, episode.meta_labels)
+        _, m_loss, m_acc = forward_pass(fnet, episode.meta_ims, episode.meta_labels)
+        log.outer_step(it, "adapted", m_loss, m_acc, episode, fnet, verbose)
         m_loss.backward()
 
     outer_opt.step()
     outer_opt.zero_grad()
 
+    _, m_loss, m_acc = forward_pass(model, episode.meta_ims, episode.meta_labels)
     log.outer_step(it, "meta", m_loss, m_acc, episode, model, verbose)
 
 
@@ -136,6 +143,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
             num_batches=config["num_batches"],
             remember_size=config["remember_size"],
             val_size=config["val_size"],
+            sample_method=config["sample_method"],
             add_inner_train_to_outer_train=not config["remember_only"],
             device=device,
         )

@@ -1,5 +1,5 @@
 #
-# Config for a model which is equivalent to SANML, but built using Classifier.
+# Config for a meta-trained model which is equivalent to SANML, but built using Classifier.
 #
 
 # Dataset
@@ -8,6 +8,7 @@ train_size: 20
 
 # Training Configuration
 train_method: meta
+sample_method: single
 batch_size: 1
 num_batches: 20
 train_cycles: 1

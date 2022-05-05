@@ -161,7 +161,7 @@ class ContinualMetaLearningSampler:
         batches = list(divide_chunks(self.val_sample_index, _MAX_BATCH_SIZE))
         return BatchList(self.train, batches, device)
 
-    def sample_train(self, batch_size=1, num_batches=20, remember_size=64, val_size=200,
+    def sample_train(self, batch_size=1, num_batches=20, remember_size=64, val_size=200, sample_method="single",
                      add_inner_train_to_outer_train=True, device=None):
         """
         Samples a single episode ("outer loop") of the meta-train procedure.
@@ -172,6 +172,9 @@ class ContinualMetaLearningSampler:
             remember_size (int): Number of examples to train (meta-train-test) on in the outer loop.
             val_size (int): Number of never-seen examples to test on in the outer loop (for reporting generalization
                 performance).
+            sample_method (str): The method for sampling inner loop examples:
+                - "single": Sample instances from one class only. (default)
+                - "uniform": Sample instances uniformly at random.
             add_inner_train_to_outer_train (bool): Whether to add the training examples into the validation set.
             device (str): The device to send the torch arrays to.
 
@@ -183,26 +186,35 @@ class ContinualMetaLearningSampler:
 
         # train set = inner loop training
 
-        # Sample a random class for inner loop training. This gives us a list of example indices for that class.
-        class_indices = self.rng.choice(self.train_class_index)
+        # Sample a single class, even if we aren't doing single-class training, since we might still want a random
+        # class to get lobotomized.
+        train_class = self.rng.choice(len(self.train_class_index))
+
         sample_size = batch_size * num_batches
-        # Only sample with replacement if necessary.
-        # TODO: Should we change this to always sample w/ replacement? Would that hurt performance?
-        replace = sample_size > len(class_indices)
-        sample_indices = self.rng.choice(class_indices, size=sample_size, replace=replace)
-        train_samples = [self.train[idx] for idx in sample_indices]
+        if sample_method == "uniform":
+            train_indices = self.rng.choice(self.train_sample_index, size=sample_size, replace=False)
+        elif sample_method == "single":
+            # This gives us a list of example indices for that class.
+            class_indices = self.train_class_index[train_class]
+            # Only sample with replacement if necessary.
+            replace = sample_size > len(class_indices)
+            train_indices = self.rng.choice(class_indices, size=sample_size, replace=replace)
+        else:
+            raise ValueError(f"Unrecognized sample method: {sample_method}")
+
+        # Load the actual data from disk.
+        train_samples = [self.train[idx] for idx in train_indices]
         # Split into batches.
         batched_train_samples = [train_samples[batch_size * i: batch_size * (i + 1)] for i in range(num_batches)]
         # Collate into tensors.
         train_traj = [collate_images(batch, device) for batch in batched_train_samples]
         train_ims, train_labels = collate_images(train_samples, device)  # all training samples together (unbatched)
-        train_class = train_samples[0][1]  # just take the first label off the top, since they should all be the same.
 
         # remember set = outer loop training
 
         # Sample some number of random instances for meta-training.
-        indices = self.rng.choice(self.train_sample_index, size=remember_size, replace=False)
-        rem_samples = [self.train[idx] for idx in indices]
+        rem_indices = self.rng.choice(self.train_sample_index, size=remember_size, replace=False)
+        rem_samples = [self.train[idx] for idx in rem_indices]
         rem_ims, rem_labels = collate_images(rem_samples, device)
 
         if add_inner_train_to_outer_train:

@@ -34,6 +34,8 @@ def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
     argutils.add_dataset_arg(parser, add_train_size_arg=True)
     parser.add_argument("--train-method", choices=["meta", "sequential_episodic"], type=str.lower, default="meta",
                         help="Training method to use.")
+    parser.add_argument("--sample-method", choices=["single", "uniform"], type=str.lower, default="single",
+                        help="Method to use for sampling inner loop examples.")
     parser.add_argument("--batch-size", metavar="INT", type=int, default=1,
                         help="Number of examples per training batch in the inner loop.")
     parser.add_argument("--num-batches", metavar="INT", type=int, default=20,
@@ -88,9 +90,9 @@ def prep_config(parser, args):
     argutils.configure_logging(args, level=logging.INFO)
 
     overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "augment", "train_method",
-                         "batch_size", "num_batches", "train_cycles", "val_size", "remember_size", "remember_only",
-                         "lobotomize", "inner_lr", "outer_lr", "save_freq", "epochs", "device", "seed", "id", "project",
-                         "entity", "group", "full_test", "eval_steps", "cluster"]
+                         "sample_method", "batch_size", "num_batches", "train_cycles", "val_size", "remember_size",
+                         "remember_only", "lobotomize", "inner_lr", "outer_lr", "save_freq", "epochs", "device", "seed",
+                         "id", "project", "entity", "group", "full_test", "eval_steps", "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
 
     # Conduct a quick test.
