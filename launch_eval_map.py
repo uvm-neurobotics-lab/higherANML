@@ -56,7 +56,6 @@ def prep_config(parser, args):
     ensure_config_param(config, "classes")
     ensure_config_param(config, "train_examples")
     ensure_config_param(config, "test_examples")
-    ensure_config_param(config, "lr")
     ensure_config_param(config, "runs")
     eval_freq = config.get("eval_freq")
     if eval_freq is None:
@@ -105,13 +104,19 @@ def get_input_output_dirs(config, output, flavor, dry_run):
 
 
 def build_command_args(config, outpath, force):
+    # Enforce that at least one of these variables is present, so that we get a valid combination.
+    keys = ("model", "dataset", "classes", "train_examples", "test_examples", "lr")
+    assert any(k in config for k in keys)
+
     # Figure out which config arguments have multiple choices. Extract them from the config.
     fixed_values = []
     variable_args = []
     variable_values = []
-    for k in ("model", "dataset", "classes", "train_examples", "test_examples", "lr"):
-        v = config[k]
-        if isinstance(v, (list, tuple)):
+    for k in keys:
+        v = config.get(k)
+        if not v:
+            continue
+        elif isinstance(v, (list, tuple)):
             # Ensure no duplicates.
             v = set(v)
             if len(v) == 0:
