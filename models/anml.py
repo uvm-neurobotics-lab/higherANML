@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 
 from models.registry import register
-from utils import calculate_output_size_for_fc_layer
+from utils import calculate_output_size_for_fc_layer, has_arg
 
 
 def _conv_block(in_channels, out_channels, pooling=True):
@@ -125,6 +125,27 @@ class ANML(nn.Module):
         return out
 
 
+class ANMLEncoder(nn.Module):
+    """
+    ANML, but without the linear classifier on top.
+    """
+    def __init__(self, input_shape, rln_chs, nm_chs, num_conv_blocks=3, pool_rln_output=False):
+        super(ANMLEncoder, self).__init__()
+        self.input_shape = input_shape
+        self.rln = RLN(input_shape[0], rln_chs, num_conv_blocks, pool_rln_output)
+        feature_size = calculate_output_size_for_fc_layer(self.rln, input_shape)
+        self.nm = NM(input_shape, nm_chs, feature_size, num_conv_blocks)
+        init_model_weights(self)
+
+    def forward(self, x):
+        features = self.rln(x)
+        nm_mask = self.nm(x)
+
+        out = features * nm_mask
+
+        return out
+
+
 class SANML(nn.Module):
     """
     ANML, without the neuromodulation (the entire NM module is removed).
@@ -171,7 +192,7 @@ def create_anml_variant(ModelClass, input_shape, **kwargs):
     model_args["input_shape"] = input_shape
 
     # Auto-derive some arguments if they are not explicitly defined by the user.
-    if "num_classes" not in model_args:
+    if "num_classes" not in model_args and has_arg(ModelClass, "num_classes"):
         # TODO: Auto-size this instead.
         # model_args["num_classes"] = max(sampler.num_train_classes(), sampler.num_test_classes())
         model_args["num_classes"] = 1000
@@ -189,6 +210,11 @@ def create_anml_variant(ModelClass, input_shape, **kwargs):
 @register("anml")
 def create_anml(input_shape, **kwargs):
     return create_anml_variant(ANML, input_shape, **kwargs)
+
+
+@register("anml-encoder")
+def create_anml(input_shape, **kwargs):
+    return create_anml_variant(ANMLEncoder, input_shape, **kwargs)
 
 
 @register("sanml")

@@ -52,6 +52,20 @@ def get_arg_names(type_or_func):
     return arg_names
 
 
+def has_arg(type_or_func, arg_name):
+    """
+    Uses `get_arg_names()` to determine whether the given type/function has an argument with the given name.
+
+    Args:
+        type_or_func (type or function): The callable object to test.
+        arg_name (str): The name of the argument to search for.
+
+    Returns:
+        bool: Whether the function has the given name.
+    """
+    return arg_name in get_arg_names(type_or_func)
+
+
 def update_with_keys(src, dest, keys):
     """ Works like dict.update, but only copies the values from the given keys. """
     for k in keys:
