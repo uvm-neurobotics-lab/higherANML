@@ -41,7 +41,7 @@ output_layer: classifier.mlp.2
 
 eval_steps: [10000, 25000]
 eval:
-  - no-sgd: !include eval-omni-zero-shot-mlp.yml
+  - no-sgd: !include eval-omni-zero-shot-oml.yml
   - 1ft: !include eval-sweep-omni-84-1layer.yml
   - 2ft: !include eval-sweep-omni-84-2layer.yml
   - ft-all: !include eval-sweep-omni-84-unfrozen.yml
