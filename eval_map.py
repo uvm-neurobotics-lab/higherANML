@@ -87,6 +87,9 @@ def main(args=None):
 
     if config["eval_method"] not in ("sequential", "seq", "iid", "zero_shot"):
         raise ValueError(f'Unrecognized evaluation method: "{config["eval_method"]}"')
+    elif config["eval_method"].startswith("seq"):
+        # Make the naming uniform so they all report under the same name in W&B and pandas tables.
+        config["eval_method"] = "sequential"
 
     sampler_type = "oml" if config["eval_method"].startswith("seq") else "iid"
     sampler, input_shape = argutils.get_dataset_sampler(config, sampler_type=sampler_type)
