@@ -2,14 +2,19 @@
 Utilities for optimization.
 """
 import torch
+from torch.optim.lr_scheduler import _LRScheduler
 
 from utils import get_arg_names
 
 
-class DummyScheduler:
-    def step(self, **kwargs):
-        # Do nothing.
-        pass
+class DummyScheduler(_LRScheduler):
+
+    def __init__(self, optimizer, last_epoch=-1, verbose=False):
+        super(DummyScheduler, self).__init__(optimizer, last_epoch, verbose)
+
+    def get_lr(self):
+        # Never change learning rate, just use the existing one.
+        return [group['lr'] for group in self.optimizer.param_groups]
 
 
 def optimizer_from_config(config, params):
@@ -43,7 +48,7 @@ def scheduler_from_config(config, opt):
     """
     sched_name = config.get("lr_scheduler")
     if not sched_name:
-        return DummyScheduler()
+        return DummyScheduler(opt)
     sched_args = config.get("lr_scheduler_args", {})
     cls = getattr(torch.optim.lr_scheduler, sched_name)
     if "verbose" in get_arg_names(cls):

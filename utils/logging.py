@@ -143,6 +143,23 @@ def print_validation_stats(episode, train_out, rem_out, val_out, verbose, print_
             print_fn(str(pred_label_pairs))
 
 
+def log_gradient_stats(metrics, model, name=None):
+    if name and not name.endswith("/"):
+        name += "/"
+    elif name is None:
+        name = ""
+
+    params = [p for p in model.parameters() if p.grad is not None]
+    if not params:
+        return
+
+    norm_type = 2
+    device = params[0].grad.device
+    # Computed the same way as in torch.nn.utils.clip_grad_norm_().
+    norm = torch.norm(torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in params]), norm_type)
+    metrics["gradients/" + name + "norm"] = norm
+
+
 def forward_pass(model, ims, labels):
     if len(ims) == 0:
         out = torch.tensor([])
@@ -323,12 +340,14 @@ class BaseLog:
 
 class StandardLog(BaseLog):
 
-    def __init__(self, name, model_args, print_freq=100, save_freq=2000, full_test=True, config=None):
+    def __init__(self, name, model, model_args, print_freq=100, save_freq=2000, full_test=True, config=None):
         super().__init__(name, model_args, save_freq, full_test, config)
         self.start = -1
         self.print_freq = print_freq
+        wandb.watch(model, log_freq=print_freq)  # log gradient histograms automatically
 
-    def epoch(self, it, epoch, model, sampler, device):
+    def epoch(self, it, epoch, sampler, optimizer):
+        wandb.log({"lr": optimizer.param_groups[0]["lr"]}, step=it)  # NOTE: assumes only one param group for now.
         self.info(f"---- Beginning Epoch {epoch}: {len(sampler.train_loader)} batches, {sampler.batch_size} samples"
                   " each ----")
 
@@ -340,6 +359,7 @@ class StandardLog(BaseLog):
         metrics["batch_train_acc"] = acc
         metrics["batch_train_acc_top1"] = acc1
         metrics["batch_train_acc_top5"] = acc5
+        log_gradient_stats(metrics, model)
 
         time_to_print = (it % self.print_freq == 0)
         if time_to_print:
@@ -353,8 +373,8 @@ class StandardLog(BaseLog):
                 self.start = end
                 metrics["runtime"] = elapsed
 
-            self.info(f"Step {it}: Loss = {loss.item():.3f} | Train Acc = {acc:.1%} | Train Top 5 Acc = {acc5:.1%}"
-                      f" ({strftime('%H:%M:%S', gmtime(elapsed))})")
+            self.info(f"Step {it}: Batch Loss = {loss.item():.3f} | Batch Train Acc = {acc:.1%}"
+                      f" | Batch Train Top 5 Acc = {acc5:.1%} ({strftime('%H:%M:%S', gmtime(elapsed))})")
 
         wandb.log(metrics, step=it)
         self.maybe_save_and_eval(it, model, sampler, device)
@@ -362,11 +382,12 @@ class StandardLog(BaseLog):
 
 class MetaLearningLog(BaseLog):
 
-    def __init__(self, name, model_args, print_freq=10, verbose_freq=None, save_freq=1000, full_test=True, config=None):
+    def __init__(self, name, model, model_args, print_freq=10, verbose_freq=None, save_freq=1000, full_test=True, config=None):
         super().__init__(name, model_args, save_freq, full_test, config)
         self.start = -1
         self.print_freq = print_freq
         self.verbose_freq = verbose_freq
+        wandb.watch(model, log_freq=print_freq * 10)  # log gradient histograms automatically
 
     def outer_begin(self, it):
         if self.start < 0:
@@ -374,11 +395,11 @@ class MetaLearningLog(BaseLog):
 
     def outer_info(self, it, train_class):
         if it % self.print_freq == 0:
-            self.info(f"**** Episode {it}: Learning on class {train_class}...")
+            self.info(f"**** Episode {it}: Learning on class {train_class} ****")
 
     @torch.no_grad()
     def inner(self, outer_it, inner_it, inner_loss, inner_acc, episode, model, verbose):
-        wandb.log({"inner.loss": inner_loss, "inner.acc": inner_acc}, step=outer_it)
+        wandb.log({"inner/loss": inner_loss, "inner/acc": inner_acc}, step=outer_it)
 
         # Only print inner loop info when verbose is turned on.
         if (self.verbose_freq > 0) and (outer_it % self.verbose_freq == 0):
@@ -397,7 +418,7 @@ class MetaLearningLog(BaseLog):
                                        lambda msg: self.debug("    " + msg))
 
     @torch.no_grad()
-    def outer_step(self, it, name, loss, acc, episode, model, verbose):
+    def outer_step(self, it, name, loss, acc, episode, model, log_gradients, verbose):
         capname = name.capitalize()
         metrics = {}
         time_to_print = (it % self.print_freq == 0)
@@ -412,11 +433,13 @@ class MetaLearningLog(BaseLog):
                 train_acc = accuracy(train_out, episode.train_labels)
                 rem_acc = accuracy(rem_out, episode.rem_labels)
                 val_acc = accuracy(val_out, episode.val_labels)
-                metrics[name + ".loss"] = loss.item()
-                metrics[name + ".acc"] = acc
-                metrics[name + ".train_acc"] = train_acc
-                metrics[name + ".remember_acc"] = rem_acc
-                metrics[name + ".valid_acc"] = val_acc
+                metrics[name + "/loss"] = loss.item()
+                metrics[name + "/acc"] = acc
+                metrics[name + "/train_acc"] = train_acc
+                metrics[name + "/remember_acc"] = rem_acc
+                metrics[name + "/valid_acc"] = val_acc
+                if log_gradients:
+                    log_gradient_stats(metrics, model, name)
                 self.info(f"  {capname} Model on Episode {it}: Meta-Loss = {loss.item():.3f} | Meta-Acc = {acc:.1%}"
                           f" | Train = {train_acc:.1%} | Remember = {rem_acc:.1%} | Sampled Val = {val_acc:.1%}")
 

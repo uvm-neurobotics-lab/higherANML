@@ -48,7 +48,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     name += "-".join(map(str, input_shape))
     # If double-verbose, print every iteration. Else, print at least as often as we save.
     print_freq = 1 if verbose > 1 else min(config["save_freq"], 100)
-    log = StandardLog(name, model_args, print_freq, config["save_freq"], config["full_test"], config)
+    log = StandardLog(name, model, model_args, print_freq, config["save_freq"], config["full_test"], config)
 
     optimizer = utils.optimization.optimizer_from_config(config, model.parameters())
     scheduler = utils.optimization.scheduler_from_config(config, optimizer)
@@ -67,7 +67,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
 
 def run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps=float("inf"), device=None):
     """ Run one training epoch. """
-    log.epoch(step, epoch, model, sampler, device)
+    log.epoch(step, epoch, sampler, optimizer)
     model.train()
 
     for images, labels in sampler.train_loader:
@@ -78,13 +78,14 @@ def run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps=float("
         # Forward pass.
         out, loss, acc = forward_pass(model, images, labels)
 
-        # Record accuracy and other metrics.
-        log.step(step, epoch, loss, acc, out, labels, model, sampler, device)
-
         # Backpropagate.
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
+        # Record accuracy and other metrics. Do this after the backward pass in case we want to record gradients or
+        # save the latest model.
+        log.step(step, epoch, loss, acc, out, labels, model, sampler, device)
 
         step += 1
         if step >= max_steps:

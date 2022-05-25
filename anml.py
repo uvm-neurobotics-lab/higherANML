@@ -65,14 +65,14 @@ def run_meta_episode(config, episode, model, inner_opt, outer_opt, log, it, verb
 
         # Outer "loop" of 1 task (all training batches) + `remember_size` random chars, in a single large batch.
         _, m_loss, m_acc = forward_pass(fnet, episode.meta_ims, episode.meta_labels)
-        log.outer_step(it, "adapted", m_loss, m_acc, episode, fnet, verbose)
+        log.outer_step(it, "adapted", m_loss, m_acc, episode, fnet, False, verbose)
         m_loss.backward()
 
     outer_opt.step()
     outer_opt.zero_grad()
 
     _, m_loss, m_acc = forward_pass(model, episode.meta_ims, episode.meta_labels)
-    log.outer_step(it, "meta", m_loss, m_acc, episode, model, verbose)
+    log.outer_step(it, "meta", m_loss, m_acc, episode, model, True, verbose)
 
 
 def run_sequential_episode(config, episode, model, inner_opt, outer_opt, log, it, verbose):
@@ -84,16 +84,18 @@ def run_sequential_episode(config, episode, model, inner_opt, outer_opt, log, it
         inner_opt.step()
         inner_opt.zero_grad()
 
-    log.outer_step(it, "adapted", inner_loss, inner_acc, episode, model, verbose)
+    log.outer_step(it, "adapted", inner_loss, inner_acc, episode, model, False, verbose)
 
     # Outer "loop" of 1 task (all training batches) + `remember_size` random chars, in a single large batch.
     m_out, m_loss, m_acc = forward_pass(model, episode.meta_ims, episode.meta_labels)
     m_loss.backward()
 
     outer_opt.step()
-    outer_opt.zero_grad()
+    # The logging step is exactly here, after update and before zeroing out gradients. Thus we can log gradients, and
+    # also evaluate the model with the updated weights.
+    log.outer_step(it, "meta", m_loss, m_acc, episode, model, True, verbose)
 
-    log.outer_step(it, "meta", m_loss, m_acc, episode, model, verbose)
+    outer_opt.zero_grad()
 
 
 def train(sampler, input_shape, config, device="cuda", verbose=0):
@@ -110,7 +112,8 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     name += "-".join(map(str, input_shape))
     print_freq = 1 if verbose > 1 else 10  # if double-verbose, print every iteration
     verbose_freq = print_freq if verbose > 0 else 0  # if verbose, then print verbose info at the same frequency
-    log = MetaLearningLog(name, model_args, print_freq, verbose_freq, config["save_freq"], config["full_test"], config)
+    log = MetaLearningLog(name, model, model_args, print_freq, verbose_freq, config["save_freq"], config["full_test"],
+                          config)
 
     # inner optimizer used during the learning phase
     inner_params = collect_matching_params(model, config["inner_params"])
