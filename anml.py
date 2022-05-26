@@ -69,10 +69,13 @@ def run_meta_episode(config, episode, model, inner_opt, outer_opt, log, it, verb
         m_loss.backward()
 
     outer_opt.step()
-    outer_opt.zero_grad()
 
+    # The logging step is exactly here, after update and before zeroing out gradients. Thus we can log gradients, and
+    # also evaluate the model with the updated weights.
     _, m_loss, m_acc = forward_pass(model, episode.meta_ims, episode.meta_labels)
     log.outer_step(it, "meta", m_loss, m_acc, episode, model, True, verbose)
+
+    outer_opt.zero_grad()
 
 
 def run_sequential_episode(config, episode, model, inner_opt, outer_opt, log, it, verbose):
@@ -91,6 +94,7 @@ def run_sequential_episode(config, episode, model, inner_opt, outer_opt, log, it
     m_loss.backward()
 
     outer_opt.step()
+
     # The logging step is exactly here, after update and before zeroing out gradients. Thus we can log gradients, and
     # also evaluate the model with the updated weights.
     log.outer_step(it, "meta", m_loss, m_acc, episode, model, True, verbose)
