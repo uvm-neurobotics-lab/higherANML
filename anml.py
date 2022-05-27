@@ -68,6 +68,8 @@ def run_meta_episode(config, episode, model, inner_opt, outer_opt, log, it, verb
         log.outer_step(it, "adapted", m_loss, m_acc, episode, fnet, False, verbose)
         m_loss.backward()
 
+    if config.get("max_grad_norm", 0) > 0:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), config["max_grad_norm"])
     outer_opt.step()
 
     # The logging step is exactly here, after update and before zeroing out gradients. Thus we can log gradients, and
@@ -93,6 +95,8 @@ def run_sequential_episode(config, episode, model, inner_opt, outer_opt, log, it
     m_out, m_loss, m_acc = forward_pass(model, episode.meta_ims, episode.meta_labels)
     m_loss.backward()
 
+    if config.get("max_grad_norm", 0) > 0:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), config["max_grad_norm"])
     outer_opt.step()
 
     # The logging step is exactly here, after update and before zeroing out gradients. Thus we can log gradients, and

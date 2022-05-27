@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 from torch.nn.functional import cross_entropy
+from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
 from tqdm import trange
 
@@ -56,8 +57,9 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     # BEGIN TRAINING
     step = 0
     max_steps = config.get("max_steps", float("inf"))
+    max_grad_norm = config.get("max_grad_norm", 0)
     for epoch in range(config["epochs"]):
-        step = run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps, device)
+        step = run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps, max_grad_norm, device)
         if step >= max_steps:
             break
         scheduler.step()
@@ -65,7 +67,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     log.close(step, model, sampler, device)
 
 
-def run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps=float("inf"), device=None):
+def run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps=float("inf"), max_grad_norm=0, device=None):
     """ Run one training epoch. """
     log.epoch(step, epoch, sampler, optimizer)
     model.train()
@@ -81,6 +83,8 @@ def run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps=float("
         # Backpropagate.
         optimizer.zero_grad()
         loss.backward()
+        if max_grad_norm > 0:
+            clip_grad_norm_(model.parameters(), max_grad_norm)
         optimizer.step()
 
         # Record accuracy and other metrics. Do this after the backward pass in case we want to record gradients or
