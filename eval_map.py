@@ -10,7 +10,6 @@ The "map" portion of a map-reduce job for evaluating ANML and related models.
 # Optionally add `--eval-freq 2` to test a full trajectory of evaluation numbers. This will take longer and will print
 # the same result, but more data will end up in the resulting dataframe.
 
-import argparse
 import sys
 from pathlib import Path
 
@@ -30,13 +29,6 @@ EVAL_METHODS = {
 }
 
 
-def check_path(path):
-    if Path(path).exists():
-        return path
-    else:
-        raise argparse.ArgumentTypeError(f"model: {path} is not a valid path")
-
-
 def main(args=None):
     parser = argutils.create_parser(__doc__)
 
@@ -49,7 +41,8 @@ def main(args=None):
                         help="The method to use to reinitialize trainable parameters: typical kaiming normal"
                              "initialization or least squares estimate of the final linear layer.")
     argutils.add_dataset_arg(parser)
-    parser.add_argument("-m", "--model", metavar="PATH", type=check_path, help="Path to the model to evaluate.")
+    parser.add_argument("-m", "--model", metavar="PATH", type=argutils.existing_path,
+                        help="Path to the model to evaluate.")
     parser.add_argument("-l", "--lr", metavar="RATE", type=float,
                         help="Learning rate to use (check README for suggestions).")
     parser.add_argument("--classes", metavar="INT", type=int, help="Number of classes to test.")
