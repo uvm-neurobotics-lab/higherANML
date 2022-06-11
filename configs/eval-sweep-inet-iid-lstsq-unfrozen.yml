@@ -15,6 +15,7 @@ reinit_params: classifier.linear
 init_size: 0  # use one example per class to init
 opt_params: all
 classes: 20
+batch_size: 64
 lr: !include learning-rates.yml
 
 # Reporting

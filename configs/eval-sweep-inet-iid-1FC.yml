@@ -12,6 +12,7 @@ eval_method: iid
 reinit_params: classifier.linear
 opt_params: classifier
 classes: 20
+batch_size: 64
 lr: !include learning-rates.yml
 
 # Reporting
