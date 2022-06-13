@@ -91,3 +91,63 @@ python eval_omni.py --model trained_anmls/256_112_2304_ANML-29999.pth --classes 
 ```
 
 During evaluation the model is quite sensitive to learning rates used, the data shown in the above table has been gathered sweeping several learning rates over multiple repeats.
+
+
+# End-to-End Pipeline
+
+If you have access to a Slurm cluster, and you are using
+[Neuromanager](https://github.com/lfrati/neuromanager), then everything from train to
+test can be automated in a single pipeline. **Be sure to use the
+[launcher-improvements](https://github.com/lfrati/neuromanager/tree/ntraft/launcher-improvements) branch
+of Neuromanager.**
+
+Here is an example command to train and test a model:
+```
+python launch_train.py -c configs/train-omni-sanml.yml --project my-wandb-project
+```
+
+Everything about the training and evaluation is defined by this single config file, `configs/train-omni-sanml.yml`
+(which also references other config files). You should see output like this when launching:
+```
+wandb: Currently logged in as: ntraft (use `wandb login --relogin` to force relogin)
+wandb: wandb version 0.12.17 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Tracking run with wandb version 0.12.10
+wandb: Syncing run whole-shadow-15297
+wandb: ⭐️ View project at https://wandb.ai/ntraft/anml-sanml-oml
+wandb: 🚀 View run at https://wandb.ai/ntraft/anml-sanml-oml/runs/29ox9s3q
+wandb: Run data is saved locally in /gpfs2/scratch/ntraft/Development/higherANML/wandb/run-20220527_142930-29ox9s3q
+wandb: Run `wandb offline` to turn off syncing.
+
+Running command: launcher dggpu /gpfs2/scratch/ntraft/Development/higherANML/train_anml.py --config /gpfs2/scratch/ntraft/Development/higherANML/experiments/anml-sanml-oml/whole-shadow-15297/train-config.yml
+Submitted batch job 533897
+
+wandb: Waiting for W&B process to finish, PID 71284... (success).
+wandb:                                                                                
+wandb: Synced 6 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Synced whole-shadow-15297: https://wandb.ai/ntraft/anml-sanml-oml/runs/29ox9s3q
+wandb: Find logs at: /gpfs2/scratch/ntraft/Development/higherANML/wandb/run-20220527_142930-29ox9s3q/logs/debug.log
+wandb: 
+```
+
+Once launched, you can alter any piece of the config (or the code!) and launch another.
+
+Each run will create its own folder in `higherANML/experiments/<project-name>/<group-name>`, and all configs and results
+will be logged under this group name (in the above case, `whole-shadow-15297`).
+
+### Using BlackDiamond
+
+By default this runs everything on DeepGreen (`dggpu` profile in Neuromanager), but you can run on BlackDiamond instead
+by adding `--cluster bdgpu`. However, in this case you'll need to have a `deep-amd` conda environment, where you need to
+install PyTorch with AMD tooling instead of CUDA tooling. You should be able to do this just by cloning a working
+environment and reinstalling PyTorch following AMD instructions instead. You will also need to add the following to your
+`.bash_profile` (or equivalent shell config), or else you will encounter import or library linkage errors:
+```shell
+# This variable is set on BlackDiamond, which means on that cluster we look in
+# the wrong place for certain libraries. So we need to manually add to the path
+# to make sure things still work.
+if [ -n $LD_LIBRARY_PATH ]; then
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/users/n/t/ntraft/miniconda3/lib
+fi
+```
+Replace `/users/n/t/ntraft/miniconda3` with your own conda install location.
