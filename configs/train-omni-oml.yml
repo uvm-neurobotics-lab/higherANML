@@ -22,6 +22,7 @@ seed: 1
 
 # Model Architecture
 model: classifier
+model_name: oml
 model_args:
   encoder: convnet
   encoder_args:

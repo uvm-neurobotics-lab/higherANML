@@ -23,6 +23,7 @@ seed: 1
 
 # Model Architecture
 model: classifier
+model_name: anml
 model_args:
   encoder: anml-encoder
   encoder_args:

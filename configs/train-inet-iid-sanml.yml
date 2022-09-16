@@ -14,6 +14,7 @@ seed: 1
 
 # Model Architecture
 model: classifier
+model_name: sanml
 model_args:
   encoder: convnet
   encoder_args:

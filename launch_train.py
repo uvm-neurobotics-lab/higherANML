@@ -98,6 +98,9 @@ def main(argv=None):
     overrideable_args = ["train_method", "dataset", "data_path", "download", "im_size", "train_size", "augment",
                          "device", "seed", "id", "project", "entity", "group", "full_test", "eval_steps", "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
+    # For convenience of filtering, make sure model_name is set.
+    if "model_name" not in config:
+        config["model_name"] = config.get("model")
 
     # Set up, and jump into, the destination path.
     run = argutils.prepare_wandb(config, dry_run=args.dry_run)
