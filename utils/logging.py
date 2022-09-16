@@ -290,10 +290,10 @@ class BaseLog:
                           f" Validation Top-1 Acc = {full_val_acc1:.1%} | Validation Top-5 Acc = {full_val_acc5:.1%}"
                           f" (Time to Eval = {strftime('%H:%M:%S', gmtime(elapsed))})")
                 wandb.log({
-                    "train.acc": full_train_acc1,
-                    "val.acc": full_val_acc1,
-                    "train.top5_acc": full_train_acc5,
-                    "val.top5_acc": full_val_acc5,
+                    "overall/train.acc": full_train_acc1,
+                    "overall/val.acc": full_val_acc1,
+                    "overall/train.top5_acc": full_train_acc5,
+                    "overall/val.top5_acc": full_val_acc5,
                 }, step=it)
 
             # Save the model.
