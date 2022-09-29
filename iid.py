@@ -37,6 +37,8 @@ def check_train_config(config):
     lobo_rate = config.get("lobo_rate")
     lobo_size = config.get("lobo_size")
     if lobo_rate and lobo_rate > 0 and lobo_size and lobo_size > 0:
+        ensure_config_param(config, "lobo_rate", of_type(int))
+        ensure_config_param(config, "lobo_size", of_type(int))
         # If we are performing lobotomy, then we need to know at which layer.
         ensure_config_param(config, "output_layer", of_type(str))
 
