@@ -12,6 +12,8 @@ batch_size: 256
 epochs: 30
 seed: 1
 
+output_layer: classifier.linear
+
 # Model Architecture
 model: classifier
 model_args:

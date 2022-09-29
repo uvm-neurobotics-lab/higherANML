@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 import yaml
+from numpy.random import default_rng
 from torch.nn.functional import cross_entropy
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
@@ -11,7 +12,7 @@ from tqdm import trange
 import models
 import utils.optimization
 from models import fine_tuning_setup, load_model, maybe_collect_init_sample
-from utils import ensure_config_param, flatten
+from utils import ensure_config_param, flatten, get_matching_module, lobotomize
 from utils.logging import forward_pass, overall_accuracy, StandardLog
 
 
@@ -33,6 +34,11 @@ def check_train_config(config):
     ensure_config_param(config, "save_freq", gt_zero)
     ensure_config_param(config, "model", of_type(str))
     config.setdefault("full_test", True)
+    lobo_rate = config.get("lobo_rate")
+    lobo_size = config.get("lobo_size")
+    if lobo_rate and lobo_rate > 0 and lobo_size and lobo_size > 0:
+        # If we are performing lobotomy, then we need to know at which layer.
+        ensure_config_param(config, "output_layer", of_type(str))
 
 
 def train(sampler, input_shape, config, device="cuda", verbose=0):
@@ -53,12 +59,20 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
 
     optimizer = utils.optimization.optimizer_from_config(config, model.parameters())
     scheduler = utils.optimization.scheduler_from_config(config, optimizer)
+    rng = default_rng(config["seed"])
 
     # BEGIN TRAINING
     step = 0
     max_steps = config.get("max_steps", float("inf"))
     max_grad_norm = config.get("max_grad_norm", 0)
+    lobo_rate = config.get("lobo_rate")
+    lobo_size = config.get("lobo_size")
+    # Output layer so we can reset output classes when needed (see `lobotomize()`).
+    output_layer = get_matching_module(model, config["output_layer"])
     for epoch in range(config["epochs"]):
+        if lobo_rate and lobo_rate > 0 and lobo_size and lobo_size > 0 and epoch % lobo_rate == 0:
+            lobotomize(output_layer, rng.choice(len(output_layer.weight), size=lobo_size, replace=False))
+
         step = run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps, max_grad_norm, device)
         if step >= max_steps:
             break

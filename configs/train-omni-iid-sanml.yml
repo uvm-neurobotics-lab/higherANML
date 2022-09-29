@@ -12,6 +12,8 @@ batch_size: 256
 epochs: 10
 seed: 12345
 
+output_layer: classifier.linear
+
 # Model Architecture
 model: classifier
 model_name: sanml
