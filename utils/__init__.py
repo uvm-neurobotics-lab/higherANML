@@ -259,17 +259,20 @@ def collect_matching_params(model, param_list):
     return [p for _, p in collect_matching_named_params(model, param_list)]
 
 
-def lobotomize(layer, class_num):
+def lobotomize(layer, classes):
     """
     Reinitialize the weights of the given output layer corresponding to the given class, so that we "erase" what we
     learned about classifying that class. The weights are initialized with `torch.nn.init.kaiming_normal_()`.
 
     Args:
         layer (torch.nn.Module): An object which has a `weight` property (like a Linear layer).
-        class_num (int): The index of the weights to reinitialize.
+        classes (int or list(int)): The index(es) of the weights to reinitialize.
     """
+    import torch
     from torch.nn.init import kaiming_normal_
-    kaiming_normal_(layer.weight[class_num].unsqueeze(0))
+    with torch.no_grad():
+        # The indexing here sometimes results in a copy, so we have to set it back to the original location.
+        layer.weight[classes] = kaiming_normal_(layer.weight[classes].unsqueeze(0))
 
 
 def calculate_output_shape(module, input_shape):
