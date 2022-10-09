@@ -35,7 +35,7 @@ def check_train_config(config):
 
     ensure_config_param(config, "batch_size", gt_zero)
     ensure_config_param(config, "num_batches", gt_zero)
-    ensure_config_param(config, "val_size", gte_zero)
+    ensure_config_param(config, "val_sample_size", gte_zero)
     ensure_config_param(config, "remember_size", gt_zero)
     ensure_config_param(config, "train_cycles", gt_zero)
     ensure_config_param(config, "inner_lr", gt_zero)
@@ -145,6 +145,8 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     # (epochs + 1) because we want the iteration counts to be 1-based, but we still keep the 0th iteration as a sort of
     # "test run" where we make sure we can successfully run full test metrics and save the model checkpoints. This
     # allows the job to fail early if there are issues with any of these things.
+    # TODO: Change this to have an explicit save/eval logging step *before* the first iteration. Make it optional in
+    # TODO: config. Make --smoke-test require it.
     for it in range(config["epochs"] + 1):
 
         log.outer_begin(it)
@@ -153,7 +155,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
             batch_size=config["batch_size"],
             num_batches=config["num_batches"],
             remember_size=config["remember_size"],
-            val_size=config["val_size"],
+            val_size=config["val_sample_size"],
             sample_method=config["sample_method"],
             add_inner_train_to_outer_train=not config["remember_only"],
             device=device,

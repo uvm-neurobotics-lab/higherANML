@@ -214,7 +214,7 @@ def create_datasets(root, download=True, preload_train=False, preload_test=False
 
 
 def create_iid_sampler(root, download=True, preload_train=False, preload_test=False, im_size=28, batch_size=256,
-                       train_size=None, augment=False):
+                       train_size=None, val_size=None, augment=False):
     """
     Create a sampler for Omniglot data which will sample shuffled batches in the standard way for i.i.d. training.
 
@@ -225,7 +225,8 @@ def create_iid_sampler(root, download=True, preload_train=False, preload_test=Fa
         preload_test (bool): Whether to load all testing images into memory up-front.
         im_size (int): Desired size of images, or None to default to 28x28.
         batch_size (int): Number of images per batch for both datasets.
-        train_size (int): Total number of samples from the train set to actually use for training.
+        train_size (int or float): Number (or fraction) of samples from the train set to actually use for training.
+        val_size (int or float): Number (or fraction) of samples from the train set to use for validation.
         augment (bool): Whether to apply data augmentation to the training set.
 
     Returns:
@@ -233,11 +234,11 @@ def create_iid_sampler(root, download=True, preload_train=False, preload_test=Fa
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
     omni_train, omni_test, image_shape = create_datasets(root, download, preload_train, preload_test, im_size, augment)
-    return IIDSampler(omni_train, omni_test, batch_size, train_size), image_shape
+    return IIDSampler(omni_train, omni_test, batch_size, train_size, val_size), image_shape
 
 
 def create_OML_sampler(root, download=True, preload_train=False, preload_test=False, im_size=28, train_size=None,
-                       augment=False, seed=None):
+                       val_size=None, augment=False, seed=None):
     """
     Create a sampler for Omniglot data that will return examples in the framework specified by OML (see
     ContinualMetaLearningSampler).
@@ -248,7 +249,8 @@ def create_OML_sampler(root, download=True, preload_train=False, preload_test=Fa
         preload_train (bool): Whether to load all training images into memory up-front.
         preload_test (bool): Whether to load all testing images into memory up-front.
         im_size (int): Desired size of images, or None to default to 28x28.
-        train_size (int): Total number of samples from the train set to actually use for training.
+        train_size (int or float): Number (or fraction) of samples from the train set to actually use for training.
+        val_size (int or float): Number (or fraction) of samples from the train set to use for validation.
         seed (int or list[int]): Random seed for sampling.
         augment (bool): Whether to apply data augmentation to the training set.
 
@@ -257,4 +259,4 @@ def create_OML_sampler(root, download=True, preload_train=False, preload_test=Fa
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
     omni_train, omni_test, image_shape = create_datasets(root, download, preload_train, preload_test, im_size, augment)
-    return ContinualMetaLearningSampler(omni_train, omni_test, seed, train_size), image_shape
+    return ContinualMetaLearningSampler(omni_train, omni_test, seed, train_size, val_size), image_shape

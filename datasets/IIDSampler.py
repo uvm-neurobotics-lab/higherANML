@@ -8,6 +8,7 @@ from numpy.random import default_rng, SeedSequence
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Subset
 
+from .class_indexed_dataset import train_val_split
 from utils import unzip
 
 
@@ -22,7 +23,7 @@ class IIDSampler:
     A class which uses standard torch.utils.data.DataLoaders to sample randomly from a pair of (train, val) datasets.
     """
 
-    def __init__(self, train, test, batch_size=128, train_size=None, seed=None):
+    def __init__(self, train, test, batch_size=128, train_size=None, val_size=None, seed=None):
         """
         Create the sampler.
 
@@ -30,9 +31,11 @@ class IIDSampler:
             train (ClassIndexedDataset): The training set.
             test (ClassIndexedDataset): The testing set.
             batch_size (int): Number of images per batch for both datasets.
-            train_size (int or float): Number or fraction of examples per class to reserve for all training. The
-                remaining examples, if any, will form a training validation set that will not be sampled for training,
-                and instead will form `full_val_data`.
+            train_size (int or float): Number or fraction of examples per class to reserve for all training. If
+                `None`, this will be set to the complement of `val_size`. If both are `None`, all examples will be used
+                for training and the validation set will be empty.
+            val_size (int or float): Number or fraction of examples per class to reserve for the validation set. If
+                `None`, this will be set to the complement of `train_size`.
             seed (int): (Optional) Random seed to use for sampling. Otherwise entropy will be pulled from the OS.
         """
         self.train = train
@@ -44,16 +47,8 @@ class IIDSampler:
         self.rng = default_rng(ss)
 
         # Select which examples will form the training/validation splits.
-        # NOTE: This line assumes all classes have the same number of examples.
-        if not train_size or train_size >= len(self.train.class_index[0]):
-            # Use all training data.
-            self.train_class_index = self.train.class_index
-            self.val_class_index = []
-        else:
-            self.train_class_index, self.val_class_index = unzip(
-                train_test_split(indices, train_size=train_size, shuffle=True)
-                for indices in self.train.class_index
-            )
+        self.train_class_index, self.val_class_index = train_val_split(self.train, train_size, val_size)
+
         # Get a flattened list of all samples from each category, for convenient sampling.
         self.train_sample_index = [idx for indices in self.train_class_index for idx in indices]
         self.val_sample_index = [idx for indices in self.val_class_index for idx in indices]

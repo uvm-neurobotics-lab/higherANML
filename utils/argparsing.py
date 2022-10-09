@@ -14,6 +14,13 @@ from pathlib import Path
 from utils import load_yaml, make_pretty
 
 
+def int_or_float(numstr):
+    try:
+        return int(numstr)
+    except ValueError:
+        return float(numstr)
+
+
 def resolved_path(str_path):
     """
     This function can be used as an argument type to fully resolve a user-supplied path:
@@ -228,9 +235,12 @@ def add_dataset_arg(parser, dflt_data_dir="experiments/data", add_resize_arg=Tru
         parser.add_argument("--im-size", metavar="PX", type=int, default=None,
                             help="Resize all input images to the given size (in pixels).")
     if add_train_size_arg:
-        parser.add_argument("--train-size", metavar="INT", type=int, default=500,
-                            help="Number of examples per class to use in training split. Remainder (if any) will be"
-                                 " reserved for validation.")
+        parser.add_argument("--train-size", metavar="SIZE", type=int_or_float, default=500,
+                            help="Number or fraction of examples per class to use in training split. Remainder (if any)"
+                                 "will be reserved for validation.")
+        parser.add_argument("--val-size", metavar="SIZE", type=int_or_float, default=None,
+                            help="Number or fraction of examples per class to use in validation split (taken from the"
+                                 " training set).")
     if add_augment_arg:
         parser.add_argument("--augment", "--data-augmentation", action="store_true",
                             help="Add random data augmentation transforms to the training data. Note that this also"
@@ -260,14 +270,15 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
     if isinstance(args, argparse.Namespace):
         old_args = args
         args = {}
-        for k in ("dataset", "data_path", "download", "im_size", "batch_size", "train_size", "augment", "seed"):
+        for k in ("dataset", "data_path", "download", "im_size", "batch_size", "train_size", "val_size", "augment",
+                  "seed"):
             args[k] = getattr(old_args, k, None)
     else:
         # Do not modify the config that was passed in.
         args = args.copy()
 
     # These args are allowed to be missing.
-    for arg in ("im_size", "batch_size", "train_size", "seed"):
+    for arg in ("im_size", "batch_size", "train_size", "val_size", "seed"):
         args.setdefault(arg)
     args.setdefault("augment", False)
     # Ensure we have a Path type here.
@@ -279,22 +290,26 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
         if sampler_type == "oml":
             return omniglot.create_OML_sampler(root=args["data_path"] / "omni", download=args["download"],
                                                im_size=args["im_size"], train_size=args["train_size"],
-                                               augment=args["augment"], seed=args["seed"])
+                                               val_size=args["val_size"], augment=args["augment"],
+                                               seed=args["seed"])
         elif sampler_type == "iid":
             return omniglot.create_iid_sampler(root=args["data_path"] / "omni", download=args["download"],
                                                im_size=args["im_size"], batch_size=args["batch_size"],
-                                               train_size=args["train_size"], augment=args["augment"])
+                                               train_size=args["train_size"], val_size=args["val_size"],
+                                               augment=args["augment"])
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")
     elif args["dataset"] == "miniimagenet":
         if sampler_type == "oml":
             return imagenet.create_OML_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
                                                im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
-                                               train_size=args["train_size"], seed=args["seed"])
+                                               train_size=args["train_size"], val_size=args["val_size"],
+                                               seed=args["seed"])
         elif sampler_type == "iid":
             return imagenet.create_iid_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
                                                im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
-                                               batch_size=args["batch_size"], train_size=args["train_size"])
+                                               batch_size=args["batch_size"], train_size=args["train_size"],
+                                               val_size=args["val_size"])
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")
     else:

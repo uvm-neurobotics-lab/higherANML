@@ -43,9 +43,9 @@ def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
     parser.add_argument("--train-cycles", metavar="INT", type=int, default=1,
                         help="Number of times to run through all training batches, to comprise a single outer loop."
                              " Total number of gradient updates will be num_batches * train_cycles.")
-    parser.add_argument("--val-size", metavar="INT", type=int, default=200,
+    parser.add_argument("--val-sample-size", metavar="INT", type=int, default=200,
                         help="Total number of test examples to sample from the validation set each iteration (for"
-                             " testing generalization to never-seen examples).")
+                             " testing generalization to never-seen examples from the training domain).")
     parser.add_argument("--remember-size", metavar="INT", type=int, default=64,
                         help="Number of randomly sampled training examples to compute the meta-loss.")
     parser.add_argument("--remember-only", action="store_true",
@@ -89,10 +89,11 @@ def prep_config(parser, args):
 
     argutils.configure_logging(args, level=logging.INFO)
 
-    overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "augment", "train_method",
-                         "sample_method", "batch_size", "num_batches", "train_cycles", "val_size", "remember_size",
-                         "remember_only", "lobotomize", "inner_lr", "outer_lr", "save_freq", "epochs", "device", "seed",
-                         "id", "project", "entity", "group", "full_test", "eval_steps", "cluster"]
+    overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "val_size", "augment",
+                         "train_method", "sample_method", "batch_size", "num_batches", "train_cycles",
+                         "val_sample_size", "remember_size", "remember_only", "lobotomize", "inner_lr", "outer_lr",
+                         "save_freq", "epochs", "device", "seed", "id", "project", "entity", "group", "full_test",
+                         "eval_steps", "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
 
     # Conduct a quick test.
@@ -100,8 +101,8 @@ def prep_config(parser, args):
         config["batch_size"] = 1
         config["num_batches"] = 2
         config["train_cycles"] = 1
-        if config.get("val_size", 0) > 2:
-            config["val_size"] = 2
+        if config.get("val_sample_size", 0) > 2:  # FIXME val_sample_size?
+            config["val_sample_size"] = 2
         config["epochs"] = 1
         config["save_freq"] = 1
         config["full_test"] = False

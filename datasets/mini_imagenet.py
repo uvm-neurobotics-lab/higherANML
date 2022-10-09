@@ -230,7 +230,7 @@ def create_datasets(root, download=True, im_size=None, greyscale=False, augment=
 
 
 def create_iid_sampler(root, download=True, im_size=None, greyscale=False, batch_size=128, train_size=None,
-                       augment=False):
+                       val_size=None, augment=False):
     """
     Create a sampler for Mini-ImageNet data which will sample shuffled batches in the standard way for i.i.d. training.
 
@@ -240,7 +240,8 @@ def create_iid_sampler(root, download=True, im_size=None, greyscale=False, batch
         im_size (int): Desired size of images, or None to use the on-disk sizes.
         greyscale (bool): Whether to convert images to greyscale; False or None to keep the default coloring.
         batch_size (int): Number of images per batch for both datasets.
-        train_size (int): Total number of samples from the train set to actually use for training.
+        train_size (int or float): Number (or fraction) of samples from the train set to actually use for training.
+        val_size (int or float): Number (or fraction) of samples from the train set to use for validation.
         augment (bool): Whether to apply data augmentation to the training set.
 
     Returns:
@@ -248,10 +249,11 @@ def create_iid_sampler(root, download=True, im_size=None, greyscale=False, batch
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
     train, test, image_shape = create_datasets(root, download, im_size, greyscale, augment)
-    return IIDSampler(train, test, batch_size, train_size), image_shape
+    return IIDSampler(train, test, batch_size, train_size, val_size), image_shape
 
 
-def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train_size=None, augment=False, seed=None):
+def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train_size=None, val_size=None,
+                       augment=False, seed=None):
     """
     Create a sampler for Mini-ImageNet data that will return examples in the framework specified by OML (see
     ContinualMetaLearningSampler).
@@ -261,7 +263,8 @@ def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train
         download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
         im_size (int): Desired size of images, or None to use the on-disk sizes.
         greyscale (bool): Whether to convert images to greyscale; False or None to keep the default coloring.
-        train_size (int): Total number of samples from the train set to actually use for training.
+        train_size (int or float): Number (or fraction) of samples from the train set to actually use for training.
+        val_size (int or float): Number (or fraction) of samples from the train set to use for validation.
         augment (bool): Whether to apply data augmentation to the training set.
         seed (int or list[int]): Random seed for sampling.
 
@@ -270,4 +273,4 @@ def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
     train, test, image_shape = create_datasets(root, download, im_size, greyscale, augment)
-    return ContinualMetaLearningSampler(train, test, seed, train_size), image_shape
+    return ContinualMetaLearningSampler(train, test, seed, train_size, val_size), image_shape

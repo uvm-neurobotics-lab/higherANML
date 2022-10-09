@@ -11,7 +11,7 @@ train_method: sequential_episodic
 batch_size: 1
 num_batches: 20
 train_cycles: 1
-val_size: 200
+val_sample_size: 200
 remember_size: 100
 remember_only: false
 inner_lr: 0.001

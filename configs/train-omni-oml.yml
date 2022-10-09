@@ -11,7 +11,7 @@ im_size: 84
 batch_size: 1
 num_batches: 20
 train_cycles: 1
-val_size: 0
+val_sample_size: 0
 remember_size: 64
 remember_only: false
 inner_lr: 0.03

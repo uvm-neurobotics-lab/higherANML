@@ -3,6 +3,7 @@ Standard Training Script
 """
 # NOTE: Use one of the following commands to test the functionality of this script:
 #   time WANDB_MODE=disabled DEBUG=Y python train_iid.py -c configs/train-omni-iid-sanml.yml --st
+#   time WANDB_MODE=disabled DEBUG=Y python train_iid.py -c configs/train-omni-iid-sanml.yml --train-size 1 --val-size 1 --epochs 1 -vv
 #   time WANDB_MODE=disabled DEBUG=Y python train_iid.py -c configs/train-omni-iid-sanml.yml --train-size 15 --epochs 1 --no-full-test -vv --group mygroup
 #   time python train_iid.py -c configs/train-omni-iid-sanml.yml
 # Which you use depends on how much of the pipeline you actually want to test. You can further remove the `DEBUG` and
@@ -67,15 +68,16 @@ def prep_config(parser, args):
 
     argutils.configure_logging(args, level=logging.INFO)
 
-    overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "augment", "batch_size", "lr",
-                         "epochs", "save_freq", "device", "seed", "id", "project", "entity", "group", "full_test",
-                         "eval_steps", "cluster"]
+    overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "val_size", "augment",
+                         "batch_size", "lr", "epochs", "save_freq", "device", "seed", "id", "project", "entity",
+                         "group", "full_test", "eval_steps", "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
 
     # Conduct a quick test.
     if args.smoke_test:
         config["batch_size"] = 256
         config["train_size"] = 1
+        config["val_size"] = 1
         config["max_steps"] = 1
         config["epochs"] = 1
         config["save_freq"] = 1
