@@ -45,6 +45,8 @@ def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
                         help="Do not test the full train/test sets before saving each model. These tests take a long"
                              " time so this is useful when saving models frequently or running quick tests. This"
                              " setting is implied if --smoke-test is enabled.")
+    parser.add_argument("--save-initial-model", action="store_true",
+                        help="Save the state of the model just after initialization, before any training.")
     parser.add_argument("--eval-steps", metavar="INT", nargs="*", type=int,
                         help="Points in the training at which the model should be fully evaluated. At each of these"
                              " steps, the model will be saved and a full evaluation will be run (in a separate Slurm"
@@ -70,7 +72,7 @@ def prep_config(parser, args):
 
     overrideable_args = ["dataset", "data_path", "download", "im_size", "train_size", "val_size", "augment",
                          "batch_size", "lr", "epochs", "save_freq", "device", "seed", "id", "project", "entity",
-                         "group", "full_test", "eval_steps", "cluster"]
+                         "group", "full_test", "save_initial_model", "eval_steps", "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
 
     # Conduct a quick test.
@@ -82,6 +84,7 @@ def prep_config(parser, args):
         config["epochs"] = 1
         config["save_freq"] = 1
         config["full_test"] = False
+        config["save_initial_model"] = False
         config["eval_steps"] = []
 
     return config

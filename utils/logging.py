@@ -260,6 +260,10 @@ class BaseLog:
     def debug(self, msg):
         self.logger.debug(msg)
 
+    def begin(self, model, sampler, device):
+        if self.config.get("save_initial_model") or (0 in self.eval_steps):
+            self.maybe_save_and_eval(0, model, sampler, device, should_save=True)
+
     @torch.no_grad()
     def maybe_save_and_eval(self, it, model, sampler, device, should_save=None, should_eval=None):
         if should_eval is None:
@@ -382,7 +386,8 @@ class StandardLog(BaseLog):
 
 class MetaLearningLog(BaseLog):
 
-    def __init__(self, name, model, model_args, print_freq=10, verbose_freq=None, save_freq=1000, full_test=True, config=None):
+    def __init__(self, name, model, model_args, print_freq=10, verbose_freq=None, save_freq=1000, full_test=True,
+                 config=None):
         super().__init__(name, model_args, save_freq, full_test, config)
         self.start = -1
         self.print_freq = print_freq

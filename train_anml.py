@@ -3,8 +3,8 @@ ANML Training Script
 """
 # NOTE: Use one of the following commands to test the functionality of this script:
 #   time python train_anml.py -c configs/train-omni-anml.yml --st
-#   time WANDB_MODE=disabled DEBUG=Y python train_anml.py -c configs/train-omni-anml.yml --val-size 64 --epochs 10 --no-full-test --eval-steps -vv --group mygroup
-#   time WANDB_MODE=disabled DEBUG=Y python train_anml.py -c configs/train-omni-anml.yml --val-size 64 --epochs 1 --no-full-test -vv --group mygroup
+#   time WANDB_MODE=disabled DEBUG=Y python train_anml.py -c configs/train-omni-anml.yml --val-sample-size 64 --epochs 10 --no-full-test --eval-steps -vv --group mygroup
+#   time WANDB_MODE=disabled DEBUG=Y python train_anml.py -c configs/train-omni-anml.yml --val-sample-size 64 --epochs 1 --no-full-test -vv --group mygroup
 #   time python train_anml.py -c configs/train-omni-anml.yml
 # Which you use depends on how much of the pipeline you actually want to test. You can further remove the `DEBUG` and
 # `WANDB_MODE` flags to actually test launching eval jobs and reporting results to W&B.
@@ -66,6 +66,8 @@ def create_arg_parser(desc, allow_abbrev=True, allow_id=True):
                         help="Do not test the full train/test sets before saving each model. These tests take a long"
                              " time so this is useful when saving models frequently or running quick tests. This"
                              " setting is implied if --smoke-test is enabled.")
+    parser.add_argument("--save-initial-model", action="store_true",
+                        help="Save the state of the model just after initialization, before any training.")
     parser.add_argument("--eval-steps", metavar="INT", nargs="*", type=int,
                         help="Points in the training at which the model should be fully evaluated. At each of these"
                              " steps, the model will be saved and a full evaluation will be run (in a separate Slurm"
@@ -93,7 +95,7 @@ def prep_config(parser, args):
                          "train_method", "sample_method", "batch_size", "num_batches", "train_cycles",
                          "val_sample_size", "remember_size", "remember_only", "lobotomize", "inner_lr", "outer_lr",
                          "save_freq", "epochs", "device", "seed", "id", "project", "entity", "group", "full_test",
-                         "eval_steps", "cluster"]
+                         "save_initial_model", "eval_steps", "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
 
     # Conduct a quick test.
@@ -101,11 +103,12 @@ def prep_config(parser, args):
         config["batch_size"] = 1
         config["num_batches"] = 2
         config["train_cycles"] = 1
-        if config.get("val_sample_size", 0) > 2:  # FIXME val_sample_size?
+        if config.get("val_sample_size", 0) > 2:
             config["val_sample_size"] = 2
         config["epochs"] = 1
         config["save_freq"] = 1
         config["full_test"] = False
+        config["save_initial_model"] = False
         config["eval_steps"] = []
 
     return config

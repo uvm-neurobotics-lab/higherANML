@@ -58,25 +58,27 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     # If double-verbose, print every iteration. Else, print at least as often as we save.
     print_freq = 1 if verbose > 1 else min(config["save_freq"], 100)
     log = StandardLog(name, model, model_args, print_freq, config["save_freq"], config["full_test"], config)
+    log.begin(model, sampler, device)
 
     optimizer = utils.optimization.optimizer_from_config(config, model.parameters())
     scheduler = utils.optimization.scheduler_from_config(config, optimizer)
     rng = default_rng(config["seed"])
 
-    # BEGIN TRAINING
-    step = 0
-    max_steps = config.get("max_steps", float("inf"))
-    max_grad_norm = config.get("max_grad_norm", 0)
+    # Output layer so we can periodically reset output nodes (see `lobotomize()`).
+    output_layer = get_matching_module(model, config["output_layer"])
     lobo_rate = config.get("lobo_rate")
     lobo_size = config.get("lobo_size")
-    # Output layer so we can reset output classes when needed (see `lobotomize()`).
-    output_layer = get_matching_module(model, config["output_layer"])
-    for epoch in range(config["epochs"]):
-        if lobo_rate and lobo_rate > 0 and lobo_size and lobo_size > 0 and epoch % lobo_rate == 0:
+    max_grad_norm = config.get("max_grad_norm", 0)
+
+    # BEGIN TRAINING
+    step = 1
+    max_steps = config.get("max_steps", float("inf"))
+    for epoch in range(1, config["epochs"] + 1):  # Epoch/step counts will be 1-based.
+        if lobo_rate and lobo_size and epoch % lobo_rate == 0:
             lobotomize(output_layer, rng.choice(len(output_layer.weight), size=lobo_size, replace=False))
 
         step = run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps, max_grad_norm, device)
-        if step >= max_steps:
+        if step > max_steps:
             break
         scheduler.step()
 
@@ -108,7 +110,7 @@ def run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps=float("
         log.step(step, epoch, loss, acc, out, labels, model, sampler, device)
 
         step += 1
-        if step >= max_steps:
+        if step > max_steps:
             break
 
     return step

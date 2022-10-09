@@ -95,8 +95,9 @@ def main(argv=None):
     argutils.configure_logging(args, level=logging.INFO)
 
     # Create the full config using all the command line arguments.
-    overrideable_args = ["train_method", "dataset", "data_path", "download", "im_size", "train_size", "augment",
-                         "device", "seed", "id", "project", "entity", "group", "full_test", "eval_steps", "cluster"]
+    overrideable_args = ["train_method", "dataset", "data_path", "download", "im_size", "train_size", "val_size",
+                         "augment", "device", "seed", "id", "project", "entity", "group", "full_test", "eval_steps",
+                         "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
     # For convenience of filtering, make sure model_name is set.
     if "model_name" not in config:

@@ -26,11 +26,13 @@ def check_train_config(config):
     def of_type(types):
         def test_fn(val):
             return isinstance(val, types)
+
         return test_fn
 
     def one_of(options):
         def test_fn(val):
             return val in options
+
         return test_fn
 
     ensure_config_param(config, "batch_size", gt_zero)
@@ -40,7 +42,7 @@ def check_train_config(config):
     ensure_config_param(config, "train_cycles", gt_zero)
     ensure_config_param(config, "inner_lr", gt_zero)
     ensure_config_param(config, "outer_lr", gt_zero)
-    ensure_config_param(config, "epochs", gte_zero)
+    ensure_config_param(config, "epochs", gt_zero)
     ensure_config_param(config, "save_freq", gt_zero)
     ensure_config_param(config, "inner_params", of_type((str, list, tuple)))
     ensure_config_param(config, "outer_params", of_type((str, list, tuple)))
@@ -122,6 +124,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     verbose_freq = print_freq if verbose > 0 else 0  # if verbose, then print verbose info at the same frequency
     log = MetaLearningLog(name, model, model_args, print_freq, verbose_freq, config["save_freq"], config["full_test"],
                           config)
+    log.begin(model, sampler, device)
 
     # inner optimizer used during the learning phase
     inner_params = collect_matching_params(model, config["inner_params"])
@@ -142,12 +145,8 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     else:
         raise RuntimeError(f'Unsupported train method: "{train_method}"')
 
-    # (epochs + 1) because we want the iteration counts to be 1-based, but we still keep the 0th iteration as a sort of
-    # "test run" where we make sure we can successfully run full test metrics and save the model checkpoints. This
-    # allows the job to fail early if there are issues with any of these things.
-    # TODO: Change this to have an explicit save/eval logging step *before* the first iteration. Make it optional in
-    # TODO: config. Make --smoke-test require it.
-    for it in range(config["epochs"] + 1):
+    # MAIN TRAINING LOOP
+    for it in range(1, config["epochs"] + 1):  # Epoch/step counts will be 1-based.
 
         log.outer_begin(it)
 
@@ -246,6 +245,7 @@ def check_test_config(config):
     def of_type(types):
         def test_fn(val):
             return isinstance(val, types)
+
         return test_fn
 
     ensure_config_param(config, "model", of_type((str, Path)))
