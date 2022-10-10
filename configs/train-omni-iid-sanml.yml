@@ -10,8 +10,10 @@ train_size: 15
 train_method: iid
 batch_size: 256
 epochs: 10
-seed: 12345
+seed: 1
 
+lobo_rate: 0
+lobo_size: 0
 output_layer: classifier.linear
 
 # Model Architecture
@@ -32,8 +34,9 @@ lr: 0.001
 
 # Evaluation
 save_freq: 57
-eval_steps: [300, 10000]
+eval_steps: [285, 10000]
 eval:
+  - no-sgd: !include eval-omni-zero-shot.yml
   - olft: !include eval-sweep-omni-1FC.yml
   - unfrozen: !include eval-sweep-omni-unfrozen.yml
   - olft-oracle: !include eval-sweep-omni-iid-1FC.yml

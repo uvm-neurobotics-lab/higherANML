@@ -82,7 +82,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
             break
         scheduler.step()
 
-    log.close(step, model, sampler, device)
+    log.close(step-1, model, sampler, device)
 
 
 def run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps=float("inf"), max_grad_norm=0, device=None):

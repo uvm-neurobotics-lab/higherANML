@@ -278,7 +278,8 @@ class BaseLog:
             # Nothing to do.
             return
 
-        model_path = self.save_path / f"{self.name}-{it}.net"
+        model_name = f"{self.name}-{it}.net"
+        model_path = self.save_path / model_name
         if should_save:
             # Run full test on training data.
             if self.full_test:
@@ -289,9 +290,9 @@ class BaseLog:
                                                                 print_fn=self.debug)
                 end = time()
                 elapsed = end - start
-                self.info(f"Saved Model Performance:"
-                          f" Train Top-1 Acc = {full_train_acc1:.1%} | Train Top-5 Acc = {full_train_acc5:.1%} |"
-                          f" Validation Top-1 Acc = {full_val_acc1:.1%} | Validation Top-5 Acc = {full_val_acc5:.1%}"
+                self.info(f"Saved Model ({model_name}) Performance:"
+                          f" Train Top-1 Acc = {full_train_acc1:.1%} | Validation Top-1 Acc = {full_val_acc1:.1%} |"
+                          f" Train Top-5 Acc = {full_train_acc5:.1%} | Validation Top-5 Acc = {full_val_acc5:.1%}"
                           f" (Time to Eval = {strftime('%H:%M:%S', gmtime(elapsed))})")
                 wandb.log({
                     "overall/train.acc": full_train_acc1,

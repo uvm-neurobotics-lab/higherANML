@@ -171,7 +171,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
 
         log.outer_end(it, model, sampler, device)
 
-    log.close(it, model, sampler, device)
+    log.close(config["epochs"], model, sampler, device)
 
 
 def evaluate(model, classes):
