@@ -6,6 +6,10 @@ possible learning rates, datasets, models, etc. Each parameter can be supplied
 either through the yaml config OR via the command line. Command line arguments
 override the config values.
 
+If --config is not specified, then the script will try to load evaluation
+options from --train-config. If this is not specified either, it will try to
+find a training config for the specified model.
+
 Furthermore, any settings accepted by `sbatch` OR `launcher` may be supplied on
 the command line. These will override the options provided by the launch config,
 as well as the ones this script would normally pass to `launcher`. For example,
@@ -38,19 +42,18 @@ from pathlib import Path
 import yaml
 
 import utils.argparsing as argutils
-from utils import as_strings, ensure_config_param
+from utils import as_strings, ensure_config_param, load_yaml, update_with_keys
 from utils.slurm import call_sbatch
-
 
 # Get the resolved path of this script, before we switch directories.
 SCRIPT_DIR = Path(__file__).parent.resolve()
 
 
-def prep_config(parser, args):
+def prep_config(config, parser, args):
     overrideable_args = ["eval_method", "reinit_method", "dataset", "data_path", "im_size", "augment", "model",
                          "classes", "train_examples", "test_examples", "lr", "init_size", "batch_size", "eval_freq",
                          "runs", "device", "seed", "project", "entity", "group"]
-    config = argutils.load_config_from_args(parser, args, overrideable_args)
+    config = argutils.overwrite_command_line_args(config, parser, args, overrideable_args)
     ensure_config_param(config, "dataset")
     ensure_config_param(config, "model")
     ensure_config_param(config, "classes")
@@ -61,6 +64,44 @@ def prep_config(parser, args):
     if eval_freq is None:
         config["eval_freq"] = max(1, config["classes"] // 20)
     return config
+
+
+def get_eval_configs(parser, args):
+    if args.config:
+        # Just one eval config, no flavor.
+        config = load_yaml(args.config)
+        return [(args.flavor, prep_config(config, parser, args))]
+
+    # Try to find a training config.
+    train_cfg_path = args.train_config
+    if not train_cfg_path:
+        if args.model:
+            if not isinstance(args.model, (list, tuple)):
+                train_cfg_path = args.model.parent.parent / "train-config.yml"
+    if not train_cfg_path:
+        raise RuntimeError("Unable to infer config from command line arguments. You must supply either --config,"
+                           " --train-config, or a single --model which is next to a training config.")
+
+    # Try to load one or more eval configs from the training config.
+    train_cfg = load_yaml(train_cfg_path)
+    eval_config = train_cfg.get("eval")
+    if not eval_config:
+        raise RuntimeError("Did not find any eval config within the train config: {train_cfg_path}")
+    cfg_list = eval_config if isinstance(eval_config, list) else [eval_config]
+
+    # Build the list of eval "flavors".
+    flavor_list = []
+    for eval_config in cfg_list:
+        flavor = args.flavor
+        if len(eval_config) == 1:
+            # If the config only has one key, then this names the "flavor" of the evaluation, and the corresponding
+            # value is actually the config.
+            flavor, eval_config = next(iter(eval_config.items()))
+        update_with_keys(train_cfg, eval_config, ["project", "entity", "group", "model_name", "train_method"])
+        eval_config = prep_config(eval_config, parser, args)
+        flavor_list.append((flavor, eval_config))
+
+    return flavor_list
 
 
 def get_input_output_dirs(config, output, flavor, dry_run):
@@ -83,7 +124,8 @@ def get_input_output_dirs(config, output, flavor, dry_run):
             suffix = ("-" + str(flavor)) if flavor else ""
             outpath = model_file.parent.parent / (f"eval-{model_spec[0]}-{model_spec[-1]}" + suffix)
         else:
-            raise RuntimeError("You must supply an output destination (-o/--output) when evaluating more than one model.")
+            raise RuntimeError(
+                "You must supply an output destination (-o/--output) when evaluating more than one model.")
 
     # Ensure the destination can be written.
     if outpath.is_file():
@@ -257,7 +299,6 @@ def build_commands(config, inpath, outpath, cluster, verbose, force, dry_run, la
 
 def launch(config, output=None, flavor=None, cluster="dggpu", verbose=0, force=False, dry_run=False,
            launch_verbose=False, launcher_args=None):
-
     # Get destination path.
     inpath, outpath = get_input_output_dirs(config, output, flavor, dry_run)
 
@@ -266,14 +307,6 @@ def launch(config, output=None, flavor=None, cluster="dggpu", verbose=0, force=F
 
     # Launch the jobs.
     return call_sbatch(command, launch_verbose, dry_run)
-
-
-def check_path(path):
-    pathobj = Path(path)
-    if pathobj.exists():
-        return pathobj.resolve()
-    else:
-        raise argparse.ArgumentTypeError(f"{path} is not a valid path")
 
 
 def no_whitespace(string):
@@ -294,7 +327,7 @@ def main(args=None):
                                              "possible combinations of the arguments will be launched.")
     repeat_group.add_argument("--dataset", nargs="+", choices=["omni", "miniimagenet"], type=str.lower,
                               default=["omni"], help="The dataset to use.")
-    repeat_group.add_argument("-m", "--model", metavar="PATH", nargs="+", type=check_path,
+    repeat_group.add_argument("-m", "--model", metavar="PATH", nargs="+", type=argutils.existing_path,
                               help="Path to the model to evaluate.")
     repeat_group.add_argument("--classes", metavar="INT", nargs="+", type=int, help="Number of classes to test.")
     repeat_group.add_argument("--train-examples", metavar="INT", nargs="+", type=int, default=[15],
@@ -307,15 +340,18 @@ def main(args=None):
     # Non-Repeating Arguments
     non_repeat_group = parser.add_argument_group("Non-Repeating Evaluation Arguments",
                                                  "Arguments that will be the same across all eval_map.py jobs.")
-    non_repeat_group.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
+    non_repeat_group.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path,
                                   help="Evaluation config file.")
+    non_repeat_group.add_argument("--train-config", metavar="PATH", type=argutils.existing_path,
+                                  help="Training config file, from which to extract the evaluation config. Only used if"
+                                       " --config is not supplied.")
     non_repeat_group.add_argument("--eval-method", choices=("sequential", "seq", "iid", "zero_shot"),
                                   default="sequential", help="The testing method to use: sequential (continual"
                                                              " learning) or i.i.d. (standard transfer learning).")
     non_repeat_group.add_argument("--reinit-method", choices=("kaiming", "lstsq"), default="kaiming",
                                   help="The method to use to reinitialize trainable parameters: typical kaiming normal"
-                                       "initialization or least squares estimate of the final linear layer.")
-    non_repeat_group.add_argument("--data-path", "--data-dir", metavar="PATH", type=check_path,
+                                       " initialization or least squares estimate of the final linear layer.")
+    non_repeat_group.add_argument("--data-path", "--data-dir", metavar="PATH", type=argutils.existing_path,
                                   help="The root path in which to look for the dataset(s). Default location will be"
                                        " relative to the output directory: <output>/../../data. IMPORTANT: The datasets"
                                        " will not be downloaded automatically, so make sure they exist before"
@@ -349,8 +385,8 @@ def main(args=None):
                              " because we will assume that ALL .pkl files are the result of this job.")
     parser.add_argument("--flavor", type=no_whitespace,
                         help="A string that describes the type of evaluation being performed. This will only be used"
-                        " if --output is not given, to help name the output folder. It will be appended as a suffix to"
-                        " the folder name.")
+                             " if --output is not given, to help name the output folder. It will be appended as a"
+                             " suffix to the folder name.")
     parser.add_argument("--cluster", metavar="NAME", default="dggpu",
                         help="The cluster to launch on. This must correspond to one of the resources in your"
                              " Neuromanager config.")
@@ -366,12 +402,20 @@ def main(args=None):
     # Parse
     args, launcher_args = parser.parse_known_args(args)
 
-    # Create the full config using all the command line arguments.
-    config = prep_config(parser, args)
+    # Infer one or more configs from the command line arguments.
+    configs = get_eval_configs(parser, args)
 
-    # Run the bulk of the program.
-    return launch(config, args.output, args.flavor, args.cluster, args.verbose, args.force, args.dry_run,
-                  args.launch_verbose, launcher_args)
+    # Launch a job for each config.
+    retcode = 0
+    for flavor, cfg in configs:
+        # Launch the evaluation (potentially a sweep of evaluations).
+        ret = launch(cfg, args.output, flavor, args.cluster, args.verbose, args.force, args.dry_run,
+                     args.launch_verbose, launcher_args)
+        if ret != 0:
+            retcode = ret
+            print(f"Eval job may not have launched. Launcher exited with code {ret}. See above for possible errors.")
+
+    return retcode
 
 
 if __name__ == "__main__":

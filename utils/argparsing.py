@@ -179,12 +179,37 @@ def create_parser(desc, allow_abbrev=True):
     return ArgParser(description=desc, formatter_class=HelpFormatter, allow_abbrev=allow_abbrev)
 
 
-def load_config_from_args(parser, parsed_args, overrideable_args):
+def overwrite_command_line_args(config, parser, parsed_args, overrideable_args=None):
+    """
+    Overwrite config values with any values that the user supplied on the command line. The list of keys that should be
+    taken from the command line is given by `overrideable_args`. If the key isn't already present in the config, it will
+    be taken from the args. Otherwise, it will only be taken from the args **if the user chose a non-default value**.
+
+    Args:
+        config (dict): The config whose values to overwrite.
+        parser (ArgParser): This must be the local ArgParser type; not just any argparse.ArgumentParser.
+        parsed_args (argparse.Namespace): The arguments from the command line.
+        overrideable_args (list[str]): A list of keys that can be optionally overwritten with command-line values.
+
+    Returns:
+        dict: The parsed config object.
+    """
+    # Command line args optionally override config.
+    user_supplied_args = parser.get_user_specified_args()
+    if overrideable_args:
+        for arg in overrideable_args:
+            # Only replace if value was explicitly specified by the user, or if the value doesn't already exist in config.
+            if arg not in config or arg in user_supplied_args:
+                config[arg] = getattr(parsed_args, arg, None)
+
+    config = make_pretty(config)
+    return config
+
+
+def load_config_from_args(parser, parsed_args, overrideable_args=None):
     """
     Load a config from the `--config` argument, and then overwrite config values with any values that the user supplied
-    on the command line. The list of keys that should be taken from the command line is given by `overrideable_args`. If
-    the key isn't already present in the config, it will be taken from the args. Otherwise, it will only be taken from
-    the args **if the user chose a non-default value**.
+    on the command line. See `overwrite_command_line_args()`.
 
     Args:
         parser (ArgParser): This must be the local ArgParser type; not just any argparse.ArgumentParser.
@@ -195,16 +220,7 @@ def load_config_from_args(parser, parsed_args, overrideable_args):
         dict: The parsed config object.
     """
     config = load_yaml(parsed_args.config)
-
-    # Command line args optionally override config.
-    user_supplied_args = parser.get_user_specified_args()
-    for arg in overrideable_args:
-        # Only replace if value was explicitly specified by the user, or if the value doesn't already exist in config.
-        if arg not in config or arg in user_supplied_args:
-            config[arg] = getattr(parsed_args, arg, None)
-
-    config = make_pretty(config)
-    return config
+    return overwrite_command_line_args(config, parser, parsed_args, overrideable_args)
 
 
 def add_verbose_arg(parser):

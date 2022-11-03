@@ -319,7 +319,7 @@ class BaseLog:
                 flavor, eval_config = next(iter(eval_config.items()))
             eval_config = eval_config.copy()  # copy before editing
             eval_config["model"] = str(model_path.resolve())
-            update_with_keys(self.config, eval_config, ["project", "entity", "group"])
+            update_with_keys(self.config, eval_config, ["project", "entity", "group", "model_name", "train_method"])
             if not eval_config.get("group"):
                 # If group is not defined, try a couple more backups, because we really want these runs grouped.
                 group = str(wandb.run.group)
