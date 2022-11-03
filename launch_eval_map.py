@@ -75,12 +75,18 @@ def get_eval_configs(parser, args):
     # Try to find a training config.
     train_cfg_path = args.train_config
     if not train_cfg_path:
-        if args.model:
-            if not isinstance(args.model, (list, tuple)):
-                train_cfg_path = args.model.parent.parent / "train-config.yml"
+        single_model = None
+        if not isinstance(args.model, (list, tuple)):
+            single_model = args.model
+        elif len(args.model) == 1:
+            single_model = args.model[0]
+        if single_model:
+            train_cfg_path = single_model.parent.parent / "train-config.yml"
     if not train_cfg_path:
         raise RuntimeError("Unable to infer config from command line arguments. You must supply either --config,"
-                           " --train-config, or a single --model which is next to a training config.")
+                           " --train-config, or a single --model which is next to a training config."
+                           f"\nModel: {args.model}"
+                           f"\nInferred config path: {train_cfg_path}")
 
     # Try to load one or more eval configs from the training config.
     train_cfg = load_yaml(train_cfg_path)
