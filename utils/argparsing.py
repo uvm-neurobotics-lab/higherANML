@@ -240,8 +240,8 @@ def add_dataset_arg(parser, dflt_data_dir="experiments/data", add_resize_arg=Tru
     """
     Add an argument for the user to specify a dataset.
     """
-    parser.add_argument("--dataset", choices=["omni", "miniimagenet"], type=str.lower, default="omni",
-                        help="The dataset to use.")
+    parser.add_argument("--dataset", choices=["omni", "miniimagenet", "omniimage20", "omniimage100"], type=str.lower,
+                        default="omni", help="The dataset to use.")
     parser.add_argument("--data-path", "--data-dir", metavar="PATH", type=resolved_path, default=dflt_data_dir,
                         help="The root path in which to look for the dataset (or store a new one if it isn't already"
                              " present).")
@@ -281,6 +281,7 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
     """
     import datasets.mini_imagenet as imagenet
     import datasets.omniglot as omniglot
+    import datasets.omniimage as omniimage
 
     # Turn namespace into dict.
     if isinstance(args, argparse.Namespace):
@@ -326,6 +327,17 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
                                                im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
                                                batch_size=args["batch_size"], train_size=args["train_size"],
                                                val_size=args["val_size"])
+    elif args["dataset"] == "omniimage":
+        if sampler_type == "oml":
+            return omniimage.create_OML_sampler(root=args["data_path"] / "omniimage", download=args["download"],
+                                                im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
+                                                train_size=args["train_size"], val_size=args["val_size"],
+                                                seed=args["seed"])
+        elif sampler_type == "iid":
+            return omniimage.create_iid_sampler(root=args["data_path"] / "omniimage", download=args["download"],
+                                                im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
+                                                batch_size=args["batch_size"], train_size=args["train_size"],
+                                                val_size=args["val_size"])
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")
     else:
