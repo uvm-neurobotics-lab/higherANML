@@ -5,13 +5,13 @@
 
 # Dataset
 dataset: miniimagenet
-train_examples: 30
+train_examples: 500
 test_examples: 100
 
 # Test Method - Fit a linear layer using the entire support set.
 eval_method: zero_shot
 reinit_method: lstsq
 reinit_params: classifier.linear
-init_size: 600  # = 20 * 30
+init_size: 10000  # = 20 * 500
 batch_size: 256
 classes: 20
