@@ -103,7 +103,7 @@ class OmniImage(ClassIndexedDataset):
         return image, label
 
 
-def create_datasets(root, download=True, num_images_per_class=20, im_size=None, greyscale=False, augment=False):
+def create_datasets(root, download=True, num_images_per_class=None, im_size=None, greyscale=False, augment=False):
     """
     Create a pair of (train, test) datasets for OmniImage.
 
@@ -122,6 +122,9 @@ def create_datasets(root, download=True, num_images_per_class=20, im_size=None, 
     """
     # We know that by default this dataset has 84x84 color images.
     actual_size = 84 if im_size is None else im_size
+    # By default we use 20 images per class.
+    if num_images_per_class is None:
+        num_images_per_class = 20
 
     # Build train set.
     train_transforms = []
@@ -170,14 +173,16 @@ def create_datasets(root, download=True, num_images_per_class=20, im_size=None, 
     return train, test, image_shape
 
 
-def create_iid_sampler(root, download=True, im_size=None, greyscale=False, batch_size=128, train_size=None,
-                       val_size=None, augment=False):
+def create_iid_sampler(root, download=True, num_images_per_class=None, im_size=None, greyscale=False, batch_size=128,
+                       train_size=None, val_size=None, augment=False):
     """
     Create a sampler for OmniImage data which will sample shuffled batches in the standard way for i.i.d. training.
 
     Args:
         root (str or Path): Folder where the dataset will be located.
         download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
+        num_images_per_class (int): Number of images per class (only certain values are available---check the
+                                    OmniImage library documentation).
         im_size (int): Desired size of images, or None to use the on-disk sizes.
         greyscale (bool): Whether to convert images to greyscale; False or None to keep the default coloring.
         batch_size (int): Number of images per batch for both datasets.
@@ -189,12 +194,12 @@ def create_iid_sampler(root, download=True, im_size=None, greyscale=False, batch
         IIDSampler: The sampler class.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
-    train, test, image_shape = create_datasets(root, download, im_size, greyscale, augment)
+    train, test, image_shape = create_datasets(root, download, num_images_per_class, im_size, greyscale, augment)
     return IIDSampler(train, test, batch_size, train_size, val_size), image_shape
 
 
-def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train_size=None, val_size=None,
-                       augment=False, seed=None):
+def create_OML_sampler(root, download=True, num_images_per_class=None, im_size=None, greyscale=False, train_size=None,
+                       val_size=None, augment=False, seed=None):
     """
     Create a sampler for OmniImage data that will return examples in the framework specified by OML (see
     ContinualMetaLearningSampler).
@@ -202,6 +207,8 @@ def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train
     Args:
         root (str or Path): Folder where the dataset will be located.
         download (bool): If True, download the data if it doesn't already exist. If False, raise an error.
+        num_images_per_class (int): Number of images per class (only certain values are available---check the
+                                    OmniImage library documentation).
         im_size (int): Desired size of images, or None to use the on-disk sizes.
         greyscale (bool): Whether to convert images to greyscale; False or None to keep the default coloring.
         train_size (int or float): Number (or fraction) of samples from the train set to actually use for training.
@@ -213,5 +220,5 @@ def create_OML_sampler(root, download=True, im_size=None, greyscale=False, train
         ContinualMetaLearningSampler: The sampler class.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
-    train, test, image_shape = create_datasets(root, download, im_size, greyscale, augment)
+    train, test, image_shape = create_datasets(root, download, num_images_per_class, im_size, greyscale, augment)
     return ContinualMetaLearningSampler(train, test, seed, train_size, val_size), image_shape

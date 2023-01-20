@@ -295,7 +295,7 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
         args = args.copy()
 
     # These args are allowed to be missing.
-    for arg in ("im_size", "batch_size", "train_size", "val_size", "seed"):
+    for arg in ("imgs_per_class", "im_size", "batch_size", "train_size", "val_size", "seed"):
         args.setdefault(arg)
     args.setdefault("augment", False)
     # Ensure we have a Path type here.
@@ -329,12 +329,14 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
                                                val_size=args["val_size"])
     elif args["dataset"] == "omniimage":
         if sampler_type == "oml":
-            return omniimage.create_OML_sampler(root=args["data_path"] / "omniimage", download=args["download"],
+            return omniimage.create_OML_sampler(root=args["data_path"] / "omniimage",
+                                                num_images_per_class=args["imgs_per_class"], download=args["download"],
                                                 im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
                                                 train_size=args["train_size"], val_size=args["val_size"],
                                                 seed=args["seed"])
         elif sampler_type == "iid":
-            return omniimage.create_iid_sampler(root=args["data_path"] / "omniimage", download=args["download"],
+            return omniimage.create_iid_sampler(root=args["data_path"] / "omniimage",
+                                                num_images_per_class=args["imgs_per_class"], download=args["download"],
                                                 im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
                                                 batch_size=args["batch_size"], train_size=args["train_size"],
                                                 val_size=args["val_size"])
