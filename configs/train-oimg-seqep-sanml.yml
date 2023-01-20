@@ -1,10 +1,11 @@
 #
-# Current best known config for sequential-episodic pre-training an ANML-like model on Mini-ImageNet.
+# Current best known config for sequential-episodic pre-training an ANML-like model on OmniImage.
 #
 
 # Dataset
-dataset: miniimagenet
-train_size: 500
+dataset: omniimage
+imgs_per_class: 20
+train_size: 15
 
 # Training Configuration
 train_method: sequential_episodic
@@ -30,7 +31,7 @@ model_args:
     num_blocks: 4
     num_filters: 256
   classifier: linear-classifier
-  classifier_args: {num_classes: 64}
+  classifier_args: {num_classes: 700}
 
 # Optimization Configuration
 inner_params: all
@@ -39,10 +40,9 @@ output_layer: classifier.linear
 
 eval_steps: [5000, 9000]
 eval:
-  - no-sgd: !include eval-inet-zero-shot.yml
-  - no-sgd-lg: !include eval-inet-zero-shot-lg.yml
-  - olft: !include eval-sweep-inet-1FC.yml
-  - unfrozen: !include eval-sweep-inet-unfrozen.yml
-  - iid-olft: !include eval-sweep-inet-iid-1FC.yml
-  - iid-unfrozen: !include eval-sweep-inet-iid-unfrozen.yml
+  - no-sgd: !include eval-oimg20-zero-shot.yml
+  - olft: !include eval-sweep-oimg20-1FC.yml
+  - unfrozen: !include eval-sweep-oimg20-unfrozen.yml
+  - iid-olft: !include eval-sweep-oimg20-iid-1FC.yml
+  - iid-unfrozen: !include eval-sweep-oimg20-iid-unfrozen.yml
 

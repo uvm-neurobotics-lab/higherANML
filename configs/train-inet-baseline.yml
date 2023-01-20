@@ -7,6 +7,8 @@ dataset: miniimagenet
 train_size: 500
 
 # Training Configuration
+train_method: meta
+lobotomize: false
 batch_size: 1
 num_batches: 20
 train_cycles: 1
@@ -21,6 +23,7 @@ seed: 1
 
 # Model Architecture
 model: classifier
+model_name: resnet18
 model_args:
   encoder: resnet18
   encoder_args: {}

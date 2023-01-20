@@ -1,0 +1,47 @@
+#
+# Current best known config for meta-training an ANML-like model on OmniImage.
+#
+
+# Dataset
+dataset: omniimage
+imgs_per_class: 20
+train_size: 15
+
+# Training Configuration
+train_method: meta
+lobotomize: false
+batch_size: 1
+num_batches: 20
+train_cycles: 1
+val_sample_size: 200
+remember_size: 100
+remember_only: false
+inner_lr: 0.001
+outer_lr: 0.001
+
+epochs: 25000
+seed: 1
+
+# Model Architecture
+model: classifier
+model_name: sanml
+model_args:
+  encoder: convnet
+  encoder_args:
+    num_blocks: 4
+    num_filters: 256
+  classifier: linear-classifier
+  classifier_args: {num_classes: 700}
+
+# Optimization Configuration
+inner_params: all
+outer_params: all
+output_layer: classifier.linear
+
+eval_steps: [10000, 25000]
+eval:
+  - no-sgd: !include eval-oimg20-zero-shot.yml
+  - olft: !include eval-sweep-oimg20-1FC.yml
+  - unfrozen: !include eval-sweep-oimg20-unfrozen.yml
+  - iid-olft: !include eval-sweep-oimg20-iid-1FC.yml
+  - iid-unfrozen: !include eval-sweep-oimg20-iid-unfrozen.yml

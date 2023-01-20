@@ -1,0 +1,19 @@
+#
+# Config for continual meta-test of Classifier-Basline models on Omniglot. Fine-tunes the entire network.
+#
+
+# Dataset
+dataset: omniimage
+imgs_per_class: 20
+train_examples: 15
+test_examples: 5
+
+# Test Method
+eval_method: seq
+reinit_params: classifier.linear
+opt_params: all
+classes: 300
+lr: !include learning-rates.yml
+
+# Reporting
+eval_freq: 10

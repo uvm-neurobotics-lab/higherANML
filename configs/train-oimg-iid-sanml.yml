@@ -1,0 +1,50 @@
+#
+# Current best known config for i.i.d. pre-training an ANML-like model on OmniImage.
+#
+
+# Dataset
+dataset: omniimage
+imgs_per_class: 20
+train_size: 15
+
+# Training Configuration
+train_method: iid
+batch_size: 256
+epochs: 30
+seed: 1
+
+lobo_rate: 0
+lobo_size: 0
+output_layer: classifier.linear
+
+# Model Architecture
+model: classifier
+model_name: resnet18
+model_args:
+  encoder: resnet18
+  classifier: linear-classifier
+  classifier_args: {num_classes: 700}
+
+# Optimization
+optimizer: Adam
+lr: 3.0e-4
+#optimizer: SGD
+#optimizer_args:
+#  lr: 0.1
+#  momentum: 0.9
+#  weight_decay: 0.0001
+#lr_scheduler: StepLR
+#lr_scheduler_args:
+#  step_size: 10
+#  gamma: 0.1
+
+# Evaluation
+save_freq: 125
+eval_steps: [2000, 10000]
+eval:
+  - no-sgd: !include eval-oimg20-zero-shot.yml
+  - olft: !include eval-sweep-oimg20-1FC.yml
+  - unfrozen: !include eval-sweep-oimg20-unfrozen.yml
+  - iid-olft: !include eval-sweep-oimg20-iid-1FC.yml
+  - iid-unfrozen: !include eval-sweep-oimg20-iid-unfrozen.yml
+

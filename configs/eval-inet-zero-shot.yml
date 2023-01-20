@@ -12,6 +12,6 @@ test_examples: 100
 eval_method: zero_shot
 reinit_method: lstsq
 reinit_params: classifier.linear
-init_size: 600  # = 20 * 30
+init_size: 600  # = 30 images * 20 classes
 batch_size: 256
 classes: 20
