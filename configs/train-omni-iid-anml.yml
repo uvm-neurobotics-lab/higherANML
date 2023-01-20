@@ -1,0 +1,42 @@
+#
+# Config for training SANML in standard, non-meta-learned fashion on Omniglot data.
+#
+
+# Dataset
+dataset: omni
+train_size: 15
+
+# Training Configuration
+train_method: iid
+batch_size: 256
+epochs: 10
+seed: 1
+
+lobo_rate: 1
+lobo_size: 1000
+output_layer: classifier.linear
+
+# Model Architecture
+model: classifier
+model_name: anml
+model_args:
+  encoder: anml-encoder
+  encoder_args:
+    rln_chs: 256
+    nm_chs: 112
+    pool_rln_output: false
+  classifier: linear-classifier
+  classifier_args: {num_classes: 1000}
+
+# Optimization
+lr: 0.001
+
+# Evaluation
+save_freq: 57
+eval_steps: [300, 10000]
+eval:
+  - no-sgd: !include eval-omni-zero-shot.yml
+  - olft: !include eval-sweep-omni-1FC.yml
+  - unfrozen: !include eval-sweep-omni-unfrozen.yml
+  - olft-oracle: !include eval-sweep-omni-iid-1FC.yml
+  - unfrozen-oracle: !include eval-sweep-omni-iid-unfrozen.yml
