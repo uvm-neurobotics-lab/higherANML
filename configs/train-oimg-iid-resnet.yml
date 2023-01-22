@@ -19,12 +19,9 @@ output_layer: classifier.linear
 
 # Model Architecture
 model: classifier
-model_name: sanml
+model_name: resnet18
 model_args:
-  encoder: convnet
-  encoder_args:
-    num_blocks: 4
-    num_filters: 256
+  encoder: resnet18
   classifier: linear-classifier
   classifier_args: {num_classes: 700}
 
