@@ -1,0 +1,18 @@
+#
+# Config for "zero-shot" (no SGD) test of Classifier-Basline models on OmniImage. Just fits the last linear layer using
+# Linear Least Squares.
+#
+
+# Dataset
+dataset: omniimage
+imgs_per_class: 100
+train_examples: 85
+test_examples: 15
+
+# Test Method - Fit a linear layer using the entire support set.
+eval_method: zero_shot
+reinit_method: lstsq
+reinit_params: classifier.linear
+init_size: 25500  # = 85 images * 300 classes
+batch_size: 256
+classes: 300

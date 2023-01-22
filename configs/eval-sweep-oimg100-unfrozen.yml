@@ -1,0 +1,19 @@
+#
+# Config for continual meta-test of Classifier-Basline models on OmniImage. Fine-tunes just the classifier.
+#
+
+# Dataset
+dataset: omniimage
+imgs_per_class: 100
+train_examples: 15
+test_examples: 85
+
+# Test Method
+eval_method: seq
+reinit_params: classifier.linear
+opt_params: all
+classes: 300
+lr: !include learning-rates.yml
+
+# Reporting
+eval_freq: 10
