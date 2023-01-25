@@ -49,13 +49,13 @@ def build_command(config, config_path, smoke_test, verbosity, launcher_args):
     return launch_cmd
 
 
-def launch(config, args, launcher_args):
+def launch(config, args, launcher_args, allow_reinit=None):
     # For convenience of filtering, make sure model_name is set.
     if "model_name" not in config:
         config["model_name"] = config.get("model")
 
     # Set up, and jump into, the destination path.
-    run = argutils.prepare_wandb(config, dry_run=args.dry_run)
+    run = argutils.prepare_wandb(config, dry_run=args.dry_run, allow_reinit=allow_reinit)
     # Setting the ID in the config will cause the batch job to use the same W&B run which we've already created. We do
     # this so that we can create the output folder ahead of time and store the Slurm log into the same folder.
     config["id"] = run.id

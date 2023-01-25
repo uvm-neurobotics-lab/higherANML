@@ -9,13 +9,16 @@ Variables to vary:
  - model
  - seed
 """
+import os
 import sys
 import utils
 from copy import copy
 from pathlib import Path
 
+import wandb
+
+import launch_train
 import utils.argparsing as argutils
-from launch_train import launch
 
 datasets = ["omni", "oimg", "oimg100", "inet"]
 train_method = ["-iid"]  # ["", "-seqep", "-iid"]  # blank means "meta"
@@ -48,6 +51,16 @@ lobo_options = [None]
 
 # Nothing special about these numbers, just need to be different random selections.
 seeds = [29384, 93242, 49289]
+
+
+def launch(config, args, launcher_args):
+    curdir = os.getcwd()
+    ret = launch_train.launch(config, args, launcher_args, allow_reinit=True)
+    # Need to undo the side effects of the launch method before we can launch another.
+    if wandb.run is not None:
+        wandb.run.finish()
+    os.chdir(curdir)
+    return ret
 
 
 def launch_jobs(parser, args, launcher_args):
