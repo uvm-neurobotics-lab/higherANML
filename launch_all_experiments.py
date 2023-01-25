@@ -20,6 +20,7 @@ import wandb
 import launch_train
 import utils.argparsing as argutils
 
+
 datasets = ["omni", "oimg", "oimg100", "inet"]
 train_method = ["-iid"]  # ["", "-seqep", "-iid"]  # blank means "meta"
 base_config_files = [f"train-{d}{m}-sanml.yml" for d in datasets for m in train_method]
@@ -47,7 +48,7 @@ models = [
 ]
 
 # Whether to lobotomize.
-lobo_options = [None]
+lobo_options = [None]  # [True, False]
 
 # Nothing special about these numbers, just need to be different random selections.
 seeds = [29384, 93242, 49289]
@@ -65,6 +66,14 @@ def launch(config, args, launcher_args):
 
 def launch_jobs(parser, args, launcher_args):
     exit_code = 0
+    launched = 1
+
+    # Estimate total number of jobs to be run.
+    total = len(datasets) * len(models) * len(lobo_options) * len(seeds)
+    num_iid = len([1 for m in train_method if m == "-iid"])
+    num_inner_outer = len(train_method) - num_iid
+    total *= (num_iid * len(adam_LRs) + num_inner_outer * len(inner_outer_LRs))
+    print(f"Preparing to launch {total} jobs...")
 
     # Create a giant loop over all the different valid combinations of these settings.
     for dataset in datasets:
@@ -131,7 +140,10 @@ def launch_jobs(parser, args, launcher_args):
                         for seed in seeds:
                             cfg["seed"] = seed
                             # Here we finally get to launch a pre-train job! Ensure a unique copy each time we run.
+                            print(f"\n---- JOB {launched}/{total} ----")
                             res = launch(copy(cfg), args, launcher_args)
+                            print(f"---------------------")
+                            launched += 1
                             if res != 0:
                                 exit_code = res
 

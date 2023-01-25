@@ -73,7 +73,8 @@ def launch(config, args, launcher_args, allow_reinit=None):
             yaml.dump(config, f)
     else:
         print(f"Would write training config to file: {config_dest}")
-        print(f"\nconfig to be written:\n{config}\n\n")
+        if args.verbose:
+            print(f"\nConfig to be written:\n{config}\n\n")
 
     # Get the launch command.
     command = build_command(config, config_dest, args.smoke_test, args.verbose, launcher_args)
