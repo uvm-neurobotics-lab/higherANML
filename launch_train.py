@@ -49,6 +49,39 @@ def build_command(config, config_path, smoke_test, verbosity, launcher_args):
     return launch_cmd
 
 
+def launch(config, args, launcher_args):
+    # For convenience of filtering, make sure model_name is set.
+    if "model_name" not in config:
+        config["model_name"] = config.get("model")
+
+    # Set up, and jump into, the destination path.
+    run = argutils.prepare_wandb(config, dry_run=args.dry_run)
+    # Setting the ID in the config will cause the batch job to use the same W&B run which we've already created. We do
+    # this so that we can create the output folder ahead of time and store the Slurm log into the same folder.
+    config["id"] = run.id
+    # We reuse the name that W&B generated for our run as the group name, if the user didn't already provide one. Both
+    # train and eval jobs will be put under this group in the UI.
+    if not config.get("group"):  # either group is missing, or it's None or empty string
+        config["group"] = run.name
+
+    # Write config into the destination folder (which is now our current directory), so that the batch job has its own
+    # local copy of the config and doesn't conflict with other jobs.
+    config_dest = Path("./train-config.yml")
+    if not args.dry_run:
+        config_dest = config_dest.resolve()
+        with open(config_dest, "w") as f:
+            yaml.dump(config, f)
+    else:
+        print(f"Would write training config to file: {config_dest}")
+        print(f"\nconfig to be written:\n{config}\n\n")
+
+    # Get the launch command.
+    command = build_command(config, config_dest, args.smoke_test, args.verbose, launcher_args)
+
+    # Launch the job.
+    return call_sbatch(command, args.launch_verbose, args.dry_run)
+
+
 def main(argv=None):
     # Training Script Arguments
     # Disable abbreviations to avoid some of the "unknown" args from potentially being swallowed.
@@ -99,34 +132,9 @@ def main(argv=None):
                          "augment", "device", "seed", "id", "project", "entity", "group", "full_test", "eval_steps",
                          "cluster"]
     config = argutils.load_config_from_args(parser, args, overrideable_args)
-    # For convenience of filtering, make sure model_name is set.
-    if "model_name" not in config:
-        config["model_name"] = config.get("model")
-
-    # Set up, and jump into, the destination path.
-    run = argutils.prepare_wandb(config, dry_run=args.dry_run)
-    # Setting the ID in the config will cause the batch job to use the same W&B run which we've already created. We do
-    # this so that we can create the output folder ahead of time and store the Slurm log into the same folder.
-    config["id"] = run.id
-    # We we reuse the name that W&B generated for our run as the group name, if the user didn't already provide one.
-    # Both train and eval jobs will be put under this group in the UI.
-    if not config.get("group"):  # either group is missing, or it's None or empty string
-        config["group"] = run.name
-
-    # Write config into the destination folder (which is now our current directory), so that the batch job has its own
-    # local copy of the config and doesn't conflict with other jobs.
-    config_dest = Path("./train-config.yml")
-    if not args.dry_run:
-        with open(config_dest, "w") as f:
-            yaml.dump(config, f)
-    else:
-        print(f"Would write training config to file: {config_dest}")
-
-    # Get the launch command.
-    command = build_command(config, config_dest.resolve(), args.smoke_test, args.verbose, launcher_args)
 
     # Launch the job.
-    return call_sbatch(command, args.launch_verbose, args.dry_run)
+    return launch(config, args, launcher_args)
 
 
 if __name__ == "__main__":

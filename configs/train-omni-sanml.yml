@@ -8,7 +8,7 @@ train_size: 20
 
 # Training Configuration
 train_method: meta
-sample_method: single
+lobotomize: false
 batch_size: 1
 num_batches: 20
 train_cycles: 1
