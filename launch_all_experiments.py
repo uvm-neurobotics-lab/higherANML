@@ -86,6 +86,10 @@ def launch_jobs(parser, args, launcher_args):
             overrideable_args = ["project", "entity", "cluster"]
             config = argutils.overwrite_command_line_args(config, parser, args, overrideable_args)
 
+            # Manually set the data directory, if needed.
+            if "data_path" not in config:
+                config["data_path"] = os.getcwd() + "/experiments/data"
+
             # Set all models to just evaluate once at the very end.
             config["eval_steps"] = [300000]
 
