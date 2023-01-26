@@ -245,8 +245,8 @@ def add_dataset_arg(parser, dflt_data_dir="experiments/data", add_resize_arg=Tru
     parser.add_argument("--data-path", "--data-dir", metavar="PATH", type=resolved_path, default=dflt_data_dir,
                         help="The root path in which to look for the dataset (or store a new one if it isn't already"
                              " present).")
-    parser.add_argument("--no-download", dest="download", action="store_false",
-                        help="Do not download the dataset automatically if it doesn't already exist; raise an error.")
+    parser.add_argument("--download", action="store_true", help="Download the dataset automatically if it doesn't"
+                                                                " already exist. Otherwise, an error is raised.")
     if add_resize_arg:
         parser.add_argument("--im-size", metavar="PX", type=int, default=None,
                             help="Resize all input images to the given size (in pixels).")
