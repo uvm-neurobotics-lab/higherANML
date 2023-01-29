@@ -298,6 +298,7 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
     for arg in ("imgs_per_class", "im_size", "batch_size", "train_size", "val_size", "seed"):
         args.setdefault(arg)
     args.setdefault("augment", False)
+    args.setdefault("use_random_split", False)
     # Ensure we have a Path type here.
     args["data_path"] = Path(args["data_path"])
 
@@ -333,13 +334,13 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
                                                 num_images_per_class=args["imgs_per_class"], download=args["download"],
                                                 im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
                                                 train_size=args["train_size"], val_size=args["val_size"],
-                                                seed=args["seed"])
+                                                random_split=args["use_random_split"], seed=args["seed"])
         elif sampler_type == "iid":
             return omniimage.create_iid_sampler(root=args["data_path"] / "omniimage",
                                                 num_images_per_class=args["imgs_per_class"], download=args["download"],
                                                 im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
                                                 batch_size=args["batch_size"], train_size=args["train_size"],
-                                                val_size=args["val_size"])
+                                                val_size=args["val_size"], random_split=args["use_random_split"])
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")
     else:
