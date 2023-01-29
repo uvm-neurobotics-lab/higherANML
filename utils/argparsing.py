@@ -11,6 +11,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import datasets.imagenet84
 from utils import load_yaml, make_pretty
 
 
@@ -240,7 +241,7 @@ def add_dataset_arg(parser, dflt_data_dir="experiments/data", add_resize_arg=Tru
     """
     Add an argument for the user to specify a dataset.
     """
-    parser.add_argument("--dataset", choices=["omni", "miniimagenet", "omniimage20", "omniimage100"], type=str.lower,
+    parser.add_argument("--dataset", choices=["omni", "miniimagenet", "imagenet84"], type=str.lower,
                         default="omni", help="The dataset to use.")
     parser.add_argument("--data-path", "--data-dir", metavar="PATH", type=resolved_path, default=dflt_data_dir,
                         help="The root path in which to look for the dataset (or store a new one if it isn't already"
@@ -279,6 +280,7 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
         ContinualMetaLearningSampler or IIDSampler: The sampler.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
+    import datasets.imagenet84 as imagenet84
     import datasets.mini_imagenet as imagenet
     import datasets.omniglot as omniglot
     import datasets.omniimage as omniimage
@@ -328,6 +330,19 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
                                                im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
                                                batch_size=args["batch_size"], train_size=args["train_size"],
                                                val_size=args["val_size"])
+    elif args["dataset"] == "imagenet84":
+        if sampler_type == "oml":
+            return imagenet84.create_OML_sampler(root=args["data_path"] / "ImageNet84",
+                                                 num_images_per_class=args["imgs_per_class"], im_size=args["im_size"],
+                                                 greyscale=greyscale, augment=args["augment"],
+                                                 train_size=args["train_size"], val_size=args["val_size"],
+                                                 random_split=args["use_random_split"], seed=args["seed"])
+        elif sampler_type == "iid":
+            return imagenet84.create_iid_sampler(root=args["data_path"] / "ImageNet84",
+                                                 num_images_per_class=args["imgs_per_class"], im_size=args["im_size"],
+                                                 greyscale=greyscale, augment=args["augment"],
+                                                 batch_size=args["batch_size"], train_size=args["train_size"],
+                                                 val_size=args["val_size"], random_split=args["use_random_split"])
     elif args["dataset"] == "omniimage":
         if sampler_type == "oml":
             return omniimage.create_OML_sampler(root=args["data_path"] / "omniimage",

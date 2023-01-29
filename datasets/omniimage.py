@@ -2,7 +2,6 @@
 PyTorch Dataset class for OmniImage.
 """
 
-import random
 from pathlib import Path
 
 import torch

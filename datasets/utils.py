@@ -85,7 +85,7 @@ def list_dir(root, prefix=False):
     """List all directories at a given root
 
     Args:
-        root (str): Path to directory whose folders need to be listed
+        root (str or Path): Path to directory whose folders need to be listed
         prefix (bool, optional): If true, prepends the path to each result, otherwise
             only returns the name of the directories found
     """
@@ -104,7 +104,7 @@ def list_files(root, suffix, prefix=False):
     """List all files ending with a suffix at a given root
 
     Args:
-        root (str): Path to directory whose folders need to be listed
+        root (str or Path): Path to directory whose folders need to be listed
         suffix (str or tuple): Suffix of the files to match, e.g. '.png' or ('.jpg', '.png').
             It uses the Python "str.endswith" method and is passed directly
         prefix (bool, optional): If true, prepends the path to each result, otherwise
