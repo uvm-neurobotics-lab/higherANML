@@ -334,13 +334,13 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
         if sampler_type == "oml":
             return imagenet84.create_OML_sampler(root=args["data_path"] / "ImageNet84",
                                                  num_images_per_class=args["imgs_per_class"], im_size=args["im_size"],
-                                                 greyscale=greyscale, augment=args["augment"],
+                                                 greyscale=greyscale, augment=args["augment"], seed=args["seed"],
                                                  train_size=args["train_size"], val_size=args["val_size"],
-                                                 random_split=args["use_random_split"], seed=args["seed"])
+                                                 random_split=args["use_random_split"])
         elif sampler_type == "iid":
             return imagenet84.create_iid_sampler(root=args["data_path"] / "ImageNet84",
                                                  num_images_per_class=args["imgs_per_class"], im_size=args["im_size"],
-                                                 greyscale=greyscale, augment=args["augment"],
+                                                 greyscale=greyscale, augment=args["augment"], seed=args["seed"],
                                                  batch_size=args["batch_size"], train_size=args["train_size"],
                                                  val_size=args["val_size"], random_split=args["use_random_split"])
     elif args["dataset"] == "omniimage":
