@@ -2,6 +2,8 @@
 PyTorch Dataset class for OmniImage.
 """
 import logging
+import pickle
+from collections import defaultdict
 from os.path import basename
 from pathlib import Path
 
@@ -9,13 +11,50 @@ import numpy as np
 import torch
 from numpy.random import default_rng, SeedSequence
 from PIL import Image
-from omnimage.dataset import get_fixed_random_test_classes, get_evolved_test_classes, OmnImageDataset
+from omnimage.dataset import get_fixed_random_test_classes, get_evolved_test_classes
 from torchvision.transforms import Compose, Lambda, Normalize, RandomResizedCrop, RandomHorizontalFlip, Resize, ToTensor
 
 from .class_indexed_dataset import ClassIndexedDataset
 from .ContinualMetaLearningSampler import ContinualMetaLearningSampler
 from .IIDSampler import IIDSampler
-from .utils import extract_archive, check_integrity, list_dir, list_files
+from .utils import list_dir, list_files
+
+
+def scan_for_image_files(root_dir):
+    logging.info(f"Scanning folder for all image files: {root_dir}")
+
+    # Check that all classes are present before filtering. Sort alphabetically for determinism.
+    all_class_folders = sorted(list_dir(root_dir, prefix=True))
+    if len(all_class_folders) != 1000:
+        raise RuntimeError(f"Expected to find 1000 ImageNet classes, but instead found {len(all_class_folders)}"
+                           " class folders.")
+
+    # A mapping from class ID (ImageNet class IDs like "n01855672") to a sorted list of images.
+    return {basename(cls): sorted(list_files(cls, ".JPEG", prefix=True)) for cls in all_class_folders}
+
+
+def get_image_files_from_cache(cache_file):
+    logging.info(f"Reading images from cache file: {cache_file}")
+
+    with open(cache_file, "rb") as f:
+        all_files = pickle.load(f)
+        # A mapping from class ID (ImageNet class IDs like "n01855672") to a sorted list of images.
+        classes = defaultdict(list)
+        for img_file in all_files:
+            classes[img_file.parent.name].append(img_file)
+        if len(classes) != 1000:
+            raise RuntimeError(f"Expected to find 1000 ImageNet classes, but instead found {len(classes)} class"
+                               " folders.")
+        return classes
+
+
+def get_class_to_image_mapping(root_dir, index_name="index.pkl"):
+    index_file = root_dir / index_name
+    if index_file.exists():
+        # Get from the cache if possible, because scanning directories on the VACC is horrifyingly slow.
+        return get_image_files_from_cache(index_file)
+    else:
+        return scan_for_image_files(root_dir)
 
 
 class ImageNet84(ClassIndexedDataset):
@@ -59,32 +98,24 @@ class ImageNet84(ClassIndexedDataset):
         if not self.target_folder.is_dir():
             raise FileNotFoundError(f"Not a valid directory: {self.target_folder}")
 
-        # If seed is None, then we will pull entropy from the OS and log it in case we need to reproduce this run.
-        ss = SeedSequence(seed)
-        logging.info(f"ImageNet84 dataset is using seed = {ss.entropy}")
-        rng = default_rng(ss)
-
         # Determine which split we're interested in.
         test_classes = get_fixed_random_test_classes() if random_split else get_evolved_test_classes()
         is_test_split = (split.lower() == "test")
 
-        # Check that all classes are present before filtering. Sort alphabetically for determinism.
-        all_class_folders = sorted(list_dir(self.target_folder, prefix=True))
-        if len(all_class_folders) != 1000:
-            raise RuntimeError(f"Expected to find ImageNet 1000 classes, but instead found {len(all_class_folders)}"
-                               " class folders.")
-
-        # Subsample images before filtering. This will cost us more time, but means we will always select the same
-        # image set when using the same seed, even if using different classes.
-        def sample_images(class_folder):
-            all_images = sorted(list_files(class_folder, ".jpg", prefix=True))
-            if num_images_per_class is not None:
-                all_images = rng.choice(all_images, num_images_per_class)
-            return all_images
-
         # self.classes is a mapping from class ID (ImageNet class IDs like "n01855672") to a sorted list of images, for
         # all classes and images in this dataset. Keys are sorted alphabetically for determinism.
-        self.classes = {basename(cls): sample_images(cls) for cls in all_class_folders}
+        self.classes = get_class_to_image_mapping(self.target_folder)
+
+        # Subsample images, if necessary. Do this before filtering the classes to the desired split. This will cost us
+        # more time, but means we will always select the same image set when using the same seed, even if using a
+        # different set of classes.
+        if num_images_per_class is not None:
+            # If seed is None, then we will pull entropy from the OS and log it in case we need to reproduce this run.
+            ss = SeedSequence(seed)
+            logging.info(f"ImageNet84 dataset is using seed = {ss.entropy}")
+            rng = default_rng(ss)
+            for cls in self.classes:
+                self.classes[cls] = rng.choice(self.classes[cls], num_images_per_class)
 
         # Now we can finally narrow the full dataset down to just the split we're interested in.
         def is_desired_class(item):
