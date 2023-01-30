@@ -281,7 +281,6 @@ def build_commands(config, inpath, outpath, cluster, verbose, force, dry_run, la
         SCRIPT_DIR / "eval_map.py",
         "--config", config_path,
         "--data-path", inpath,
-        "--no-download",
     ]
     if verbose:
         job_cmd.append("-" + ("v" * verbose))
