@@ -125,11 +125,6 @@ class ImageNet84(ClassIndexedDataset):
 
         self.classes = dict(filter(is_desired_class, self.classes.items()))
 
-        # TODO: TMP
-        vals = list(self.classes.values())
-        print(f"First 10 of first class: {[basename(p) for p in vals[0][:10]]}")
-        print(f"First 10 of last class: {[basename(p) for p in vals[-1][:10]]}")
-
         # self._class_index is a list of lists of the kind specified by `ClassIndexedDataset.class_index()`.
         self._class_index = []
         # self.all_items is a flattened list of all items from all classes. They will be sorted in alphabetical order of

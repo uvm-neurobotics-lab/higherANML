@@ -21,9 +21,9 @@ import launch_train
 import utils.argparsing as argutils
 
 
-datasets = ["omni", "oimg", "oimg100", "inet"]
+# datasets = ["omni", "oimg", "oimg100", "inet84", "inet"]
+datasets = ["inet84"]
 train_method = ["-iid"]  # ["", "-seqep", "-iid"]  # blank means "meta"
-base_config_files = [f"train-{d}{m}-sanml.yml" for d in datasets for m in train_method]
 
 # LR variables are different depending on train_method. But we can sweep over various rates, regardless of model.
 adam_LRs = [{"lr": lr} for lr in [0.003, 0.001, 0.0003]]
@@ -43,8 +43,8 @@ inet_iid_train_test_splits = [(name, {"train_examples": t, "test_examples": e})
 
 # Different model types.
 models = [
-    {"model_name": "resnet18", "encoder": "resnet18", "encoder_args": {}},
     {"model_name": "sanml", "encoder": "convnet", "encoder_args": {"num_blocks": 4, "num_filters": 256}},
+    {"model_name": "resnet18", "encoder": "resnet18", "encoder_args": {}},
 ]
 
 # Whether to lobotomize.
@@ -80,11 +80,19 @@ def launch_jobs(parser, args, launcher_args):
         eval_splits = inet_iid_train_test_splits if dataset == "inet" else oimg100_iid_train_test_splits
 
         for method in train_method:
-            fpath = Path("configs") / f"train-{dataset}{method}-sanml.yml"
+            if dataset == "inet84":
+                # Special case for ImageNet84 since it doesn't have its own config.
+                fpath = Path("configs") / f"train-oimg100{method}-sanml.yml"
+            else:
+                fpath = Path("configs") / f"train-{dataset}{method}-sanml.yml"
             config = utils.load_yaml(fpath)
             # Create the full config using all the command line arguments.
             overrideable_args = ["project", "entity", "cluster"]
             config = argutils.overwrite_command_line_args(config, parser, args, overrideable_args)
+
+            # Special case for ImageNet84 again.
+            if dataset == "inet84":
+                config["dataset"] = "imagenet84"
 
             # Manually set the data directory, if needed.
             if "data_path" not in config:
@@ -119,12 +127,16 @@ def launch_jobs(parser, args, launcher_args):
                         cfg.update(lr_cfg)
 
                         # Eval settings.
-                        if dataset == "oimg100" or dataset == "inet":
+                        if dataset == "oimg100" or dataset == "inet84" or dataset == "inet":
                             # Need to reconfigure the evals for these datasets with higher number of images per class.
                             new_evals = []
                             for evset in cfg["eval"]:
                                 assert len(evset) == 1
                                 flavor, evcfg = next(iter(evset.items()))
+                                # First reconfigure for ImageNet84 if needed.
+                                if dataset == "inet84":
+                                    evcfg["dataset"] = "imagenet84"
+                                # Now decide how to add to the eval set.
                                 if flavor == "iid-olft":
                                     # Do not add. Making an explicit choice here to drop the OLFT results.
                                     pass
