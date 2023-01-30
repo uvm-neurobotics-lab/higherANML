@@ -21,8 +21,8 @@ import launch_train
 import utils.argparsing as argutils
 
 
-# datasets = ["omni", "oimg", "oimg100", "inet84", "inet"]
-datasets = ["inet84"]
+# datasets = ["omni", "oimg", "oimg100", "inet84-20", "inet84-100", "inet"]
+datasets = ["inet84-20", "inet84-100"]
 train_method = ["-iid"]  # ["", "-seqep", "-iid"]  # blank means "meta"
 
 # LR variables are different depending on train_method. But we can sweep over various rates, regardless of model.
@@ -80,8 +80,10 @@ def launch_jobs(parser, args, launcher_args):
         eval_splits = inet_iid_train_test_splits if dataset == "inet" else oimg100_iid_train_test_splits
 
         for method in train_method:
-            if dataset == "inet84":
-                # Special case for ImageNet84 since it doesn't have its own config.
+            # Special case for ImageNet84 since it doesn't have its own config.
+            if dataset == "inet84-20":
+                fpath = Path("configs") / f"train-oimg{method}-sanml.yml"
+            elif dataset == "inet84-100":
                 fpath = Path("configs") / f"train-oimg100{method}-sanml.yml"
             else:
                 fpath = Path("configs") / f"train-{dataset}{method}-sanml.yml"
@@ -91,7 +93,7 @@ def launch_jobs(parser, args, launcher_args):
             config = argutils.overwrite_command_line_args(config, parser, args, overrideable_args)
 
             # Special case for ImageNet84 again.
-            if dataset == "inet84":
+            if dataset.startswith("inet84"):
                 config["dataset"] = "imagenet84"
 
             # Manually set the data directory, if needed.
@@ -127,15 +129,17 @@ def launch_jobs(parser, args, launcher_args):
                         cfg.update(lr_cfg)
 
                         # Eval settings.
-                        if dataset == "oimg100" or dataset == "inet84" or dataset == "inet":
-                            # Need to reconfigure the evals for these datasets with higher number of images per class.
+                        # First set to ImageNet84 if needed.
+                        if dataset.startswith("inet84"):
+                            for evset in cfg["eval"]:
+                                for evcfg in evset.values():
+                                    evcfg["dataset"] = "imagenet84"
+                        # Need to reconfigure the evals for these datasets with higher number of images per class.
+                        if dataset == "oimg100" or dataset == "inet84-100" or dataset == "inet":
                             new_evals = []
                             for evset in cfg["eval"]:
                                 assert len(evset) == 1
                                 flavor, evcfg = next(iter(evset.items()))
-                                # First reconfigure for ImageNet84 if needed.
-                                if dataset == "inet84":
-                                    evcfg["dataset"] = "imagenet84"
                                 # Now decide how to add to the eval set.
                                 if flavor == "iid-olft":
                                     # Do not add. Making an explicit choice here to drop the OLFT results.
