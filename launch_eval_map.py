@@ -129,9 +129,11 @@ def get_input_output_dirs(config, output, flavor, dry_run):
             model_spec = model_file.stem.split("-")
             suffix = ("-" + str(flavor)) if flavor else ""
             outpath = model_file.parent.parent / (f"eval-{model_spec[0]}-{model_spec[-1]}" + suffix)
+        elif not config["model"]:
+            raise RuntimeError("No model supplied for evaluation. Use -m/--model to specify the model.")
         else:
-            raise RuntimeError(
-                "You must supply an output destination (-o/--output) when evaluating more than one model.")
+            raise RuntimeError("You must supply an output destination (-o/--output) when evaluating more than one"
+                               f" model. Models to evaluate are:\n{config['model']}")
 
     # Ensure the destination can be written.
     if outpath.is_file():
