@@ -1,10 +1,11 @@
 #
-# Current best known config for i.i.d. pre-training on Mini-ImageNet.
+# Current best known config for i.i.d. pre-training an ANML-like model on OmniImage.
 #
 
 # Dataset
-dataset: miniimagenet
-train_size: 500
+dataset: omniimage
+imgs_per_class: 100
+train_size: 85
 
 # Training Configuration
 train_method: iid
@@ -18,10 +19,11 @@ output_layer: classifier.linear
 
 # Model Architecture
 model: classifier
+model_name: resnet18
 model_args:
   encoder: resnet18
   classifier: linear-classifier
-  classifier_args: {num_classes: 64}
+  classifier_args: {num_classes: 700}
 
 # Optimization
 optimizer: Adam
@@ -40,8 +42,10 @@ lr: 3.0e-5
 save_freq: 125
 eval_steps: [2000, 10000]
 eval:
-  - no-sgd: !include eval-inet-zero-shot.yml
-  - olft: !include eval-sweep-inet-1FC.yml
-  - unfrozen: !include eval-sweep-inet-unfrozen.yml
-  - iid-olft: !include eval-sweep-inet-iid-1FC.yml
-  - iid-unfrozen: !include eval-sweep-inet-iid-unfrozen.yml
+  - no-sgd: !include eval-oimg100-zero-shot.yml
+  - no-sgd-lg: !include eval-oimg100-zero-shot-lg.yml
+  - olft: !include eval-sweep-oimg100-1FC.yml
+  - unfrozen: !include eval-sweep-oimg100-unfrozen.yml
+  - iid-olft: !include eval-sweep-oimg100-iid-1FC.yml
+  - iid-unfrozen: !include eval-sweep-oimg100-iid-unfrozen.yml
+

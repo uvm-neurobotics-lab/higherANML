@@ -4,7 +4,7 @@
 
 # Dataset
 dataset: omni
-train_size: 20
+train_size: 15
 
 # Training Configuration
 train_method: sequential_episodic
