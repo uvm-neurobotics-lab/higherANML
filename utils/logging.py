@@ -329,7 +329,7 @@ class BaseLog:
                     eval_config["group"] = wandb.run.name
             check_eval_config(eval_config)
             retcode = evaljob.launch(eval_config, flavor=flavor, cluster=self.config["cluster"],
-                                     launcher_args=["--mem=50G"], force=True)
+                                     launcher_args=["--mem=12G"], force=True)
             if retcode != 0:
                 self.warning(f"Eval job may not have launched. Launcher exited with code {retcode}. See above for"
                              " possible errors.")
