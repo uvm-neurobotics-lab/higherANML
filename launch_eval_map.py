@@ -51,8 +51,8 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 
 def prep_config(config, parser, args):
     overrideable_args = ["eval_method", "reinit_method", "dataset", "data_path", "im_size", "augment", "model",
-                         "classes", "train_examples", "test_examples", "lr", "init_size", "batch_size", "eval_freq",
-                         "runs", "device", "seed", "project", "entity", "group"]
+                         "classes", "train_examples", "test_examples", "epochs", "lr", "init_size", "batch_size",
+                         "eval_freq", "runs", "device", "seed", "project", "entity", "group"]
     config = argutils.overwrite_command_line_args(config, parser, args, overrideable_args)
     ensure_config_param(config, "dataset")
     ensure_config_param(config, "model")
@@ -155,7 +155,7 @@ def get_input_output_dirs(config, output, flavor, dry_run):
 
 def build_command_args(config, outpath, force):
     # Enforce that at least one of these variables is present, so that we get a valid combination.
-    keys = ("model", "dataset", "classes", "train_examples", "test_examples", "lr")
+    keys = ("model", "dataset", "classes", "train_examples", "test_examples", "epochs", "lr")
     assert any(k in config for k in keys)
 
     # Figure out which config arguments have multiple choices. Extract them from the config.
@@ -332,7 +332,7 @@ def main(args=None):
     repeat_group = parser.add_argument_group("Repeating Evaluation Arguments",
                                              "You can supply multiple values for each of these arguments, and all "
                                              "possible combinations of the arguments will be launched.")
-    repeat_group.add_argument("--dataset", nargs="+", choices=["omni", "miniimagenet"], type=str.lower,
+    repeat_group.add_argument("--dataset", nargs="+", choices=["omni", "miniimagenet", "imagenet84"], type=str.lower,
                               default=["omni"], help="The dataset to use.")
     repeat_group.add_argument("-m", "--model", metavar="PATH", nargs="+", type=argutils.existing_path,
                               help="Path to the model to evaluate.")
@@ -341,6 +341,8 @@ def main(args=None):
                               help="Number of examples per class, for training.")
     repeat_group.add_argument("--test-examples", metavar="INT", nargs="+", type=int, default=[5],
                               help="Number of examples per class, for testing.")
+    repeat_group.add_argument("--epochs", metavar="INT", nargs="+", type=int,
+                              help="Number of epochs to fine-tune for. Only used in i.i.d. testing.")
     repeat_group.add_argument("-l", "--lr", metavar="RATE", nargs="+", type=float, default=[0.001],
                               help="Learning rate to use (check README for suggestions).")
 
