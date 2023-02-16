@@ -16,6 +16,8 @@ from pathlib import Path
 import yaml
 
 import utils.argparsing as argutils
+from launch_eval_map import (EVAL_METHOD_DFLT, TRAIN_EX_DFLT, TEST_EX_DFLT, RUNS_DFLT, SEED_DFLT, REINIT_METHOD_DFLT,
+                             EPOCHS_DFLT, BATCH_SIZE_DFLT, INIT_SIZE_DFLT)
 from anml import run_full_test as seq_test
 from iid import run_full_test as iid_test
 from zero_shot import run_full_test as zero_shot_test
@@ -27,17 +29,6 @@ EVAL_METHODS = {
     "iid": iid_test,
     "zero_shot": zero_shot_test,
 }
-
-# NOTE: launch_eval_map.py refers to these defaults so that it uses the same defaults.
-EVAL_METHOD_DFLT = "sequential"
-REINIT_METHOD_DFLT = "kaiming"
-TRAIN_EX_DFLT = 15
-TEST_EX_DFLT = 5
-EPOCHS_DFLT = 1
-BATCH_SIZE_DFLT = 256
-INIT_SIZE_DFLT = 256
-RUNS_DFLT = 10
-SEED_DFLT = 12345
 
 
 def main(args=None):
