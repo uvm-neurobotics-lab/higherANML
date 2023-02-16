@@ -200,10 +200,11 @@ def overwrite_command_line_args(config, parser, parsed_args, overrideable_args=N
     if overrideable_args:
         for arg in overrideable_args:
             # Only replace if value was explicitly specified by the user, or if the value doesn't already exist in
-            # config (but does exist in the arg defaults).
+            # config. Only replace with non-null values.
             if arg not in config or arg in user_supplied_args:
-                if hasattr(parsed_args, arg):
-                    config[arg] = getattr(parsed_args, arg)
+                cli_arg = getattr(parsed_args, arg, None)
+                if cli_arg is not None:
+                    config[arg] = cli_arg
 
     config = make_pretty(config)
     return config
