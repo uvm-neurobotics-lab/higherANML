@@ -156,13 +156,11 @@ def create_datasets(root, download=True, num_images_per_class=None, im_size=None
             # automatically anti-alias). This could be removed in the future if we refactor MiniImageNet.
             train_transforms.append(Resize(im_size, antialias=True))
     train_transforms = Compose(train_transforms)
-    t_transforms = Lambda(lambda x: torch.tensor(x))
     train = create_subset(
         root=root,
         num_images_per_class=num_images_per_class,
         split="train",
         transform=train_transforms,
-        target_transform=t_transforms,
         random_split=random_split,
         greyscale=greyscale,
         download=download,
@@ -181,7 +179,6 @@ def create_datasets(root, download=True, num_images_per_class=None, im_size=None
         num_images_per_class=num_images_per_class,
         split="test",
         transform=test_transforms,
-        target_transform=t_transforms,
         random_split=random_split,
         greyscale=greyscale,
         download=download,
