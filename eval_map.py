@@ -28,16 +28,27 @@ EVAL_METHODS = {
     "zero_shot": zero_shot_test,
 }
 
+# NOTE: launch_eval_map.py refers to these defaults so that it uses the same defaults.
+EVAL_METHOD_DFLT = "sequential"
+REINIT_METHOD_DFLT = "kaiming"
+TRAIN_EX_DFLT = 15
+TEST_EX_DFLT = 5
+EPOCHS_DFLT = 1
+BATCH_SIZE_DFLT = 256
+INIT_SIZE_DFLT = 256
+RUNS_DFLT = 10
+SEED_DFLT = 12345
+
 
 def main(args=None):
     parser = argutils.create_parser(__doc__)
 
     parser.add_argument("-c", "--config", metavar="PATH", type=argutils.existing_path, required=True,
                         help="Evaluation config file.")
-    parser.add_argument("--eval-method", choices=("sequential", "seq", "iid", "zero_shot"), default="sequential",
+    parser.add_argument("--eval-method", choices=("sequential", "seq", "iid", "zero_shot"), default=EVAL_METHOD_DFLT,
                         help="The testing method to use: sequential (continual learning) or i.i.d. (standard transfer"
                              " learning).")
-    parser.add_argument("--reinit-method", choices=("kaiming", "lstsq"), default="kaiming",
+    parser.add_argument("--reinit-method", choices=("kaiming", "lstsq"), default=REINIT_METHOD_DFLT,
                         help="The method to use to reinitialize trainable parameters: typical kaiming normal"
                              "initialization or least squares estimate of the final linear layer.")
     argutils.add_dataset_arg(parser)
@@ -46,24 +57,27 @@ def main(args=None):
     parser.add_argument("-l", "--lr", metavar="RATE", type=float,
                         help="Learning rate to use (check README for suggestions).")
     parser.add_argument("--classes", metavar="INT", type=int, help="Number of classes to test.")
-    parser.add_argument("--train-examples", metavar="INT", type=int, default=15,
+    parser.add_argument("--train-examples", metavar="INT", type=int, default=TRAIN_EX_DFLT,
                         help="Number of examples per class, for training.")
-    parser.add_argument("--test-examples", metavar="INT", type=int, default=5,
+    parser.add_argument("--test-examples", metavar="INT", type=int, default=TEST_EX_DFLT,
                         help="Number of examples per class, for testing.")
-    parser.add_argument("--epochs", metavar="INT", type=int, default=1,
+    parser.add_argument("--epochs", metavar="INT", type=int, default=EPOCHS_DFLT,
                         help="Number of epochs to fine-tune for. Only used in i.i.d. testing.")
-    parser.add_argument("--batch-size", metavar="INT", type=int, default=256,
+    parser.add_argument("--batch-size", metavar="INT", type=int, default=BATCH_SIZE_DFLT,
                         help="Size of batches to train on. Only used in i.i.d. testing.")
-    parser.add_argument("--init-size", metavar="INT", type=int, default=256,
+    parser.add_argument("--init-size", metavar="INT", type=int, default=INIT_SIZE_DFLT,
                         help="Number of samples from the support set allowed to be used for parameter initialization.")
     parser.add_argument("--eval-freq", metavar="INT", type=int,
                         help="The frequency at which to evaluate performance of the model throughout the learning"
                              " process. This can be very expensive, if evaluating after every class learned (freq = 1)."
                              " By default we evaluate only at the very end.")
-    parser.add_argument("-r", "--runs", metavar="INT", type=int, default=10, help="Number of repetitions to run.")
+    parser.add_argument("-r", "--runs", metavar="INT", type=int, default=RUNS_DFLT, help="Number of repetitions to run.")
     parser.add_argument("-o", "--output", metavar="PATH", help="The location to save to.")
     argutils.add_device_arg(parser)
-    argutils.add_seed_arg(parser)
+    # NOTE: Enforcing a default seed here makes it impossible to launch a truly random run. But I think this is better
+    # than the alternative which could have us run different tests with different seeds accidentally, so they would not
+    # be comparable.
+    argutils.add_seed_arg(parser, SEED_DFLT)
     argutils.add_wandb_args(parser)
     argutils.add_verbose_arg(parser)
 

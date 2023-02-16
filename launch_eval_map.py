@@ -42,6 +42,8 @@ from pathlib import Path
 import yaml
 
 import utils.argparsing as argutils
+from eval_map import (EVAL_METHOD_DFLT, TRAIN_EX_DFLT, TEST_EX_DFLT, RUNS_DFLT, SEED_DFLT, REINIT_METHOD_DFLT,
+                      BATCH_SIZE_DFLT, INIT_SIZE_DFLT)
 from utils import as_strings, ensure_config_param, load_yaml, update_with_keys
 from utils.slurm import call_sbatch
 
@@ -337,9 +339,9 @@ def main(args=None):
     repeat_group.add_argument("-m", "--model", metavar="PATH", nargs="+", type=argutils.existing_path,
                               help="Path to the model to evaluate.")
     repeat_group.add_argument("--classes", metavar="INT", nargs="+", type=int, help="Number of classes to test.")
-    repeat_group.add_argument("--train-examples", metavar="INT", nargs="+", type=int, default=[15],
+    repeat_group.add_argument("--train-examples", metavar="INT", nargs="+", type=int, default=[TRAIN_EX_DFLT],
                               help="Number of examples per class, for training.")
-    repeat_group.add_argument("--test-examples", metavar="INT", nargs="+", type=int, default=[5],
+    repeat_group.add_argument("--test-examples", metavar="INT", nargs="+", type=int, default=[TEST_EX_DFLT],
                               help="Number of examples per class, for testing.")
     repeat_group.add_argument("--epochs", metavar="INT", nargs="+", type=int,
                               help="Number of epochs to fine-tune for. Only used in i.i.d. testing.")
@@ -355,9 +357,9 @@ def main(args=None):
                                   help="Training config file, from which to extract the evaluation config. Only used if"
                                        " --config is not supplied.")
     non_repeat_group.add_argument("--eval-method", choices=("sequential", "seq", "iid", "zero_shot"),
-                                  default="sequential", help="The testing method to use: sequential (continual"
-                                                             " learning) or i.i.d. (standard transfer learning).")
-    non_repeat_group.add_argument("--reinit-method", choices=("kaiming", "lstsq"), default="kaiming",
+                                  default=EVAL_METHOD_DFLT, help="The testing method to use: sequential (continual"
+                                                                 " learning) or i.i.d. (standard transfer learning).")
+    non_repeat_group.add_argument("--reinit-method", choices=("kaiming", "lstsq"), default=REINIT_METHOD_DFLT,
                                   help="The method to use to reinitialize trainable parameters: typical kaiming normal"
                                        " initialization or least squares estimate of the final linear layer.")
     non_repeat_group.add_argument("--data-path", "--data-dir", metavar="PATH", type=argutils.existing_path,
@@ -367,9 +369,9 @@ def main(args=None):
                                        " launching.")
     non_repeat_group.add_argument("--im-size", metavar="PX", type=int, default=None,
                                   help="Resize all input images to the given size (in pixels).")
-    non_repeat_group.add_argument("--batch-size", metavar="INT", type=int, default=256,
+    non_repeat_group.add_argument("--batch-size", metavar="INT", type=int, default=BATCH_SIZE_DFLT,
                                   help="Size of batches to train on. Only used in i.i.d. testing.")
-    non_repeat_group.add_argument("--init-size", metavar="INT", type=int, default=256,
+    non_repeat_group.add_argument("--init-size", metavar="INT", type=int, default=INIT_SIZE_DFLT,
                                   help="Number of samples from the support set allowed to be used for parameter"
                                        " initialization.")
     non_repeat_group.add_argument("--eval-freq", metavar="INT", type=int, default=1,
@@ -378,10 +380,10 @@ def main(args=None):
                                        " learned (freq = 1). To evaluate only at the end, supply 0. By default, we will"
                                        " evaluate at a rate which is 1/20th of the number of classes, so as to have 20"
                                        " or 21 data points in the end.")
-    non_repeat_group.add_argument("-r", "--runs", metavar="INT", type=int, default=10,
+    non_repeat_group.add_argument("-r", "--runs", metavar="INT", type=int, default=RUNS_DFLT,
                                   help="Number of repetitions to run for each unique combination of arguments.")
     # We will require a fixed seed, so all runs are more comparable.
-    non_repeat_group.add_argument("--seed", type=int, default=12345,
+    non_repeat_group.add_argument("--seed", type=int, default=SEED_DFLT,
                                   help='Random seed. The same seed will be used for all jobs, but each "run" within'
                                        ' each "job" will have a different random sampling of data.')
     argutils.add_device_arg(non_repeat_group)
