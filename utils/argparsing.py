@@ -528,7 +528,7 @@ def prepare_wandb(parsed_args, job_type=None, create_folder=True, root_path="exp
             "group": parsed_args.get("group"),
             "job_type": job_type,
             "reinit": allow_reinit,
-            "entity": parsed_args["entity"],
+            "entity": parsed_args.get("entity"),
             "project": parsed_args["project"],
         }
         if existing_id:
