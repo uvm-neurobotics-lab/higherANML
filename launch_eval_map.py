@@ -286,8 +286,8 @@ def build_commands(config, inpath, outpath, cluster, verbose, force, dry_run, la
     # Write the config into the destination.
     config_path = write_config(config, outpath, fid, dry_run)
 
-    # Copy eval notebook into the destination.
-    place_eval_notebook(outpath, force, dry_run)
+    # An option: Copy eval notebook into the destination. Now deprecated.
+    # place_eval_notebook(outpath, force, dry_run)
 
     # Build the command.
     job_cmd = [
