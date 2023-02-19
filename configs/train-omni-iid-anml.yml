@@ -38,5 +38,5 @@ eval:
   - no-sgd: !include eval-omni-zero-shot.yml
   - olft: !include eval-sweep-omni-1FC.yml
   - unfrozen: !include eval-sweep-omni-unfrozen.yml
-  - olft-oracle: !include eval-sweep-omni-iid-1FC.yml
-  - unfrozen-oracle: !include eval-sweep-omni-iid-unfrozen.yml
+  - iid-olft: !include eval-sweep-omni-iid-1FC.yml
+  - iid-unfrozen: !include eval-sweep-omni-iid-unfrozen.yml
