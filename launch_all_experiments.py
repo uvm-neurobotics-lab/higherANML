@@ -21,9 +21,10 @@ import launch_train
 import utils.argparsing as argutils
 
 
-# datasets = ["omni", "oimg", "oimg100", "inet84-20", "inet84-100", "inet"]
-datasets = ["inet84-20", "inet84-100"]
-train_method = ["-iid"]  # ["", "-seqep", "-iid"]  # blank means "meta"
+datasets = ["oimg"]
+#datasets = ["omni", "inet", "oimg", "oimg100", "inet84-20", "inet84-100"]
+train_method = ["", "-seqep"]#, "-iid"]  # blank means "meta"
+eval_flavors = ["no-sgd", "unfrozen", "iid-unfrozen"]
 
 # LR variables are different depending on train_method. But we can sweep over various rates, regardless of model.
 adam_LRs = [{"lr": lr} for lr in [0.003, 0.001, 0.0003]]
@@ -37,18 +38,24 @@ inner_outer_LRs = [
 # an equivalent amount of data as the sequential learning runs, but for others we want them to be the maximum amount of
 # data possible, so we can see what is the upper limit on what the model can learn.
 oimg100_iid_train_test_splits = [(name, {"train_examples": t, "test_examples": e})
-                                 for name, t, e in [("", 15, 85), ("-med", 30, 70), ("-lg", 85, 15)]]
+                                 for name, t, e in [("", 15, 85), ("-med", 30, 70)]]
+                                 #for name, t, e in [("", 15, 85), ("-med", 30, 70), ("-lg", 85, 15)]]
 inet_iid_train_test_splits = [(name, {"train_examples": t, "test_examples": e})
-                              for name, t, e in [("", 30, 100), ("-lg", 500, 100)]]
+                              for name, t, e in [("", 30, 100)]]
+                              #for name, t, e in [("", 30, 100), ("-lg", 500, 100)]]
 
 # Different model types.
-models = [
+models_28px = [
+    {"model_name": "sanml", "encoder": "convnet",
+     "encoder_args": {"num_blocks": 3, "num_filters": 256, "padding": 0, "pool_size": [2, 2, 0]}},
+]
+models_84px = [
     {"model_name": "sanml", "encoder": "convnet", "encoder_args": {"num_blocks": 4, "num_filters": 256}},
-    {"model_name": "resnet18", "encoder": "resnet18", "encoder_args": {}},
+    #{"model_name": "resnet18", "encoder": "resnet18", "encoder_args": {}},
 ]
 
 # Whether to lobotomize.
-lobo_options = [None]  # [True, False]
+lobo_options = [True, False]
 
 # Nothing special about these numbers, just need to be different random selections.
 seeds = [29384, 93242, 49289]
@@ -69,7 +76,10 @@ def launch_jobs(parser, args, launcher_args):
     launched = 1
 
     # Estimate total number of jobs to be run.
-    total = len(datasets) * len(models) * len(lobo_options) * len(seeds)
+    total = 0  # len(datasets) * len(models) * len(lobo_options) * len(seeds)
+    for d in datasets:
+        models = models_28px if d == "omni" else models_84px
+        total += len(models) * len(lobo_options) * len(seeds)
     num_iid = len([1 for m in train_method if m == "-iid"])
     num_inner_outer = len(train_method) - num_iid
     total *= (num_iid * len(adam_LRs) + num_inner_outer * len(inner_outer_LRs))
@@ -103,6 +113,7 @@ def launch_jobs(parser, args, launcher_args):
             # Set all models to just evaluate once at the very end.
             config["eval_steps"] = [300000]
 
+            models = models_28px if dataset == "omni" else models_84px
             for model_desc in models:
                 # no need to copy the config here, can just keep updating the same config instance
                 config["model_name"] = model_desc["model_name"]
@@ -129,7 +140,14 @@ def launch_jobs(parser, args, launcher_args):
                         cfg.update(lr_cfg)
 
                         # Eval settings.
-                        # First set to ImageNet84 if needed.
+                        # First, only keep the evals we want.
+                        desired_evals = []
+                        for evset in cfg["eval"]:
+                            for k, v in evset.items():
+                                if k in eval_flavors:
+                                    desired_evals.append({k: v})
+                        cfg["eval"] = desired_evals
+                        # Now, set to ImageNet84 if needed.
                         if dataset.startswith("inet84"):
                             for evset in cfg["eval"]:
                                 for evcfg in evset.values():
