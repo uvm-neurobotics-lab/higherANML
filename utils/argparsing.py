@@ -116,6 +116,7 @@ class ActionWrapper(argparse.Action):
     """
     A wrapper class which is used to detect which arguments were explicitly supplied by the user.
     """
+
     def __init__(self, action):
         super().__init__(**dict(action._get_kwargs()))
         self.action = action
@@ -139,6 +140,7 @@ class ArgParser(argparse.ArgumentParser):
     an argument on the command-line. It can tell the difference between when the default value is used and when the user
     explicitly supplies the default.
     """
+
     def _add_action(self, action):
         action = ActionWrapper(action)
         return super()._add_action(action)
@@ -267,14 +269,13 @@ def add_dataset_arg(parser, dflt_data_dir="experiments/data", add_resize_arg=Tru
     return parser
 
 
-def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
+def get_dataset_sampler(args, sampler_type="oml"):
     """
     Parses the dataset arguments, as given by `add_dataset_args()`. May require additional arguments, depending on
     which type of sampler is being requested.
 
     Args:
         args (argparse.Namespace or dict): The parsed args.
-        greyscale (bool): Whether to convert images to greyscale, or None to use the default coloring.
         sampler_type (str): The type of sampler to get. One of:
             - "oml": OML/ANML-style sampler for continual meta-learning.
             - "iid": DataLoaders for standard i.i.d. sampling of shuffled batches.
@@ -299,7 +300,7 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
         args = args.copy()
 
     # These args are allowed to be missing.
-    for arg in ("imgs_per_class", "im_size", "batch_size", "train_size", "val_size", "seed"):
+    for arg in ("greyscale", "imgs_per_class", "im_size", "batch_size", "train_size", "val_size", "seed"):
         args.setdefault(arg)
     args.setdefault("augment", False)
     args.setdefault("use_random_split", False)
@@ -307,57 +308,58 @@ def get_dataset_sampler(args, greyscale=None, sampler_type="oml"):
     args["data_path"] = Path(args["data_path"])
 
     if args["dataset"] == "omni":
-        if greyscale is False:
-            raise ValueError("Omniglot is only available in greyscale.")
         if sampler_type == "oml":
             return omniglot.create_OML_sampler(root=args["data_path"] / "omni", download=args["download"],
-                                               im_size=args["im_size"], train_size=args["train_size"],
-                                               val_size=args["val_size"], augment=args["augment"],
-                                               seed=args["seed"])
+                                               im_size=args["im_size"], greyscale=args["greyscale"],
+                                               train_size=args["train_size"], val_size=args["val_size"],
+                                               augment=args["augment"], seed=args["seed"])
         elif sampler_type == "iid":
             return omniglot.create_iid_sampler(root=args["data_path"] / "omni", download=args["download"],
-                                               im_size=args["im_size"], batch_size=args["batch_size"],
-                                               train_size=args["train_size"], val_size=args["val_size"],
-                                               augment=args["augment"])
+                                               im_size=args["im_size"], greyscale=args["greyscale"],
+                                               batch_size=args["batch_size"], train_size=args["train_size"],
+                                               val_size=args["val_size"], augment=args["augment"])
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")
     elif args["dataset"] == "miniimagenet":
         if sampler_type == "oml":
             return imagenet.create_OML_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
-                                               im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
-                                               train_size=args["train_size"], val_size=args["val_size"],
-                                               seed=args["seed"])
+                                               im_size=args["im_size"], greyscale=args["greyscale"],
+                                               augment=args["augment"], train_size=args["train_size"],
+                                               val_size=args["val_size"], seed=args["seed"])
         elif sampler_type == "iid":
             return imagenet.create_iid_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
-                                               im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
-                                               batch_size=args["batch_size"], train_size=args["train_size"],
-                                               val_size=args["val_size"])
+                                               im_size=args["im_size"], greyscale=args["greyscale"],
+                                               augment=args["augment"], batch_size=args["batch_size"],
+                                               train_size=args["train_size"], val_size=args["val_size"])
     elif args["dataset"] == "imagenet84":
         if sampler_type == "oml":
             return imagenet84.create_OML_sampler(root=args["data_path"] / "ImageNet84",
                                                  num_images_per_class=args["imgs_per_class"], im_size=args["im_size"],
-                                                 greyscale=greyscale, augment=args["augment"], seed=args["seed"],
-                                                 train_size=args["train_size"], val_size=args["val_size"],
-                                                 random_split=args["use_random_split"])
+                                                 greyscale=args["greyscale"], augment=args["augment"],
+                                                 seed=args["seed"], train_size=args["train_size"],
+                                                 val_size=args["val_size"], random_split=args["use_random_split"])
         elif sampler_type == "iid":
             return imagenet84.create_iid_sampler(root=args["data_path"] / "ImageNet84",
                                                  num_images_per_class=args["imgs_per_class"], im_size=args["im_size"],
-                                                 greyscale=greyscale, augment=args["augment"], seed=args["seed"],
-                                                 batch_size=args["batch_size"], train_size=args["train_size"],
-                                                 val_size=args["val_size"], random_split=args["use_random_split"])
+                                                 greyscale=args["greyscale"], augment=args["augment"],
+                                                 seed=args["seed"], batch_size=args["batch_size"],
+                                                 train_size=args["train_size"], val_size=args["val_size"],
+                                                 random_split=args["use_random_split"])
     elif args["dataset"] == "omniimage":
         if sampler_type == "oml":
             return omniimage.create_OML_sampler(root=args["data_path"] / "omniimage",
                                                 num_images_per_class=args["imgs_per_class"], download=args["download"],
-                                                im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
-                                                train_size=args["train_size"], val_size=args["val_size"],
-                                                random_split=args["use_random_split"], seed=args["seed"])
+                                                im_size=args["im_size"], greyscale=args["greyscale"],
+                                                augment=args["augment"], train_size=args["train_size"],
+                                                val_size=args["val_size"], random_split=args["use_random_split"],
+                                                seed=args["seed"])
         elif sampler_type == "iid":
             return omniimage.create_iid_sampler(root=args["data_path"] / "omniimage",
                                                 num_images_per_class=args["imgs_per_class"], download=args["download"],
-                                                im_size=args["im_size"], greyscale=greyscale, augment=args["augment"],
-                                                batch_size=args["batch_size"], train_size=args["train_size"],
-                                                val_size=args["val_size"], random_split=args["use_random_split"])
+                                                im_size=args["im_size"], greyscale=args["greyscale"],
+                                                augment=args["augment"], batch_size=args["batch_size"],
+                                                train_size=args["train_size"], val_size=args["val_size"],
+                                                random_split=args["use_random_split"])
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")
     else:
@@ -458,7 +460,8 @@ def add_wandb_args(parser, allow_id=False):
     parser.add_argument("--entity", help="Entity to use for W&B logging." + id_text)
     parser.add_argument("--group", help="Name under which to group this run in W&B.")
     if allow_id:
-        parser.add_argument("--id", help="ID to use for W&B logging. If this project already exists, it will be resumed.")
+        parser.add_argument("--id",
+                            help="ID to use for W&B logging. If this project already exists, it will be resumed.")
     return parser
 
 
