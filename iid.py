@@ -168,7 +168,7 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
     query_loader = DataLoader(query_set, batch_size=config["batch_size"], shuffle=True)
 
     init_sample = maybe_collect_init_sample(model, config, support_set, device)
-    opt = fine_tuning_setup(model, config, init_sample)
+    opt = fine_tuning_setup(model, config, sampler.num_test_classes(), init_sample)
 
     train_perf_trajectory = []
     test_perf_trajectory = []

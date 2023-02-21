@@ -348,7 +348,7 @@ def test_train(sampler, sampler_input_shape, config, device="cuda", log_to_wandb
     assert len(train_classes) > 0
 
     init_sample = maybe_collect_init_sample(model, config, train_classes, device)
-    opt = fine_tuning_setup(model, config, init_sample)
+    opt = fine_tuning_setup(model, config, sampler.num_test_classes(), init_sample)
 
     train_perf_trajectory = []
     test_perf_trajectory = []

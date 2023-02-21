@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from .legacy import ANML as LegacyANML
@@ -148,6 +149,18 @@ def maybe_collect_init_sample(model, config, dataset, device):
         return collect_sparse_init_sample(model.encoder, dataset, device)
 
 
+def replace_head_if_needed(model, num_classes_needed):
+    # HACK: We will use our special model naming to identify the layer that needs to be replaced. Not all models will
+    # conform to this naming! This is just good enough to get our experiments done for now.
+    # TODO: We can't make this universal but it could be improved to work with more models.
+    old_outlayer = model.classifier.linear
+    if old_outlayer.out_features < num_classes_needed:
+        # Linear layer isn't big enough. Needs to be replaced.
+        # NOTE: If this ever replaces more stuff like norm layers, then we need to make sure it's set in the correct
+        # mode (e.g., eval_mode).
+        model.classifier.linear = nn.Linear(old_outlayer.in_features, num_classes_needed)
+
+
 def kaiming_reinit(params, model):
     for n, p in collect_matching_named_params(model, params):
         # HACK: Here we will use the parameter naming to tell us how the params should be initialized. This may not be
@@ -256,19 +269,24 @@ def create_optimizer(model, config):
     return opt
 
 
-def fine_tuning_setup(model, config, init_support_set=None):
+def fine_tuning_setup(model, config, num_test_classes, init_support_set=None):
     """
     Set up the given model for fine-tuning; creating an optimizer to optimize parameters selected by the given config,
     and reinitialize certain parameters as dictated by the config.
 
     Args:
-        model (torch.nn.Module): The model to be fine-tuned.
+        model (torch.nn.Module): The model to be fine-tuned. Will be modified to prepare for fine-tuning.
         config (dict): The config with fine-tuning and optimization parameters.
+        num_test_classes (int): The number of classes in the test set (therefore the number of outputs needed in the
+                                new classification head to be fine-tuned.
         init_support_set (tuple): A pair of (feature, label) tensors which may be used for any special initialization.
 
     Returns:
         torch.optim.Optimizer: The optimizer that can be used in a training loop.
     """
+    # First, we want to replace the last linear layer if and only if it doesn't have enough outputs.
+    replace_head_if_needed(model, num_test_classes)
+
     # Set up which parameters we will be fine-tuning and/or learning from scratch.
     # First, reinitialize layers that we want to learn from scratch.
     reinit_params(model, config, init_support_set)

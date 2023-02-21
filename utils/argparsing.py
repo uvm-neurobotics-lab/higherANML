@@ -297,9 +297,7 @@ def get_dataset_sampler(args, sampler_type="oml"):
             args[k] = getattr(old_args, k, None)
     else:
         # Do not modify the config that was passed in.
-        print(f"seed value before copy = {args['seed']}")
         args = args.copy()
-        print(f"copied config with seed = {args['seed']}")
 
     # These args are allowed to be missing.
     for arg in ("greyscale", "imgs_per_class", "im_size", "batch_size", "train_size", "val_size", "seed"):
@@ -308,7 +306,6 @@ def get_dataset_sampler(args, sampler_type="oml"):
     args.setdefault("use_random_split", False)
     # Ensure we have a Path type here.
     args["data_path"] = Path(args["data_path"])
-    print(f"seed value after setdefault = {args['seed']}")
 
     if args["dataset"] == "omni":
         if sampler_type == "oml":
