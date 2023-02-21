@@ -193,7 +193,7 @@ def create_datasets(root, download=True, num_images_per_class=None, im_size=None
 
 
 def create_iid_sampler(root, download=True, num_images_per_class=None, im_size=None, greyscale=False, batch_size=128,
-                       train_size=None, val_size=None, augment=False, random_split=False):
+                       train_size=None, val_size=None, augment=False, random_split=False, seed=None):
     """
     Create a sampler for OmniImage data which will sample shuffled batches in the standard way for i.i.d. training.
 
@@ -209,6 +209,7 @@ def create_iid_sampler(root, download=True, num_images_per_class=None, im_size=N
         val_size (int or float): Number (or fraction) of samples from the train set to use for validation.
         augment (bool): Whether to apply data augmentation to the training set.
         random_split (bool): Whether to randomly split the data, or use the predetermined OmniImage splits.
+        seed (int or list[int]): Random seed for sampling.
 
     Returns:
         IIDSampler: The sampler class.
@@ -216,7 +217,7 @@ def create_iid_sampler(root, download=True, num_images_per_class=None, im_size=N
     """
     train, test, image_shape = create_datasets(root, download, num_images_per_class, im_size, greyscale, augment,
                                                random_split)
-    return IIDSampler(train, test, batch_size, train_size, val_size), image_shape
+    return IIDSampler(train, test, batch_size, train_size, val_size, seed), image_shape
 
 
 def create_OML_sampler(root, download=True, num_images_per_class=None, im_size=None, greyscale=False, train_size=None,
@@ -244,4 +245,4 @@ def create_OML_sampler(root, download=True, num_images_per_class=None, im_size=N
     """
     train, test, image_shape = create_datasets(root, download, num_images_per_class, im_size, greyscale, augment,
                                                random_split)
-    return ContinualMetaLearningSampler(train, test, seed, train_size, val_size), image_shape
+    return ContinualMetaLearningSampler(train, test, seed, train_size, val_size, seed), image_shape

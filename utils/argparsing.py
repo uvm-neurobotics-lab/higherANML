@@ -297,7 +297,9 @@ def get_dataset_sampler(args, sampler_type="oml"):
             args[k] = getattr(old_args, k, None)
     else:
         # Do not modify the config that was passed in.
+        print(f"seed value before copy = {args['seed']}")
         args = args.copy()
+        print(f"copied config with seed = {args['seed']}")
 
     # These args are allowed to be missing.
     for arg in ("greyscale", "imgs_per_class", "im_size", "batch_size", "train_size", "val_size", "seed"):
@@ -306,6 +308,7 @@ def get_dataset_sampler(args, sampler_type="oml"):
     args.setdefault("use_random_split", False)
     # Ensure we have a Path type here.
     args["data_path"] = Path(args["data_path"])
+    print(f"seed value after setdefault = {args['seed']}")
 
     if args["dataset"] == "omni":
         if sampler_type == "oml":
@@ -317,7 +320,7 @@ def get_dataset_sampler(args, sampler_type="oml"):
             return omniglot.create_iid_sampler(root=args["data_path"] / "omni", download=args["download"],
                                                im_size=args["im_size"], greyscale=args["greyscale"],
                                                batch_size=args["batch_size"], train_size=args["train_size"],
-                                               val_size=args["val_size"], augment=args["augment"])
+                                               val_size=args["val_size"], augment=args["augment"], seed=args["seed"])
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")
     elif args["dataset"] == "miniimagenet":
@@ -330,7 +333,8 @@ def get_dataset_sampler(args, sampler_type="oml"):
             return imagenet.create_iid_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
                                                im_size=args["im_size"], greyscale=args["greyscale"],
                                                augment=args["augment"], batch_size=args["batch_size"],
-                                               train_size=args["train_size"], val_size=args["val_size"])
+                                               train_size=args["train_size"], val_size=args["val_size"],
+                                               seed=args["seed"])
     elif args["dataset"] == "imagenet84":
         if sampler_type == "oml":
             return imagenet84.create_OML_sampler(root=args["data_path"] / "ImageNet84",
@@ -359,7 +363,7 @@ def get_dataset_sampler(args, sampler_type="oml"):
                                                 im_size=args["im_size"], greyscale=args["greyscale"],
                                                 augment=args["augment"], batch_size=args["batch_size"],
                                                 train_size=args["train_size"], val_size=args["val_size"],
-                                                random_split=args["use_random_split"])
+                                                random_split=args["use_random_split"], seed=args["seed"])
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")
     else:

@@ -261,7 +261,7 @@ def create_iid_sampler(root, num_images_per_class=None, im_size=None, greyscale=
     """
     train, test, image_shape = create_datasets(root, num_images_per_class, im_size, greyscale, augment, random_split,
                                                seed)
-    return IIDSampler(train, test, batch_size, train_size, val_size), image_shape
+    return IIDSampler(train, test, batch_size, train_size, val_size, seed), image_shape
 
 
 def create_OML_sampler(root, num_images_per_class=None, im_size=None, greyscale=False, train_size=None,

@@ -228,7 +228,7 @@ def create_datasets(root, download=True, preload_train=False, preload_test=False
 
 
 def create_iid_sampler(root, download=True, preload_train=False, preload_test=False, im_size=28, greyscale=True,
-                       batch_size=256, train_size=None, val_size=None, augment=False):
+                       batch_size=256, train_size=None, val_size=None, augment=False, seed=None):
     """
     Create a sampler for Omniglot data which will sample shuffled batches in the standard way for i.i.d. training.
 
@@ -243,6 +243,7 @@ def create_iid_sampler(root, download=True, preload_train=False, preload_test=Fa
         train_size (int or float): Number (or fraction) of samples from the train set to actually use for training.
         val_size (int or float): Number (or fraction) of samples from the train set to use for validation.
         augment (bool): Whether to apply data augmentation to the training set.
+        seed (int or list[int]): Random seed for sampling.
 
     Returns:
         IIDSampler: The sampler class.
@@ -250,7 +251,7 @@ def create_iid_sampler(root, download=True, preload_train=False, preload_test=Fa
     """
     omni_train, omni_test, image_shape = create_datasets(root, download, preload_train, preload_test, im_size,
                                                          greyscale, augment)
-    return IIDSampler(omni_train, omni_test, batch_size, train_size, val_size), image_shape
+    return IIDSampler(omni_train, omni_test, batch_size, train_size, val_size, seed), image_shape
 
 
 def create_OML_sampler(root, download=True, preload_train=False, preload_test=False, im_size=28, greyscale=True,
@@ -268,8 +269,8 @@ def create_OML_sampler(root, download=True, preload_train=False, preload_test=Fa
         greyscale (bool, optional): If False, replicates the 1-channel images to 3 channels when sampling.
         train_size (int or float): Number (or fraction) of samples from the train set to actually use for training.
         val_size (int or float): Number (or fraction) of samples from the train set to use for validation.
-        seed (int or list[int]): Random seed for sampling.
         augment (bool): Whether to apply data augmentation to the training set.
+        seed (int or list[int]): Random seed for sampling.
 
     Returns:
         ContinualMetaLearningSampler: The sampler class.
