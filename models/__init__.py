@@ -158,7 +158,8 @@ def replace_head_if_needed(model, num_classes_needed):
         # Linear layer isn't big enough. Needs to be replaced.
         # NOTE: If this ever replaces more stuff like norm layers, then we need to make sure it's set in the correct
         # mode (e.g., eval_mode).
-        model.classifier.linear = nn.Linear(old_outlayer.in_features, num_classes_needed)
+        model.classifier.linear = nn.Linear(old_outlayer.in_features, num_classes_needed,
+                                            device=old_outlayer.weight.device)
 
 
 def kaiming_reinit(params, model):
