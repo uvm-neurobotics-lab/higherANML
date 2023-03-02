@@ -245,4 +245,4 @@ def create_OML_sampler(root, download=True, num_images_per_class=None, im_size=N
     """
     train, test, image_shape = create_datasets(root, download, num_images_per_class, im_size, greyscale, augment,
                                                random_split)
-    return ContinualMetaLearningSampler(train, test, seed, train_size, val_size, seed), image_shape
+    return ContinualMetaLearningSampler(train, test, seed, train_size, val_size), image_shape
