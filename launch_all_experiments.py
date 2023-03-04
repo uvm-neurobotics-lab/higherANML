@@ -23,7 +23,8 @@ import utils.argparsing as argutils
 
 datasets = ["oimg"]
 #datasets = ["omni", "inet", "oimg", "oimg100", "inet84-20", "inet84-100"]
-train_method = ["", "-seqep"]#, "-iid"]  # blank means "meta"
+train_method = ["-iid"]
+#train_method = ["", "-seqep", "-iid"]  # blank means "meta"
 eval_flavors = ["no-sgd", "unfrozen", "iid-unfrozen"]
 
 # LR variables are different depending on train_method. But we can sweep over various rates, regardless of model.
@@ -55,7 +56,17 @@ models_84px = [
 ]
 
 # Whether to lobotomize.
-lobo_options = [True, False]
+lobo_options = [
+    {"lobotomize": True},
+    {"lobotomize": False},
+]
+iid_lobo_options = [
+    #{"lobo_rate": 0, "lobo_size": 0},
+    {"lobo_rate": 1, "lobo_size": 50},
+    {"lobo_rate": 1, "lobo_size": 100},
+    {"lobo_rate": 1, "lobo_size": 350},
+    {"lobo_rate": 1, "lobo_size": 700},
+]
 
 # Nothing special about these numbers, just need to be different random selections.
 seeds = [29384, 93242, 49289]
@@ -79,10 +90,10 @@ def launch_jobs(parser, args, launcher_args):
     total = 0  # len(datasets) * len(models) * len(lobo_options) * len(seeds)
     for d in datasets:
         models = models_28px if d == "omni" else models_84px
-        total += len(models) * len(lobo_options) * len(seeds)
+        total += len(models) * len(seeds)
     num_iid = len([1 for m in train_method if m == "-iid"])
     num_inner_outer = len(train_method) - num_iid
-    total *= (num_iid * len(adam_LRs) + num_inner_outer * len(inner_outer_LRs))
+    total *= (num_iid * len(iid_lobo_options) * len(adam_LRs) + num_inner_outer * len(lobo_options) * len(inner_outer_LRs))
     print(f"Preparing to launch {total} jobs...")
 
     # Create a giant loop over all the different valid combinations of these settings.
@@ -120,23 +131,15 @@ def launch_jobs(parser, args, launcher_args):
                 config["model_args"]["encoder"] = model_desc["encoder"]
                 config["model_args"]["encoder_args"] = model_desc["encoder_args"]
 
-                for lobo in lobo_options:
-                    if lobo is not None:  # Only change config if we explicitly request it.
-                        # Lobo settings depend on train method.
-                        if method == "-iid":
-                            if lobo:
-                                config["lobo_rate"] = 1
-                                config["lobo_size"] = config["model_args"]["classifier_args"]["num_classes"]
-                            else:
-                                config["lobo_rate"] = 0
-                                config["lobo_size"] = 0
-                        else:
-                            config["lobotomize"] = lobo
+                lobopts = iid_lobo_options if method == "-iid" else lobo_options
+                for lobo in lobopts:
+                    lbcfg = copy(config)  # copy config just to be safe; keep settings in each iteration separate
+                    lbcfg.update(lobo)
 
                     # LR settings depend on train method.
                     LRs = adam_LRs if method == "-iid" else inner_outer_LRs
                     for lr_cfg in LRs:
-                        cfg = copy(config)  # copy config just to be safe; keep settings in each iteration separate
+                        cfg = copy(lbcfg)  # copy config just to be safe; keep settings in each iteration separate
                         cfg.update(lr_cfg)
 
                         # Eval settings.
