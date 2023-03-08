@@ -21,10 +21,10 @@ import launch_train
 import utils.argparsing as argutils
 
 
-datasets = ["oimg"]
-#datasets = ["omni", "inet", "oimg", "oimg100", "inet84-20", "inet84-100"]
-train_method = ["-iid"]
-#train_method = ["", "-seqep", "-iid"]  # blank means "meta"
+datasets = ["omni"]
+# datasets = ["omni", "inet", "oimg", "oimg100", "inet84-20", "inet84-100"]
+train_method = [""]
+# train_method = ["", "-seqep", "-iid"]  # blank means "meta"
 eval_flavors = ["no-sgd", "unfrozen", "iid-unfrozen"]
 
 # LR variables are different depending on train_method. But we can sweep over various rates, regardless of model.
@@ -47,12 +47,14 @@ inet_iid_train_test_splits = [(name, {"train_examples": t, "test_examples": e})
 
 # Different model types.
 models_28px = [
-    {"model_name": "sanml", "encoder": "convnet",
-     "encoder_args": {"num_blocks": 3, "num_filters": 256, "padding": 0, "pool_size": [2, 2, 0]}},
+    # {"model_name": "sanml", "encoder": "convnet",
+    #  "encoder_args": {"num_blocks": 3, "num_filters": 256, "padding": 0, "pool_size": [2, 2, 0]}},
+    {"model_name": "anml", "encoder": "anml-encoder", "inner_params": ["encoder.rln", "classifier"],
+     "encoder_args": {"rln_chs": 256, "nm_chs": 112, "pool_rln_output": False}},
 ]
 models_84px = [
     {"model_name": "sanml", "encoder": "convnet", "encoder_args": {"num_blocks": 4, "num_filters": 256}},
-    #{"model_name": "resnet18", "encoder": "resnet18", "encoder_args": {}},
+    # {"model_name": "resnet18", "encoder": "resnet18", "encoder_args": {}},
 ]
 
 # Whether to lobotomize.
@@ -61,7 +63,7 @@ lobo_options = [
     {"lobotomize": False},
 ]
 iid_lobo_options = [
-    #{"lobo_rate": 0, "lobo_size": 0},
+    {"lobo_rate": 0, "lobo_size": 0},
     {"lobo_rate": 1, "lobo_size": 50},
     {"lobo_rate": 1, "lobo_size": 100},
     {"lobo_rate": 1, "lobo_size": 350},
@@ -130,6 +132,10 @@ def launch_jobs(parser, args, launcher_args):
                 config["model_name"] = model_desc["model_name"]
                 config["model_args"]["encoder"] = model_desc["encoder"]
                 config["model_args"]["encoder_args"] = model_desc["encoder_args"]
+                if "inner_params" in model_desc:
+                    config["inner_params"] = model_desc["inner_params"]
+                if "outer_params" in model_desc:
+                    config["outer_params"] = model_desc["outer_params"]
 
                 lobopts = iid_lobo_options if method == "-iid" else lobo_options
                 for lobo in lobopts:

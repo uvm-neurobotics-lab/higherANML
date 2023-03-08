@@ -13,7 +13,7 @@ lobotomize: false
 batch_size: 1
 num_batches: 20
 train_cycles: 1
-val_sample_size: 200
+val_sample_size: 0
 remember_size: 100
 remember_only: false
 inner_lr: 0.001
