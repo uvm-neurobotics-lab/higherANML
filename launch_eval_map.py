@@ -164,7 +164,7 @@ def get_input_output_dirs(config, output, flavor, dry_run):
     return inpath, outpath
 
 
-def build_command_args(config, outpath, force):
+def build_command_args(config, outpath, force, keep_existing_outputs=False):
     # Enforce that at least one of these variables is present, so that we get a valid combination.
     keys = ("model", "dataset", "classes", "train_examples", "test_examples", "epochs", "lr")
     assert any(k in config for k in keys)
@@ -212,6 +212,9 @@ def build_command_args(config, outpath, force):
         outfile = outpath / unique_filename
         if outfile.exists():
             existing_output_files.append(outfile)
+            if keep_existing_outputs:
+                # Do not add an argline for this; just skip it.
+                continue
         # The first `len(fixed_values)` args are the fixed args, which are already specified by the config, so don't
         # put them on the command line.
         line = ["--output", outfile]
@@ -274,10 +277,10 @@ def place_eval_notebook(outpath, force, dry_run):
         print(f"Would place eval notebook into the output folder: {nbfile.name}")
 
 
-def build_commands(config, inpath, outpath, cluster, verbose, force, dry_run, launcher_args):
+def build_commands(config, inpath, outpath, cluster, verbose, force, keep_existing_outputs, dry_run, launcher_args):
     # Get one line of arguments for each unique command.
     # NOTE: This needs to be done before the config is written to disk.
-    arglines = build_command_args(config, outpath, force)
+    arglines = build_command_args(config, outpath, force, keep_existing_outputs)
 
     # For files we write to the destination folder, use a UUID to avoid name collisions with other jobs outputting to
     # the same folder.
@@ -315,13 +318,14 @@ def build_commands(config, inpath, outpath, cluster, verbose, force, dry_run, la
     return cmd
 
 
-def launch(config, output=None, flavor=None, cluster="dggpu", verbose=0, force=False, dry_run=False,
-           launch_verbose=False, launcher_args=None):
+def launch(config, output=None, flavor=None, cluster="dggpu", verbose=0, force=False, keep_existing_outputs=False,
+           dry_run=False, launch_verbose=False, launcher_args=None):
     # Get destination path.
     inpath, outpath = get_input_output_dirs(config, output, flavor, dry_run)
 
     # Get command and corresponding list of arguments.
-    command = build_commands(config, inpath, outpath, cluster, verbose, force, dry_run, launcher_args)
+    command = build_commands(config, inpath, outpath, cluster, verbose, force, keep_existing_outputs, dry_run,
+                             launcher_args)
 
     # Launch the jobs.
     return call_sbatch(command, launch_verbose, dry_run)
