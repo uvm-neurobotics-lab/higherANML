@@ -283,11 +283,6 @@ def get_dataset_sampler(args, sampler_type="oml"):
         ContinualMetaLearningSampler or IIDSampler: The sampler.
         tuple: The shape of the images that will be returned by the sampler (they will all be the same size).
     """
-    import datasets.imagenet84 as imagenet84
-    import datasets.mini_imagenet as imagenet
-    import datasets.omniglot as omniglot
-    import datasets.omniimage as omniimage
-
     # Turn namespace into dict.
     if isinstance(args, argparse.Namespace):
         old_args = args
@@ -308,6 +303,7 @@ def get_dataset_sampler(args, sampler_type="oml"):
     args["data_path"] = Path(args["data_path"])
 
     if args["dataset"] == "omni":
+        import datasets.omniglot as omniglot
         if sampler_type == "oml":
             return omniglot.create_OML_sampler(root=args["data_path"] / "omni", download=args["download"],
                                                im_size=args["im_size"], greyscale=args["greyscale"],
@@ -321,6 +317,7 @@ def get_dataset_sampler(args, sampler_type="oml"):
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")
     elif args["dataset"] == "miniimagenet":
+        import datasets.mini_imagenet as imagenet
         if sampler_type == "oml":
             return imagenet.create_OML_sampler(root=args["data_path"] / "mini-imagenet", download=args["download"],
                                                im_size=args["im_size"], greyscale=args["greyscale"],
@@ -333,6 +330,7 @@ def get_dataset_sampler(args, sampler_type="oml"):
                                                train_size=args["train_size"], val_size=args["val_size"],
                                                seed=args["seed"])
     elif args["dataset"] == "imagenet84":
+        import datasets.imagenet84 as imagenet84
         if sampler_type == "oml":
             return imagenet84.create_OML_sampler(root=args["data_path"] / "ImageNet84",
                                                  num_images_per_class=args["imgs_per_class"], im_size=args["im_size"],
@@ -347,6 +345,7 @@ def get_dataset_sampler(args, sampler_type="oml"):
                                                  train_size=args["train_size"], val_size=args["val_size"],
                                                  random_split=args["use_random_split"])
     elif args["dataset"] == "omniimage":
+        import datasets.omniimage as omniimage
         if sampler_type == "oml":
             return omniimage.create_OML_sampler(root=args["data_path"] / "omniimage",
                                                 num_images_per_class=args["imgs_per_class"], download=args["download"],
