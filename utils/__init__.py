@@ -223,7 +223,7 @@ def collect_matching_named_params(model, param_list):
 
     Args:
         model (torch.nn.Module): The model from which to get parameters.
-        param_list (list[str] or str):
+        param_list (list[str] or str): A string or list of strings to match names against.
 
     Returns:
         list: A list of (name, param) tuples, in the order returned from `model.named_parameters()`.
@@ -257,6 +257,42 @@ def collect_matching_named_params(model, param_list):
 def collect_matching_params(model, param_list):
     """ Identical to `collect_matching_named_params()`, but drops the name from each item. """
     return [p for _, p in collect_matching_named_params(model, param_list)]
+
+
+def limit_model_optimization(model, param_names_to_optimize):
+    """
+    Modifies the model parameters so that only the given params will be optimized. Uses the `requires_grad` property to
+    do so.
+
+    Args:
+        model (torch.nn.Module): The model whose parameters we wish to modify.
+        param_names_to_optimize (list[str] or set[str]): The list of exact names of the parameters which *should* be
+            optimized, as given by `model.named_parameters()`.
+
+    Returns:
+        dict: A dict of string -> bool which stores the previous state of the `requires_grad` property of each param.
+            This can be used to restore the previous state by calling `restore_grad_state()`.
+    """
+    saved_opt_state = {}
+    # Select which layers will recieve updates during optimization, by setting the requires_grad property.
+    for name, p in model.named_parameters():
+        saved_opt_state[name] = p.requires_grad
+        p.requires_grad_(name in param_names_to_optimize)
+    return saved_opt_state
+
+
+def restore_grad_state(model, requires_grad_state):
+    """
+    Sets the `requires_grad` property for each layer as given by `requires_grad_state`.
+
+    Args:
+        model (torch.nn.Module): The model whose parameters we wish to modify.
+        requires_grad_state (dict[str -> bool]): A dictionary containing the desired state of `requires_grad`.
+    Raises:
+        KeyError: if any of the named parameters are not present in the given `requires_grad_state`.
+    """
+    for name, p in model.named_parameters():
+        p.requires_grad_(requires_grad_state[name])
 
 
 def lobotomize(layer, classes):

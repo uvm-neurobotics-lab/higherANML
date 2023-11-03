@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Subset
 
 from .class_indexed_dataset import train_val_split
-from utils import unzip
+from utils import collate_images, unzip
 
 
 def possibly_empty_loader(dataset, batch_size):
@@ -102,6 +102,62 @@ class IIDSampler:
         """
         return possibly_empty_loader(self.val, self.batch_size)
 
+    def get_biased_sample(self, dataset, class_index, sample_index, classes, fraction_biased):
+        """
+        Get a batch of samples which is biased toward the given `classes`. A fraction (`fraction_biased`) of the
+        samples will be from the given set of classes, while the rest of the samples will be drawn from the full
+        dataset.
+
+        Args:
+            dataset (ClassIndexedDataset): The dataset to sample from. E.g. `self.train`.
+            class_index (list): A list of lists, where each element `i` is a list of indices of examples for class `i`.
+                The indices must correspond to the given `dataset`. E.g. `self.train_class_index`.
+            sample_index (list): A list of indices of examples from all classes. The indices must correspond to the
+                given `dataset`. E.g. `self.train_sample_index`.
+            classes (list): The indices of the classes to bias toward.
+            fraction_biased (float): A fraction [0.0, 1.0] of the total `self.batch_size` samples which will be
+                restricted to only the given classes.
+
+        Returns:
+            Tensor: The images sampled.
+            Tensor: The labels sampled.
+        """
+        num_biased = int(self.batch_size * fraction_biased)
+        num_unbiased = self.batch_size - num_biased
+        # Get a flattened list of all the desired classes. The "if" clause is to handle the case where the network
+        # output layer actually contains more classes than the dataset. In that case, some of the class indices may not
+        # actually exist, so we skip them.
+        desired_samples = [indices for cls in classes if cls < len(class_index) for indices in class_index[cls]]
+        if not desired_samples:
+            # This could happen if the network output layer actually contains more classes than the dataset itself. We
+            # might actually end up with no real classes. In that case, just take a normal unbiased sample.
+            num_biased = 0
+            num_unbiased = self.batch_size
+        # Sample `num_biased` only from this set of classes. Only sample with replacement if necessary.
+        biased_indices = self.rng.choice(desired_samples, size=num_biased, replace=(num_biased > len(desired_samples)))
+        # Now get the rest of the sample from all classes.
+        unbiased_indices = self.rng.choice(sample_index, size=num_unbiased, replace=(num_unbiased > len(sample_index)))
+        # Return the actual data.
+        samples = [dataset[idx] for idx in np.concatenate((biased_indices, unbiased_indices)).astype(int)]
+        return collate_images(samples)
+
+    def get_biased_train_sample(self, classes, fraction_biased):
+        """
+        Get a batch of samples from the training set which is biased toward the given `classes`. See
+        `get_biased_sample()` for full documentation.
+
+        Args:
+            classes (list): The indices of the classes to bias toward.
+            fraction_biased (float): A fraction [0.0, 1.0] of the total `self.batch_size` samples which will be
+                restricted to only the given classes.
+
+        Returns:
+            Tensor: The images sampled.
+            Tensor: The labels sampled.
+        """
+        return self.get_biased_sample(self.train_orig, self.train_class_index, self.train_sample_index, classes,
+                                      fraction_biased)
+
     def sample_support_and_query_sets(self, num_classes, support_size, query_size):
         """
         Sample a transfer learning problem.
@@ -133,7 +189,7 @@ class IIDSampler:
         num_available = class_sets[0]
         if not support_size or support_size >= len(num_available):
             # Use all training data.
-            raise ValueError(f"Support size is too large. Reuested {support_size} but we only have {num_available},"
+            raise ValueError(f"Support size is too large. Requested {support_size} but we only have {num_available},"
                              " leaving no room for a query set.")
         else:
             support_class_index, query_class_index = unzip(
@@ -148,4 +204,3 @@ class IIDSampler:
         support_set = Subset(self.test, support_sample_index)
         query_set = Subset(self.test, query_sample_index)
         return support_set, query_set
-

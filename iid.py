@@ -12,7 +12,8 @@ from tqdm import trange
 import models
 import utils.optimization
 from models import fine_tuning_setup, load_model, maybe_collect_init_sample
-from utils import ensure_config_param, flatten, get_matching_module, lobotomize
+from utils import (collect_matching_named_params, ensure_config_param, flatten, get_matching_module,
+                   limit_model_optimization, lobotomize, restore_grad_state)
 from utils.logging import forward_pass, overall_accuracy, StandardLog
 
 
@@ -41,6 +42,8 @@ def check_train_config(config):
         ensure_config_param(config, "lobo_size", of_type(int))
         # If we are performing lobotomy, then we need to know at which layer.
         ensure_config_param(config, "output_layer", of_type(str))
+        if "lobo_biased_fraction" in config:
+            ensure_config_param(config, "lobo_biased_fraction", lambda x: 0.0 <= x <= 1.0)
 
 
 def train(sampler, input_shape, config, device="cuda", verbose=0):
@@ -68,21 +71,37 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     output_layer = get_matching_module(model, config["output_layer"])
     lobo_rate = config.get("lobo_rate")
     lobo_size = config.get("lobo_size")
+    num_biased_steps = config.get("lobo_biased_steps")
+    lobo_biased_fraction = config.get("lobo_biased_fraction")
+    if "lobo_biased_params" in config:
+        # Only optimize these parameters during the biased steps.
+        lobo_opt_params = [k for k, _ in collect_matching_named_params(model, config["lobo_biased_params"])]
+    else:
+        # Optimize all params in the biased steps.
+        lobo_opt_params = None
     max_grad_norm = config.get("max_grad_norm", 0)
 
     # BEGIN TRAINING
     step = 1
     max_steps = config.get("max_steps", float("inf"))
     for epoch in range(1, config["epochs"] + 1):  # Epoch/step counts will be 1-based.
-        if lobo_rate and lobo_size and epoch % lobo_rate == 0:
-            lobotomize(output_layer, rng.choice(len(output_layer.weight), size=lobo_size, replace=False))
+        if lobo_rate and lobo_size and epoch != 1 and epoch % lobo_rate == 0:
+            zapped_classes = rng.choice(len(output_layer.weight), size=lobo_size, replace=False)
+            lobotomize(output_layer, zapped_classes)
+            for i in range(num_biased_steps):
+                images, labels = sampler.get_biased_train_sample(zapped_classes, lobo_biased_fraction)
+                run_one_step(images, labels, sampler, model, optimizer, log, epoch, step, lobo_opt_params,
+                             max_grad_norm, device)
+                step += 1
+                if step > max_steps:
+                    break
 
         step = run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps, max_grad_norm, device)
         if step > max_steps:
             break
         scheduler.step()
 
-    log.close(step-1, model, sampler, device)
+    log.close(step - 1, model, sampler, device)
 
 
 def run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps=float("inf"), max_grad_norm=0, device=None):
@@ -91,29 +110,42 @@ def run_one_epoch(sampler, model, optimizer, log, epoch, step, max_steps=float("
     model.train()
 
     for images, labels in sampler.train_loader:
-
-        # Move data to GPU once loaded.
-        images, labels = images.to(device), labels.to(device)
-
-        # Forward pass.
-        out, loss, acc = forward_pass(model, images, labels)
-
-        # Backpropagate.
-        optimizer.zero_grad()
-        loss.backward()
-        if max_grad_norm > 0:
-            clip_grad_norm_(model.parameters(), max_grad_norm)
-        optimizer.step()
-
-        # Record accuracy and other metrics. Do this after the backward pass in case we want to record gradients or
-        # save the latest model.
-        log.step(step, epoch, loss, acc, out, labels, model, sampler, device)
-
+        run_one_step(images, labels, sampler, model, optimizer, log, epoch, step, max_grad_norm=max_grad_norm,
+                     device=device)
         step += 1
         if step > max_steps:
             break
 
     return step
+
+
+def run_one_step(images, labels, sampler, model, optimizer, log, epoch, step, opt_params=None, max_grad_norm=0,
+                 device=None):
+    # Move data to GPU once loaded.
+    images, labels = images.to(device), labels.to(device)
+
+    # Only optimize the given layers during this step.
+    saved_opt_state = None
+    if opt_params:
+        saved_opt_state = limit_model_optimization(model, opt_params)
+
+    # Forward pass.
+    out, loss, acc = forward_pass(model, images, labels)
+
+    # Backpropagate.
+    optimizer.zero_grad()
+    loss.backward()
+    if max_grad_norm > 0:
+        clip_grad_norm_(model.parameters(), max_grad_norm)
+    optimizer.step()
+
+    # Reset the opt state.
+    if opt_params:
+        restore_grad_state(model, saved_opt_state)
+
+    # Record accuracy and other metrics. Do this after the backward pass in case we want to record gradients or
+    # save the latest model.
+    log.step(step, epoch, loss, acc, out, labels, model, sampler, device)
 
 
 def evaluate_and_log(model, name, loader, epoch, step, device, should_log):
