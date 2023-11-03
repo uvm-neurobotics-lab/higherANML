@@ -21,15 +21,16 @@ import launch_train
 import utils.argparsing as argutils
 
 
-datasets = ["omni"]
+datasets = ["inet", "oimg"]
 # datasets = ["omni", "inet", "oimg", "oimg100", "inet84-20", "inet84-100"]
 train_method = [""]
 # train_method = ["", "-seqep", "-iid"]  # blank means "meta"
-eval_flavors = ["no-sgd", "unfrozen", "iid-unfrozen"]
+eval_flavors = ["no-sgd", "olft", "unfrozen", "iid-unfrozen"]
 
 # LR variables are different depending on train_method. But we can sweep over various rates, regardless of model.
 adam_LRs = [{"lr": lr} for lr in [0.003, 0.001, 0.0003]]
 inner_outer_LRs = [
+    {"inner_lr": 0.1, "outer_lr": 0.001},
     {"inner_lr": 0.01, "outer_lr": 0.001},
     {"inner_lr": 0.001, "outer_lr": 0.001},
     {"inner_lr": 0.001, "outer_lr": 0.01},
@@ -47,14 +48,14 @@ inet_iid_train_test_splits = [(name, {"train_examples": t, "test_examples": e})
 
 # Different model types.
 models_28px = [
-    # {"model_name": "sanml", "encoder": "convnet",
-    #  "encoder_args": {"num_blocks": 3, "num_filters": 256, "padding": 0, "pool_size": [2, 2, 0]}},
+    {"model_name": "sanml", "encoder": "convnet",
+     "encoder_args": {"num_blocks": 3, "num_filters": 256, "padding": 0, "pool_size": [2, 2, 0]}},
     {"model_name": "anml", "encoder": "anml-encoder", "inner_params": ["encoder.rln", "classifier"],
      "encoder_args": {"rln_chs": 256, "nm_chs": 112, "pool_rln_output": False}},
 ]
 models_84px = [
-    {"model_name": "sanml", "encoder": "convnet", "encoder_args": {"num_blocks": 4, "num_filters": 256}},
-    # {"model_name": "resnet18", "encoder": "resnet18", "encoder_args": {}},
+    # {"model_name": "sanml", "encoder": "convnet", "encoder_args": {"num_blocks": 4, "num_filters": 256}},
+    {"model_name": "resnet18", "encoder": "resnet18", "encoder_args": {}},
 ]
 
 # Whether to lobotomize.
@@ -64,9 +65,9 @@ lobo_options = [
 ]
 iid_lobo_options = [
     {"lobo_rate": 0, "lobo_size": 0},
-    {"lobo_rate": 1, "lobo_size": 50},
-    {"lobo_rate": 1, "lobo_size": 100},
-    {"lobo_rate": 1, "lobo_size": 350},
+    #{"lobo_rate": 1, "lobo_size": 50},
+    #{"lobo_rate": 1, "lobo_size": 100},
+    #{"lobo_rate": 1, "lobo_size": 350},
     {"lobo_rate": 1, "lobo_size": 700},
 ]
 
