@@ -21,9 +21,9 @@ import launch_train
 import utils.argparsing as argutils
 
 
-datasets = ["inet", "oimg"]
+datasets = ["omni", "inet", "oimg"]
 # datasets = ["omni", "inet", "oimg", "oimg100", "inet84-20", "inet84-100"]
-train_method = [""]
+train_method = ["-iid"]
 # train_method = ["", "-seqep", "-iid"]  # blank means "meta"
 eval_flavors = ["no-sgd", "olft", "unfrozen", "iid-unfrozen"]
 
@@ -41,21 +41,21 @@ inner_outer_LRs = [
 # data possible, so we can see what is the upper limit on what the model can learn.
 oimg100_iid_train_test_splits = [(name, {"train_examples": t, "test_examples": e})
                                  for name, t, e in [("", 15, 85), ("-med", 30, 70)]]
-                                 #for name, t, e in [("", 15, 85), ("-med", 30, 70), ("-lg", 85, 15)]]
+                                 # for name, t, e in [("", 15, 85), ("-med", 30, 70), ("-lg", 85, 15)]]
 inet_iid_train_test_splits = [(name, {"train_examples": t, "test_examples": e})
                               for name, t, e in [("", 30, 100)]]
-                              #for name, t, e in [("", 30, 100), ("-lg", 500, 100)]]
+                              # for name, t, e in [("", 30, 100), ("-lg", 500, 100)]]
 
 # Different model types.
 models_28px = [
     {"model_name": "sanml", "encoder": "convnet",
      "encoder_args": {"num_blocks": 3, "num_filters": 256, "padding": 0, "pool_size": [2, 2, 0]}},
-    {"model_name": "anml", "encoder": "anml-encoder", "inner_params": ["encoder.rln", "classifier"],
-     "encoder_args": {"rln_chs": 256, "nm_chs": 112, "pool_rln_output": False}},
+    # {"model_name": "anml", "encoder": "anml-encoder", "inner_params": ["encoder.rln", "classifier"],
+    #  "encoder_args": {"rln_chs": 256, "nm_chs": 112, "pool_rln_output": False}},
 ]
 models_84px = [
-    # {"model_name": "sanml", "encoder": "convnet", "encoder_args": {"num_blocks": 4, "num_filters": 256}},
-    {"model_name": "resnet18", "encoder": "resnet18", "encoder_args": {}},
+    {"model_name": "sanml", "encoder": "convnet", "encoder_args": {"num_blocks": 4, "num_filters": 256}},
+    # {"model_name": "resnet18", "encoder": "resnet18", "encoder_args": {}},
 ]
 
 # Whether to lobotomize.
@@ -64,11 +64,9 @@ lobo_options = [
     {"lobotomize": False},
 ]
 iid_lobo_options = [
-    {"lobo_rate": 0, "lobo_size": 0},
-    #{"lobo_rate": 1, "lobo_size": 50},
-    #{"lobo_rate": 1, "lobo_size": 100},
-    #{"lobo_rate": 1, "lobo_size": 350},
-    {"lobo_rate": 1, "lobo_size": 700},
+    {"lobo_rate": 1, "lobo_biased_params": "classifier.linear", "lobo_biased_steps": 1},
+    {"lobo_rate": 1, "lobo_biased_params": "classifier.linear", "lobo_biased_steps": 3},
+    {"lobo_rate": 1, "lobo_biased_params": "classifier.linear", "lobo_biased_steps": 5},
 ]
 
 # Nothing special about these numbers, just need to be different random selections.

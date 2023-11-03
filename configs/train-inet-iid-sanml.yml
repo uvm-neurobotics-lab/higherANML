@@ -13,7 +13,7 @@ epochs: 30
 seed: 1
 
 lobo_rate: 0
-lobo_size: 0
+lobo_size: 64
 output_layer: classifier.linear
 
 # Model Architecture

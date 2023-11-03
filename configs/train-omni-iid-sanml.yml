@@ -13,9 +13,9 @@ epochs: 10
 seed: 1
 
 lobo_rate: 0
-lobo_size: 0
+lobo_size: 1000
 output_layer: classifier.linear
-lobo_biased_steps: 3
+lobo_biased_steps: 0
 lobo_biased_params: classifier.linear
 lobo_biased_fraction: 0.5
 
