@@ -42,8 +42,8 @@ def check_train_config(config):
         ensure_config_param(config, "lobo_size", of_type(int))
         # If we are performing lobotomy, then we need to know at which layer.
         ensure_config_param(config, "output_layer", of_type(str))
-        if "lobo_biased_fraction" in config:
-            ensure_config_param(config, "lobo_biased_fraction", lambda x: 0.0 <= x <= 1.0)
+        ensure_config_param(config, "lobo_biased_steps", lambda x: isinstance(x, int) and x >= 0, required=False)
+        ensure_config_param(config, "lobo_biased_fraction", lambda x: 0.0 <= x <= 1.0, required=False)
 
 
 def train(sampler, input_shape, config, device="cuda", verbose=0):
@@ -71,8 +71,8 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
     output_layer = get_matching_module(model, config["output_layer"])
     lobo_rate = config.get("lobo_rate")
     lobo_size = config.get("lobo_size")
-    num_biased_steps = config.get("lobo_biased_steps")
-    lobo_biased_fraction = config.get("lobo_biased_fraction")
+    num_biased_steps = config.get("lobo_biased_steps", 0)
+    lobo_biased_fraction = config.get("lobo_biased_fraction", 0.0)
     if "lobo_biased_params" in config:
         # Only optimize these parameters during the biased steps.
         lobo_opt_params = [k for k, _ in collect_matching_named_params(model, config["lobo_biased_params"])]
