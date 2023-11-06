@@ -17,7 +17,7 @@ lobo_size: 1000
 output_layer: classifier.linear
 lobo_biased_steps: 0
 lobo_biased_params: classifier.linear
-lobo_biased_fraction: 0.5
+lobo_biased_fraction: 0.0
 
 # Model Architecture
 model: classifier
