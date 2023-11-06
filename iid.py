@@ -88,6 +88,7 @@ def train(sampler, input_shape, config, device="cuda", verbose=0):
         if lobo_rate and lobo_size and epoch != 1 and epoch % lobo_rate == 0:
             num_zapped = min(lobo_size, len(output_layer.weight))
             zapped_classes = rng.choice(len(output_layer.weight), size=num_zapped, replace=False)
+            log.info(f"Zapping {num_zapped} classes.")
             lobotomize(output_layer, zapped_classes)
             for i in range(num_biased_steps):
                 images, labels = sampler.get_biased_train_sample(zapped_classes, lobo_biased_fraction)
