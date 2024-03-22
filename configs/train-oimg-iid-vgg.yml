@@ -22,7 +22,6 @@ model: classifier
 model_name: vgg16
 model_args:
   encoder: vgg16_encoder
-  encoder_args: {dropout: 0.0}
   classifier: linear-classifier
   classifier_args: {num_classes: 700}
 
