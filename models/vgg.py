@@ -34,8 +34,7 @@ def vgg16(pretrained=False, progress=True, dropout=0.0, **kwargs):
         **kwargs: parameters passed to the ``torchvision.models.vgg.VGG`` base class. Please refer to the `source code
             <https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py>`_ for more details about this class.
     """
-    weights = "IMAGENET1K_V1" if pretrained else None
-    return torchvgg.vgg16(weights=weights, progress=progress, dropout=dropout, **kwargs)
+    return torchvgg.vgg16(pretrained=pretrained, progress=progress, dropout=dropout, **kwargs)
 
 
 @register('vgg16_bn')
@@ -50,8 +49,7 @@ def vgg16_bn(pretrained=False, progress=True, dropout=0.0, **kwargs):
         **kwargs: parameters passed to the ``torchvision.models.vgg.VGG`` base class. Please refer to the `source code
             <https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py>`_ for more details about this class.
     """
-    weights = "IMAGENET1K_V1" if pretrained else None
-    return torchvgg.vgg16_bn(weights=weights, progress=progress, dropout=dropout, **kwargs)
+    return torchvgg.vgg16_bn(pretrained=pretrained, progress=progress, dropout=dropout, **kwargs)
 
 
 @register('vgg16_encoder')
@@ -66,8 +64,7 @@ def vgg16_encoder(pretrained=False, progress=True, dropout=0.0, **kwargs):
         **kwargs: parameters passed to the ``torchvision.models.vgg.VGG`` base class. Please refer to the `source code
             <https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py>`_ for more details about this class.
     """
-    weights = "IMAGENET1K_V1" if pretrained else None
-    vgg = torchvgg.vgg16(weights=weights, progress=progress, dropout=dropout, **kwargs)
+    vgg = torchvgg.vgg16(pretrained=pretrained, progress=progress, dropout=dropout, **kwargs)
     return VGGEncoder(vgg)
 
 
@@ -83,6 +80,5 @@ def vgg16_bn_encoder(pretrained=False, progress=True, dropout=0.0, **kwargs):
         **kwargs: parameters passed to the ``torchvision.models.vgg.VGG`` base class. Please refer to the `source code
             <https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py>`_ for more details about this class.
     """
-    weights = "IMAGENET1K_V1" if pretrained else None
-    vgg = torchvgg.vgg16_bn(weights=weights, progress=progress, dropout=dropout, **kwargs)
+    vgg = torchvgg.vgg16_bn(pretrained=pretrained, progress=progress, dropout=dropout, **kwargs)
     return VGGEncoder(vgg)
