@@ -3,7 +3,7 @@ VGG style models, imported from PyTorch.
 """
 import torch
 import torch.nn as nn
-from torchvision.models.vgg import vgg16, vgg16_bn
+import torchvision.models.vgg as torchvgg
 
 from models.registry import register
 
@@ -35,7 +35,7 @@ def vgg16(pretrained=False, progress=True, dropout=0.0, **kwargs):
             <https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py>`_ for more details about this class.
     """
     weights = "IMAGENET1K_V1" if pretrained else None
-    return vgg16(weights=weights, progress=progress, dropout=dropout, **kwargs)
+    return torchvgg.vgg16(weights=weights, progress=progress, dropout=dropout, **kwargs)
 
 
 @register('vgg16_bn')
@@ -51,7 +51,7 @@ def vgg16_bn(pretrained=False, progress=True, dropout=0.0, **kwargs):
             <https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py>`_ for more details about this class.
     """
     weights = "IMAGENET1K_V1" if pretrained else None
-    return vgg16_bn(weights=weights, progress=progress, dropout=dropout, **kwargs)
+    return torchvgg.vgg16_bn(weights=weights, progress=progress, dropout=dropout, **kwargs)
 
 
 @register('vgg16_encoder')
@@ -67,7 +67,7 @@ def vgg16_encoder(pretrained=False, progress=True, dropout=0.0, **kwargs):
             <https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py>`_ for more details about this class.
     """
     weights = "IMAGENET1K_V1" if pretrained else None
-    vgg = vgg16(weights=weights, progress=progress, dropout=dropout, **kwargs)
+    vgg = torchvgg.vgg16(weights=weights, progress=progress, dropout=dropout, **kwargs)
     return VGGEncoder(vgg)
 
 
@@ -84,5 +84,5 @@ def vgg16_bn_encoder(pretrained=False, progress=True, dropout=0.0, **kwargs):
             <https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py>`_ for more details about this class.
     """
     weights = "IMAGENET1K_V1" if pretrained else None
-    vgg = vgg16_bn(weights=weights, progress=progress, dropout=dropout, **kwargs)
+    vgg = torchvgg.vgg16_bn(weights=weights, progress=progress, dropout=dropout, **kwargs)
     return VGGEncoder(vgg)

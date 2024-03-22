@@ -19,6 +19,7 @@ from . import meta_baseline
 from . import oml
 from . import resnet
 from . import resnet12
+from . import vgg
 
 import utils.storage as storage
 from utils import collect_matching_named_params, collect_matching_params, ensure_config_param, get_matching_module
